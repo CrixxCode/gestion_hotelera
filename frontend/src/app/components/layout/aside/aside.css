@@ -1,0 +1,80 @@
+/* ====== PanelMenu base: sin fondo ni bordes ====== */
+.p-panelmenu,
+.p-panelmenu .p-panelmenu-panel,
+.p-panelmenu .p-panelmenu-header,
+.p-panelmenu .p-panelmenu-content {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* ====== Enlaces (texto) ====== */
+.p-panelmenu .p-menuitem-link {
+  background: transparent !important;
+  color: #F9FAFB !important; /* blanco suave */
+}
+
+/* Texto del item explícito */
+.p-panelmenu .p-menuitem-link .p-menuitem-text {
+  color: #F9FAFB !important;
+}
+
+/* ====== Íconos ====== */
+.p-panelmenu .p-menuitem-icon,
+.p-panelmenu .p-submenu-icon {
+  color: #F9FAFB !important; /* mismo color que el texto */
+  font-size: 1rem;
+}
+
+/* ====== Hover ====== */
+.p-panelmenu .p-menuitem-link:hover {
+  background: rgba(245, 158, 11, 0.15) !important;
+  color: #F59E0B !important;
+}
+.p-panelmenu .p-menuitem-link:hover .p-menuitem-text,
+.p-panelmenu .p-menuitem-link:hover .p-menuitem-icon,
+.p-panelmenu .p-menuitem-link:hover .p-submenu-icon {
+  color: #F59E0B !important; /* dorado */
+}
+
+/* ====== Activo (ítem seleccionado) ====== */
+.p-panelmenu .p-menuitem-link-active {
+  background: rgba(245, 158, 11, 0.10) !important;
+  color: #F59E0B !important;
+  font-weight: 600 !important;
+}
+.p-panelmenu .p-menuitem-link-active .p-menuitem-text,
+.p-panelmenu .p-menuitem-link-active .p-menuitem-icon,
+.p-panelmenu .p-menuitem-link-active .p-submenu-icon {
+  color: #F59E0B !important;
+}
+
+/* Forzar color blanco en el texto */
+.p-panelmenu .p-menuitem-link .p-menuitem-text {
+  color: #F9FAFB !important;   /* blanco */
+  opacity: 1 !important;       /* evita que quede grisáceo */
+}
+
+/* Íconos iguales al texto */
+.p-panelmenu .p-menuitem-icon,
+.p-panelmenu .p-submenu-icon {
+  color: #F9FAFB !important;
+  opacity: 1 !important;
+}
+
+/* Hover: texto + íconos dorados */
+.p-panelmenu .p-menuitem-link:hover .p-menuitem-text,
+.p-panelmenu .p-menuitem-link:hover .p-menuitem-icon,
+.p-panelmenu .p-menuitem-link:hover .p-submenu-icon {
+  color: #F59E0B !important;
+}
+
+/* Activo: texto + íconos dorados y en negrita */
+.p-panelmenu .p-menuitem-link-active .p-menuitem-text,
+.p-panelmenu .p-menuitem-link-active .p-menuitem-icon,
+.p-panelmenu .p-menuitem-link-active .p-submenu-icon {
+  color: #F59E0B !important;
+  font-weight: 600 !important;
+  opacity: 1 !important;
+}
+

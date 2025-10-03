@@ -1,0 +1,36 @@
+/* CLASE PRINCIPAL DEL BREADCRUMB */
+:host ::ng-deep .p-breadcrumb {
+  /* ¡Importante! Hace que solo se vea el texto sobre el fondo blanco de la sección. */
+  background: transparent !important;
+  border: none !important; /* Quita el borde */
+  border-radius: 0 !important; /* Quita cualquier redondeado */
+  padding: 0 !important; /* Quita el padding de la caja del breadcrumb, dejando el espacio solo a cargo de la etiqueta p-breadcrumb */
+}
+
+/* Texto de los elementos (activos y no activos) */
+:host ::ng-deep .p-breadcrumb .p-menuitem-text {
+  color: #6B7280 !important; /* Gris medio, como en la captura */
+  font-weight: 500;
+  font-size: 0.9rem; /* Un poco más pequeño si es necesario */
+}
+
+/* El elemento activo (el último) suele ser un poco más oscuro o sin hover */
+:host ::ng-deep .p-breadcrumb .p-menuitem:last-child .p-menuitem-text {
+  color: #111827 !important; /* Negro más oscuro para el elemento actual */
+}
+
+/* Separador (Chevron / >) */
+:host ::ng-deep .p-breadcrumb .p-breadcrumb-chevron {
+  color: #9CA3AF !important; /* Un gris más claro para el separador */
+}
+
+/* Icono home */
+:host ::ng-deep .p-breadcrumb .pi-home {
+  color: #6B7280 !important;
+}
+
+/* Hover (para los enlaces) */
+:host ::ng-deep .p-breadcrumb .p-menuitem-link:hover .p-menuitem-text,
+:host ::ng-deep .p-breadcrumb .p-menuitem-link:hover .pi {
+  color: #3B82F6 !important; /* Un color de enlace azul, o tu color primario */
+}

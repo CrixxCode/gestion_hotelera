@@ -1,0 +1,134 @@
+<div class="space-y-6 pt-3">
+
+  <!-- KPIs -->
+  <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <article *ngFor="let k of kpis" class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <div class="text-sm text-zinc-500">{{ k.label }}</div>
+      <div class="mt-1 text-2xl font-bold text-[#111827]">{{ k.value }}</div>
+      <div class="text-xs text-zinc-500">{{ k.help }}</div>
+    </article>
+  </section>
+
+  <!-- Fila 1: Operaciones + Dona -->
+  <section class="grid gap-6 lg:grid-cols-3">
+    <!-- Card Operaciones -->
+    <article class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <header class="mb-2">
+        <h3 class="font-semibold text-[#111827]">Operaciones de hoy</h3>
+        <p class="text-xs text-zinc-500">Check-in / Check-out</p>
+      </header>
+      <ul class="text-sm space-y-2">
+        <li class="flex items-center justify-between"><span class="inline-flex items-center gap-2"><i class="fa-solid fa-right-to-bracket text-emerald-600"></i> Check-in</span><span class="font-semibold">32</span></li>
+        <li class="flex items-center justify-between"><span class="inline-flex items-center gap-2"><i class="fa-solid fa-right-from-bracket text-rose-600"></i> Check-out</span><span class="font-semibold">18</span></li>
+        <li class="flex items-center justify-between"><span class="inline-flex items-center gap-2"><i class="fa-regular fa-calendar"></i> Llegadas</span><span class="font-semibold">34</span></li>
+        <li class="flex items-center justify-between"><span class="inline-flex items-center gap-2"><i class="fa-regular fa-calendar-minus"></i> Salidas</span><span class="font-semibold">21</span></li>
+        <li class="flex items-center justify-between"><span class="inline-flex items-center gap-2"><i class="fa-solid fa-wallet text-amber-600"></i> Pend. de pago</span><span class="font-semibold">7</span></li>
+      </ul>
+    </article>
+
+    <!-- Dona Ocupación -->
+    <article class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm lg:col-span-2 overflow-hidden">
+      <h3 class="mb-3 font-semibold text-[#111827]">Ocupación</h3>
+      <div class="h-64 w-full relative">
+        <p-chart type="doughnut" [data]="occData" [options]="occOptions" [style]="{ width:'100%', height:'100%' }"></p-chart>
+      </div>
+    </article>
+  </section>
+
+  <!-- Fila 2: Barras + Card Reservas recientes -->
+  <section class="grid gap-6 lg:grid-cols-3">
+    <!-- Barras Ingresos por canal -->
+    <article class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm lg:col-span-2">
+      <h3 class="mb-3 font-semibold text-[#111827]">Ingresos por canal (M)</h3>
+      <div class="h-64 w-full relative">
+        <p-chart type="bar" [data]="revenueData" [options]="revenueOptions" [style]="{ width:'100%', height:'100%' }"></p-chart>
+      </div>
+    </article>
+
+    <!-- Card Reservas recientes -->
+    <article class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <h3 class="mb-3 font-semibold text-[#111827]">Reservas recientes</h3>
+      <ul class="space-y-3 text-sm">
+        <li *ngFor="let r of lastReservations" class="flex items-start justify-between">
+          <div>
+            <div class="font-medium text-[#111827]">{{ r.guest }}</div>
+            <div class="text-xs text-zinc-500">
+              {{ r.roomType }} • {{ r.nights }} noche(s) • {{ r.source }}
+            </div>
+          </div>
+          <span class="text-xs text-zinc-500">{{ r.when }}</span>
+        </li>
+      </ul>
+    </article>
+  </section>
+
+  <!-- Fila 3: Cards de listas (Check-in, Check-out, Pagos, OOO) + Línea ocupación -->
+  <section class="grid gap-6 xl:grid-cols-4">
+    <!-- Últimos check-in -->
+    <article class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <h3 class="mb-3 font-semibold text-[#111827]">Últimos check-in</h3>
+      <ul class="space-y-3 text-sm">
+        <li *ngFor="let c of lastCheckins" class="flex items-start justify-between">
+          <div>
+            <div class="font-medium text-[#111827]">{{ c.guest }} <span class="text-xs text-zinc-400">({{ c.room }})</span></div>
+            <div class="text-xs text-zinc-500">{{ c.roomType }}</div>
+          </div>
+          <span class="text-xs text-zinc-500">{{ c.when }}</span>
+        </li>
+      </ul>
+    </article>
+
+    <!-- Últimos check-out -->
+    <article class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <h3 class="mb-3 font-semibold text-[#111827]">Últimos check-out</h3>
+      <ul class="space-y-3 text-sm">
+        <li *ngFor="let c of lastCheckouts" class="flex items-start justify-between">
+          <div>
+            <div class="font-medium text-[#111827]">{{ c.guest }} <span class="text-xs text-zinc-400">({{ c.room }})</span></div>
+            <div class="text-xs text-zinc-500">{{ c.roomType }}</div>
+          </div>
+          <span class="text-xs text-zinc-500">{{ c.when }}</span>
+        </li>
+      </ul>
+    </article>
+
+    <!-- Pendientes de pago -->
+    <article class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <h3 class="mb-3 font-semibold text-[#111827]">Pendientes de pago</h3>
+      <ul class="space-y-3 text-sm">
+        <li *ngFor="let p of pendingPayments" class="flex items-start justify-between">
+          <div>
+            <div class="font-medium text-[#111827]">{{ p.guest }} <span class="text-xs text-zinc-400">({{ p.room }})</span></div>
+            <div class="text-xs text-zinc-500">{{ p.roomType }}</div>
+          </div>
+          <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-xs font-medium">{{ p.amount }}</span>
+        </li>
+      </ul>
+    </article>
+
+    <!-- Línea Ocupación 14 días -->
+    <article class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm xl:col-span-1">
+      <h3 class="mb-3 font-semibold text-[#111827]">Ocupación 14 días</h3>
+      <div class="h-48 w-full relative">
+        <p-chart type="line" [data]="occTrendData" [options]="occTrendOptions" [style]="{ width:'100%', height:'100%' }"></p-chart>
+      </div>
+    </article>
+  </section>
+
+  <!-- Fila 4: Habitaciones fuera de servicio -->
+  <section class="grid gap-6 md:grid-cols-2">
+    <article class="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <h3 class="mb-3 font-semibold text-[#111827]">Habitaciones fuera de servicio</h3>
+      <ul class="space-y-2 text-sm">
+        <li *ngFor="let x of outOfOrderRooms" class="flex items-center justify-between">
+          <div>
+            <span class="font-medium text-[#111827]">Hab. {{ x.room }}</span>
+            <span class="ml-2 text-xs text-zinc-500">{{ x.reason }}</span>
+          </div>
+          <span class="text-xs text-zinc-500">ETA: {{ x.eta }}</span>
+        </li>
+      </ul>
+    </article>
+  </section>
+
+</div>
