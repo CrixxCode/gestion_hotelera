@@ -22,7 +22,6 @@ INSTALLED_APPS = [
     "drf_spectacular",
 
     "django_filters",
-    "drf_spectacular",
 
     "rest_framework",
     "rest_framework.authtoken",
@@ -187,3 +186,5 @@ SESSION_SAVE_EVERY_REQUEST = True
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
+
+PASSWORD_RESET_COOKIE_MAX_AGE = int(os.getenv("PASSWORD_RESET_COOKIE_MAX_AGE", "1800"))
