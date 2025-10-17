@@ -1,0 +1,21 @@
+<main class="grid min-h-screen w-full
+             grid-rows-[auto_1fr_auto]
+             grid-cols-[auto_1fr]">
+
+  <header class="col-span-2 bg-[#111827] text-[#F9FAFB] shadow">
+    <app-header (menuToggle)="toggleAside()"></app-header>
+  </header>
+
+  <aside
+    class="row-start-2 bg-gradient-to-b from-[#111827] to-[#1F2937] text-[#F9FAFB] text-[#F9FAFB] transition-all duration-300 overflow-hidden"
+    [class.w-65]="isAsideOpen()" [class.w-0]="!isAsideOpen()">
+    <app-aside></app-aside>
+  </aside>
+
+  <section class="row-start-2 col-start-2 bg-gray-200 p-6 overflow-y-auto text-[#111827]
+             rounded-tl-2xl shadow-lg">
+    <app-content></app-content>
+    <router-outlet></router-outlet>
+  </section>
+
+</main>
