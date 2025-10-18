@@ -78,3 +78,34 @@
   opacity: 1 !important;
 }
 
+html, body {
+  height: 100%;
+  overflow-y: auto; /* el scroll será global, no dentro del aside */
+}
+
+/* === SCROLLBAR PERSONALIZADA === */
+
+/* Estilo base para navegadores basados en WebKit (Chrome, Edge, Safari) */
+::-webkit-scrollbar {
+  width: 6px; /* grosor de la barra vertical */
+  height: 6px; /* grosor de la barra horizontal */
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 100, 100, 0.4); /* color de la barra */
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 100, 100, 0.6);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent; /* fondo invisible */
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 100, 100, 0.4) transparent;
+}

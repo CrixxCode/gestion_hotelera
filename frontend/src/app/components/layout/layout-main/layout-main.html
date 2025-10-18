@@ -1,21 +1,29 @@
-<main class="grid min-h-screen w-full
-             grid-rows-[auto_1fr_auto]
-             grid-cols-[auto_1fr]">
+<main class="relative grid min-h-screen w-full grid-cols-[auto_1fr] grid-rows-[auto_1fr] bg-gray-100 overflow-hidden">
+  <!-- OVERLAY (fondo borroso animado) -->
+  <div *ngIf="isAsideOpen() && isMobile"
+    class="fixed inset-0 bg-black/40 backdrop-blur-sm z-20 md:hidden transition-opacity duration-300 ease-in-out opacity-100"
+    (click)="toggleAside()"></div>
 
-  <header class="col-span-2 bg-[#111827] text-[#F9FAFB] shadow">
-    <app-header (menuToggle)="toggleAside()"></app-header>
-  </header>
-
-  <aside
-    class="row-start-2 bg-gradient-to-b from-[#111827] to-[#1F2937] text-[#F9FAFB] text-[#F9FAFB] transition-all duration-300 overflow-hidden"
-    [class.w-65]="isAsideOpen()" [class.w-0]="!isAsideOpen()">
-    <app-aside></app-aside>
+  <!-- ASIDE con animación -->
+  <aside class="fixed md:static top-0 left-0 h-screen bg-gradient-to-b from-[#111827] to-[#1F2937]
+           text-[#F9FAFB] shadow-2xl z-30 md:z-auto
+           transition-all duration-300 ease-in-out transform
+           overflow-hidden shrink-0" [class.w-64]="isAsideOpen()" [class.w-0]="!isAsideOpen() && !isMobile"
+    [class.-translate-x-full]="!isAsideOpen() && isMobile" [class.translate-x-0]="isAsideOpen() && isMobile">
+    <div class="w-64 flex flex-col h-full overflow-y-auto">
+      <app-aside></app-aside>
+    </div>
   </aside>
 
-  <section class="row-start-2 col-start-2 bg-gray-200 p-6 overflow-y-auto text-[#111827]
-             rounded-tl-2xl shadow-lg">
-    <app-content></app-content>
-    <router-outlet></router-outlet>
-  </section>
+  <!-- HEADER + CONTENT -->
+  <div class="flex flex-col h-screen overflow-hidden flex-1">
+    <header class="h-20 bg-gray-100 text-black flex items-center px-2 flex-shrink-0 z-10">
+      <app-header (menuToggle)="toggleAside()" class="w-full"></app-header>
+    </header>
 
+    <section class="flex-1 overflow-y-auto bg-gray-100 px-6 pb-8 text-[#111827]
+             rounded-tl-2xl custom-scroll">
+      <app-content></app-content>
+    </section>
+  </div>
 </main>

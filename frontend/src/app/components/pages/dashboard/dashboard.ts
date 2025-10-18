@@ -1,121 +1,253 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ChartModule } from 'primeng/chart';
-
-type BasicGuest = {
-  code: string;
-  guest: string;
-  room?: string;
-  roomType: string;
-  nights?: number;
-  when: string;         // fecha/hora corta para card
-  source?: 'Directo'|'OTA'|'Agencia';
-  amount?: string;      // para pagos
-};
+import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, ChartModule],
-  templateUrl: './dashboard.html'
+  imports: [CommonModule, ChartModule, FormsModule],
+  templateUrl: './dashboard.html',
 })
 export class Dashboard {
-  // ===== KPI rápidos (muestra en cards arriba) =====
-  kpis = [
-    { label: 'Ocupación', value: '78%', help: 'vs. capacidad total' },
-    { label: 'ADR', value: '$ 315.000', help: 'Tarifa diaria promedio' },
-    { label: 'RevPAR', value: '$ 245.700', help: 'Ingreso por hab. disp.' },
-    { label: 'Ingresos (hoy)', value: '$ 12.8M', help: 'Alojamiento + consumos' },
-  ];
+  constructor(private router: Router) {
+    this.generateCalendar();
 
-  // ===== Cards de listas (datos falsos) =====
-  lastReservations: BasicGuest[] = [
-    { code: 'R-20460', guest: 'N. Rivera',   roomType: 'Standard Queen', nights: 2, source: 'OTA',     when: 'hace 15 min' },
-    { code: 'R-20459', guest: 'S. Torres',   roomType: 'Suite Jr',       nights: 1, source: 'Directo', when: 'hace 32 min' },
-    { code: 'R-20458', guest: 'E. Díaz',     roomType: 'Twin Superior',  nights: 4, source: 'Agencia', when: 'hace 1 h' },
-    { code: 'R-20457', guest: 'M. Castro',   roomType: 'Deluxe King',    nights: 2, source: 'Directo', when: 'hace 2 h' },
-  ];
-
-  lastCheckins: BasicGuest[] = [
-    { code: 'R-20431', guest: 'L. Gómez',   room: '312', roomType: 'Standard Queen', when: '13:42' },
-    { code: 'R-20429', guest: 'P. Aguilar', room: '507', roomType: 'Twin Superior',  when: '12:55' },
-    { code: 'R-20427', guest: 'C. Díaz',    room: '221', roomType: 'Deluxe King',    when: '12:20' },
-  ];
-
-  lastCheckouts: BasicGuest[] = [
-    { code: 'R-20390', guest: 'A. Pérez',  room: '215', roomType: 'Twin Superior',  when: '10:33' },
-    { code: 'R-20388', guest: 'M. Arias',  room: '406', roomType: 'Deluxe King',    when: '10:10' },
-    { code: 'R-20385', guest: 'S. Ruiz',   room: '118', roomType: 'Standard Queen', when: '09:55' },
-  ];
-
-  pendingPayments: BasicGuest[] = [
-    { code: 'R-20412', guest: 'J. Rojas',  room: '334', roomType: 'Deluxe King', amount: '$ 420.000', when: 'vence hoy' },
-    { code: 'R-20405', guest: 'E. Mena',   room: '142', roomType: 'Twin Superior', amount: '$ 180.000', when: 'venció ayer' },
-    { code: 'R-20399', guest: 'D. Soto',   room: '510', roomType: 'Suite Jr', amount: '$ 1.250.000', when: 'venc. 2 días' },
-  ];
-
-  outOfOrderRooms = [
-    { room: '803', reason: 'Mantenimiento A/C', eta: '2 días' },
-    { room: '109', reason: 'Pintura',           eta: '1 día'  },
-  ];
-
-  // ===== Charts (con tamaño controlado) =====
-  occData: any; occOptions: any;           // doughnut ocupación
-  revenueData: any; revenueOptions: any;   // barras ingresos por canal
-  occTrendData: any; occTrendOptions: any; // línea ocupación 14 días
-
-  constructor() {
-    const black = '#111827';
-    const gray = '#6B7280';
-    const gold = '#F59E0B';
-    const blue = '#1E40AF';
-
-    // DONA Ocupación
-    this.occData = {
-      labels: ['Ocupadas', 'Disponibles', 'Fuera de servicio'],
-      datasets: [{ data: [64, 14, 4], backgroundColor: ['#2563EB', '#10B981', '#F87171'], borderWidth: 0 }]
-    };
-    this.occOptions = {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: '60%',
-      layout: { padding: 8 },
-      plugins: { legend: { position: 'bottom', labels: { color: black } } }
-    };
-
-    // BARRAS Ingresos por canal
-    this.revenueData = {
-      labels: ['Directo', 'OTA', 'Agencia'],
+    // === Inicializar gráfica de ocupación semanal ===
+    this.occWeekData = {
+      labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
       datasets: [
-        { label: 'Alojamiento', data: [8.2, 5.6, 3.1], backgroundColor: blue },
-        { label: 'Consumos',    data: [2.1, 1.4, 0.8], backgroundColor: gold }
-      ]
-    };
-    this.revenueOptions = {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: { ticks: { color: gray }, grid: { display: false } },
-        y: { ticks: { color: gray, callback: (v: number) => `$ ${v}M` }, grid: { color: '#E5E7EB' } }
-      },
-      plugins: { legend: { labels: { color: black } } }
+        {
+          label: 'Ocupación',
+          data: this.occDataByMonth['Octubre'],
+          borderColor: '#1E40AF',
+          backgroundColor: 'rgba(30,64,175,0.1)',
+          fill: true,
+          tension: 0.3,
+        },
+      ],
     };
 
-    // LÍNEA Ocupación 14 días
-    const days = Array.from({ length: 14 }, (_, i) => `D-${13 - i}`);
-    const occSeries = [62, 59, 61, 65, 66, 68, 64, 63, 67, 70, 72, 74, 76, 78];
-    this.occTrendData = {
-      labels: days,
-      datasets: [{ label: 'Ocupación', data: occSeries, borderColor: blue, backgroundColor: 'rgba(30,64,175,0.15)', tension: 0.3, fill: true, pointRadius: 2 }]
-    };
-    this.occTrendOptions = {
+    this.occWeekOptions = {
       responsive: true,
       maintainAspectRatio: false,
       scales: {
-        x: { ticks: { color: gray }, grid: { display: false } },
-        y: { ticks: { color: gray, callback: (v: number) => `${v}%` }, grid: { color: '#E5E7EB' } }
+        y: {
+          ticks: { callback: (v: number) => `${v}%` },
+          grid: { color: '#E5E7EB' },
+        },
+        x: { grid: { display: false } },
       },
-      plugins: { legend: { labels: { color: black } } }
     };
   }
+
+  // ============ KPIs dinámicos ============
+  kpis = [
+    {
+      label: 'Ocupación',
+      value: '78%',
+      help: 'vs. capacidad total',
+      icon: 'fa-bed text-blue-600',
+    },
+    {
+      label: 'Ingresos hoy',
+      value: '$4,250',
+      help: '↑ 12% respecto a ayer',
+      icon: 'fa-dollar-sign text-emerald-600',
+    },
+    {
+      label: 'Check-ins hoy',
+      value: '12',
+      help: 'Próximo en 35 min',
+      icon: 'fa-right-to-bracket text-emerald-500',
+    },
+    {
+      label: 'Check-outs hoy',
+      value: '8',
+      help: '2 con retraso',
+      icon: 'fa-right-from-bracket text-rose-500',
+    },
+    {
+      label: 'RevPAR',
+      value: '$245.700',
+      help: 'Ingreso por hab. disponible',
+      icon: 'fa-chart-line text-indigo-600',
+    },
+  ];
+
+  // ============ Filtro de mes ============
+  months = [
+    'Enero',
+    'Febrero',
+    'Marzo',
+    'Abril',
+    'Mayo',
+    'Junio',
+    'Julio',
+    'Agosto',
+    'Septiembre',
+    'Octubre',
+    'Noviembre',
+    'Diciembre',
+  ];
+  selectedMonth = 'Octubre';
+
+  // ============ Ocupación por semana ============
+  occWeekData: any;
+  occWeekOptions: any;
+  occDataByMonth: Record<string, number[]> = {
+    Enero: [55, 60, 62, 65, 68, 70, 72],
+    Febrero: [62, 65, 70, 73, 75, 78, 80],
+    Marzo: [65, 68, 70, 72, 74, 76, 78],
+    Octubre: [65, 70, 75, 78, 82, 85, 80],
+  };
+
+  updateOccData() {
+    const data = this.occDataByMonth[this.selectedMonth] || [];
+    this.occWeekData.datasets[0].data = data;
+    this.occWeekData = { ...this.occWeekData }; // forzar refresco
+  }
+
+  // ============ Habitaciones por categoría ============
+  roomCatData = {
+    labels: ['Individual', 'Doble', 'Suite', 'Familiar'],
+    datasets: [
+      {
+        data: [25, 35, 20, 10],
+        backgroundColor: ['#2563EB', '#10B981', '#F59E0B', '#EF4444'],
+        borderWidth: 0,
+      },
+    ],
+  };
+  roomCatOptions = {
+    responsive: true,
+    plugins: { legend: { position: 'bottom' } },
+  };
+
+  // ============ Calendario ============
+  currentDate = new Date();
+  currentMonth = this.currentDate.getMonth();
+  currentYear = this.currentDate.getFullYear();
+  currentMonthName = this.months[this.currentMonth];
+  weekDays = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+  calendarMatrix: any[][] = [];
+
+  generateCalendar() {
+    const firstDay = new Date(this.currentYear, this.currentMonth, 1);
+    const startDay = firstDay.getDay();
+    const daysInMonth = new Date(
+      this.currentYear,
+      this.currentMonth + 1,
+      0
+    ).getDate();
+    const prevDays = new Date(this.currentYear, this.currentMonth, 0).getDate();
+
+    this.calendarMatrix = [];
+    let week = [];
+
+    for (let i = 0; i < startDay; i++) {
+      week.push({ num: prevDays - startDay + i + 1, current: false });
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      week.push({ num: day, current: true });
+      if (week.length === 7) {
+        this.calendarMatrix.push(week);
+        week = [];
+      }
+    }
+
+    if (week.length > 0) {
+      const next = 1;
+      while (week.length < 7) {
+        week.push({ num: next + week.length, current: false });
+      }
+      this.calendarMatrix.push(week);
+    }
+  }
+
+  prevMonth() {
+    if (this.currentMonth === 0) {
+      this.currentMonth = 11;
+      this.currentYear--;
+    } else this.currentMonth--;
+    this.currentMonthName = this.months[this.currentMonth];
+    this.generateCalendar();
+  }
+
+  nextMonth() {
+    if (this.currentMonth === 11) {
+      this.currentMonth = 0;
+      this.currentYear++;
+    } else this.currentMonth++;
+    this.currentMonthName = this.months[this.currentMonth];
+    this.generateCalendar();
+  }
+
+  selectDay(day: any) {
+    if (day.current)
+      alert(`Fecha seleccionada: ${day.num} ${this.currentMonthName} ${this.currentYear}`);
+  }
+
+  // ============ Próximas llegadas ============
+  nextArrivals = [
+    {
+      client: 'María González',
+      room: '301 - Suite',
+      arrival: 'Hoy, 14:00',
+      departure: '20/10/2025',
+      status: 'Pendiente',
+    },
+    {
+      client: 'Carlos Rodríguez',
+      room: '205 - Doble',
+      arrival: 'Hoy, 15:30',
+      departure: '19/10/2025',
+      status: 'Pendiente',
+    },
+    {
+      client: 'Ana Martínez',
+      room: '110 - Individual',
+      arrival: 'Hoy, 18:00',
+      departure: '18/10/2025',
+      status: 'Pendiente',
+    },
+  ];
+
+  goToCheckin(guest: any) {
+    this.router.navigate(['/checkin', guest.client]);
+  }
+
+  // ============ NUEVAS SECCIONES ============
+
+  // 🕓 Reservas recientes
+  recentBookings = [
+    { client: 'Laura Pérez', room: '104 - Doble', date: '16/10/2025' },
+    { client: 'Jorge Castillo', room: '302 - Suite', date: '16/10/2025' },
+    { client: 'Valentina López', room: '207 - Familiar', date: '15/10/2025' },
+    { client: 'Andrés Díaz', room: '118 - Individual', date: '15/10/2025' },
+  ];
+
+  // ✅ Últimos check-in
+  recentCheckins = [
+    { client: 'María González', room: '301 - Suite', time: '09:15' },
+    { client: 'Pedro Torres', room: '208 - Doble', time: '09:40' },
+    { client: 'Lucía Romero', room: '110 - Individual', time: '10:00' },
+  ];
+
+  // 🚪 Últimos check-out
+  recentCheckouts = [
+    { client: 'Carlos Ruiz', room: '215 - Doble', time: '08:30' },
+    { client: 'Ana Morales', room: '320 - Suite', time: '09:05' },
+    { client: 'Miguel Castro', room: '106 - Individual', time: '09:20' },
+  ];
+
+  // 💰 Pendientes de pago
+  pendingPayments = [
+    { client: 'Tatiana Gómez', amount: '$340.000' },
+    { client: 'Sergio Ramírez', amount: '$210.000' },
+    { client: 'Verónica Salas', amount: '$480.000' },
+    { client: 'Oscar Fuentes', amount: '$155.000' },
+  ];
 }

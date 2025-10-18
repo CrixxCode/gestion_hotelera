@@ -1,35 +1,38 @@
-<div class="w-full h-20 px-6 flex items-center justify-between">
-    <!-- IZQUIERDA: Botón hamburguesa + Logo -->
-    <div class="flex items-center gap-4">
-        <!-- Botón hamburguesa: visible en todos los tamaños -->
-        <button class="p-2 rounded-lg bg-[#374151] hover:bg-[#4b5563] inline-flex items-center justify-center"
-            (click)="menuToggle.emit()" aria-label="Abrir menú lateral">
-            <i class="fa-solid fa-bars text-lg text-[#F9FAFB]"></i>
-        </button>
-
-
-        <!-- Logo empresa -->
-        <div class="flex items-center gap-2">
-            <img src="logo.png" alt="Logo" class="h-15 object-contain rounded-md">
-            <span class="text-lg font-semibold tracking-wide">Hotel Manager</span>
-        </div>
+<header class="w-full h-20 px-6 flex items-center">
+  <!-- Contenedor flexible -->
+  <div class="flex items-center justify-between w-full">
+    
+    <!-- IZQUIERDA: botón hamburguesa -->
+    <div class="flex items-center">
+      <button
+        class="p-2 rounded-lg bg-[#111827] hover:bg-[#4b5563] inline-flex items-center justify-center"
+        (click)="menuToggle.emit()"
+        aria-label="Abrir menú lateral"
+      >
+        <i class="fa-solid fa-bars text-lg text-[#F9FAFB]"></i>
+      </button>
     </div>
 
-    <!-- DERECHA: Usuario y acciones -->
-    <div class="flex items-center gap-6">
-        <!-- Botones de acción (ejemplo notificación) -->
-        <button class="p-2 rounded-lg hover:bg-[#374151]">
-            <i class="fa-regular fa-bell text-lg"></i>
-        </button>
+    <!-- DERECHA: usuario y acciones -->
+    <div class="flex items-center gap-6 ml-auto">
+      <!-- Botón de notificaciones -->
+      <button class="p-2 rounded-lg hover:bg-[#4b5563] hover:text-white">
+        <i class="fa-regular fa-bell text-lg"></i>
+      </button>
 
-        <!-- Perfil usuario -->
-        <div class="flex items-center gap-3">
-            <div class="text-right">
-                <p class="font-medium leading-tight">Juan Pérez</p>
-                <p class="text-sm text-[#F59E0B] leading-tight">Administrador</p>
-            </div>
-            <img src="https://i.pravatar.cc/100?img=12" alt="Usuario"
-                class="w-12 h-12 rounded-full border-2 border-[#F59E0B]">
+      <!-- Perfil de usuario -->
+      <div class="flex items-center gap-3">
+        <div class="text-right leading-tight">
+          <p class="font-medium">Juan Pérez</p>
+          <p class="text-sm text-[#F59E0B]">Administrador</p>
         </div>
+        <img
+          src="https://i.pravatar.cc/100?img=12"
+          alt="Usuario"
+          class="w-12 h-12 rounded-full border-2 border-[#F59E0B]"
+        />
+      </div>
     </div>
-</div>
+
+  </div>
+</header>
