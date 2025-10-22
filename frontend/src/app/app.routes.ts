@@ -5,10 +5,6 @@ import { LayoutMain } from './components/layout/layout-main/layout-main';
 
 export const routes: Routes = [
     {
-        path: '',
-        component: Dashboard
-    },
-    {
         path: 'login',
         component: LoginComponent,
 

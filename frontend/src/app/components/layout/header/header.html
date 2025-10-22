@@ -1,8 +1,7 @@
-<header class="w-full h-20 px-6 flex items-center">
-  <!-- Contenedor flexible -->
+<header class="w-full h-20 px-6 flex items-center bg-gray-100 border-b border-gray-200">
   <div class="flex items-center justify-between w-full">
     
-    <!-- IZQUIERDA: botón hamburguesa -->
+    <!-- IZQUIERDA: Botón hamburguesa -->
     <div class="flex items-center">
       <button
         class="p-2 rounded-lg bg-[#111827] hover:bg-[#4b5563] inline-flex items-center justify-center"
@@ -13,26 +12,77 @@
       </button>
     </div>
 
-    <!-- DERECHA: usuario y acciones -->
-    <div class="flex items-center gap-6 ml-auto">
-      <!-- Botón de notificaciones -->
-      <button class="p-2 rounded-lg hover:bg-[#4b5563] hover:text-white">
+    <!-- DERECHA: Notificaciones + Menú usuario -->
+    <div class="flex items-center gap-6 ml-auto relative">
+      <!-- Notificaciones -->
+      <button class="p-2 rounded-lg hover:bg-[#4b5563] hover:text-white transition-colors">
         <i class="fa-regular fa-bell text-lg"></i>
       </button>
 
-      <!-- Perfil de usuario -->
-      <div class="flex items-center gap-3">
-        <div class="text-right leading-tight">
-          <p class="font-medium">Juan Pérez</p>
-          <p class="text-sm text-[#F59E0B]">Administrador</p>
+      <!-- Menú usuario -->
+      <div class="relative">
+        <button
+          class="flex items-center gap-3 group"
+          (click)="toggleMenu()"
+          aria-label="Abrir menú de usuario"
+        >
+          <div class="text-right leading-tight">
+            <p class="font-medium text-gray-800">{{ userName }}</p>
+            <p class="text-sm text-[#F59E0B]">{{ userRole }}</p>
+          </div>
+          <img
+            src="https://i.pravatar.cc/100?img=12"
+            alt="Usuario"
+            class="w-12 h-12 rounded-full border-2 border-[#F59E0B] group-hover:scale-105 transition-transform"
+          />
+          <i class="fa-solid fa-chevron-down text-gray-600 ml-2"></i>
+        </button>
+
+        <!-- Menú desplegable -->
+        <div
+          *ngIf="menuOpen"
+          class="absolute right-0 mt-3 w-56 bg-white rounded-lg shadow-lg border border-gray-100 z-50 animate-fade-in"
+        >
+          <ul class="divide-y divide-gray-100">
+            <li>
+              <button
+                class="w-full text-left px-4 py-3 hover:bg-gray-100 flex items-center gap-2"
+                (click)="openProfile()"
+              >
+                <i class="fa-regular fa-user text-gray-600 w-5"></i>
+                Editar perfil
+              </button>
+            </li>
+            <li>
+              <button
+                class="w-full text-left px-4 py-3 hover:bg-gray-100 flex items-center gap-2"
+                (click)="openSettings()"
+              >
+                <i class="fa-solid fa-gear text-gray-600 w-5"></i>
+                Configuración general
+              </button>
+            </li>
+            <li>
+              <button
+                class="w-full text-left px-4 py-3 hover:bg-gray-100 flex items-center gap-2"
+                (click)="toggleTheme()"
+              >
+                <i class="fa-solid fa-moon text-gray-600 w-5"></i>
+                Modo oscuro
+              </button>
+            </li>
+            <li>
+              <button
+                class="w-full text-left px-4 py-3 hover:bg-red-50 text-red-600 flex items-center gap-2"
+                (click)="logout()"
+              >
+                <i class="fa-solid fa-right-from-bracket w-5"></i>
+                Cerrar sesión
+              </button>
+            </li>
+          </ul>
         </div>
-        <img
-          src="https://i.pravatar.cc/100?img=12"
-          alt="Usuario"
-          class="w-12 h-12 rounded-full border-2 border-[#F59E0B]"
-        />
       </div>
     </div>
-
   </div>
 </header>

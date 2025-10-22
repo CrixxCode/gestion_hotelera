@@ -136,9 +136,12 @@ SPECTACULAR_SETTINGS = {
     ],
 }
 
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:4200",
+    "http://127.0.0.1:4200",
 ]
+CORS_ALLOW_CREDENTIALS = True
 
 from os import getenv
 DEBUG = getenv("DJANGO_DEBUG", "True") == "True"
@@ -153,9 +156,8 @@ CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SAMESITE = SESSION_COOKIE_SAMESITE
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:5173",
     "http://localhost:4200",
-    "http://localhost:3000",
+    "http://127.0.0.1:4200",
 ]
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"

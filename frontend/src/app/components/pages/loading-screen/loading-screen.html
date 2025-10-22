@@ -1,0 +1,24 @@
+<div
+  *ngIf="visible"
+  class="fixed inset-0 z-50 flex flex-col items-center justify-center 
+         bg-white/90 backdrop-blur-sm 
+         opacity-0 animate-fade-in transition-all duration-700"
+>
+  <!-- Logo -->
+  <img src="logo.png" alt="Logo del sistema" class="h-20 mb-4 animate-scale-in" />
+
+  <!-- Nombre del sistema -->
+  <h1 class="text-2xl font-bold text-gray-800 mb-2">HotelManager Pro</h1>
+
+  <!-- Loader circular -->
+  <div
+    class="loader mt-4"
+    [style.borderTopColor]="color"
+    aria-label="Cargando..."
+  ></div>
+
+  <!-- Mensaje -->
+  <p class="mt-4 text-gray-700 text-lg font-medium animate-fade-in">
+    {{ message }}
+  </p>
+</div>

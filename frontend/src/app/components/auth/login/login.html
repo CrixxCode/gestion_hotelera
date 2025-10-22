@@ -11,8 +11,9 @@
   <div class="relative z-10 flex flex-col justify-center items-center 
            w-11/12 max-w-md md:w-2/5 
            px-6 sm:px-10 py-12 
-           bg-white/50 md:bg-white/90  shadow-lg rounded-2xl transition-all duration-300 my-8">
+           bg-white/50 md:bg-white/90 shadow-lg rounded-2xl transition-all duration-300 my-8">
     <div class="w-full">
+      <!-- Logo y título -->
       <div class="flex flex-col items-center mb-8">
         <img src="logo.png" alt="Hotel Logo" class="h-14 mb-2" />
         <h1 class="text-2xl font-bold text-gray-800">HotelManager Pro</h1>
@@ -22,13 +23,26 @@
         Iniciar sesión
       </h2>
 
+      <!-- MENSAJE DE ERROR O ADVERTENCIA -->
+      <div *ngIf="errorMessage" class="mb-6">
+        <div class="p-3 rounded-lg text-center font-medium" [ngClass]="{
+            'bg-red-100 text-red-700 border border-red-300': errorType === 'error',
+            'bg-yellow-100 text-yellow-700 border border-yellow-300': errorType === 'warn'
+          }">
+          {{ errorMessage }}
+        </div>
+      </div>
+
+      <!-- Formulario de login -->
       <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="space-y-6">
+        <!-- Usuario -->
         <div>
           <label for="username" class="block text-sm font-medium text-gray-800 mb-1">Usuario</label>
           <input pInputText id="username" formControlName="username" placeholder="Ingresa tu usuario"
             class="w-full !bg-white/90 p-2 border rounded-md !text-gray-800 backdrop-blur-sm" />
         </div>
 
+        <!-- Contraseña -->
         <div>
           <label for="password" class="block text-sm font-medium text-gray-800 mb-1">Contraseña</label>
           <p-password id="password" formControlName="password" [feedback]="false" [toggleMask]="true"
@@ -38,6 +52,7 @@
           </p-password>
         </div>
 
+        <!-- Recuérdame + Olvidé contraseña -->
         <div class="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
           <div class="flex items-center">
             <p-checkbox binary="true" inputId="rememberMe" formControlName="rememberMe"></p-checkbox>
@@ -47,9 +62,12 @@
             contraseña?</a>
         </div>
 
-        <button pButton type="submit" label="Ingresar" routerLink="/dashboard"
+        <!-- Botón -->
+        <button pButton type="submit" label="Ingresar"
           class="w-full !bg-blue-600 hover:!bg-blue-800 !text-white py-3 font-semibold rounded-lg shadow-md transition-all duration-200"></button>
       </form>
     </div>
   </div>
+  <app-loading-screen [visible]="showLoading" [message]="'Bienvenido ' + loginForm.value.username"
+    color="#2563eb"></app-loading-screen>
 </div>

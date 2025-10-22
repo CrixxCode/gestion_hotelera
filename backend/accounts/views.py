@@ -90,8 +90,9 @@ class SessionLogoutView(APIView):
     """
     POST sin cuerpo -> cierra sesión (elimina cookie 'sessionid').
     Requiere X-CSRFToken porque modifica estado.
-    """
+    
     permission_classes = [IsAuthenticated]
+    """
 
     def post(self, request):
         logout(request)
@@ -101,8 +102,9 @@ class SessionLogoutView(APIView):
 class MeSessionView(APIView):
     """
     GET -> devuelve el usuario autenticado por sesión.
-    """
+    
     permission_classes = [IsAuthenticated]
+    """
 
     def get(self, request):
         return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
