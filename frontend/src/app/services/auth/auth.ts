@@ -5,10 +5,15 @@ import { Observable, switchMap, map } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private csrfUrl = 'http://127.0.0.1:8000/api/auth/csrf/';
-  private loginUrl = 'http://127.0.0.1:8000/api/auth/login/';
-  private logoutUrl = 'http://127.0.0.1:8000/api/auth/logout/';
-  private meUrl = 'http://127.0.0.1:8000/api/auth/me/';  // Aquí está el endpoint para la información del usuario
+  private readonly apiProtocol = window.location.protocol.startsWith('http') ? window.location.protocol : 'http:';
+  private readonly apiHost = window.location.hostname || 'localhost';
+  private readonly apiPort = '8000';
+  private readonly apiBase = `${this.apiProtocol}//${this.apiHost}:${this.apiPort}`;
+
+  private csrfUrl = `${this.apiBase}/api/auth/csrf/`;
+  private loginUrl = `${this.apiBase}/api/auth/login/`;
+  private logoutUrl = `${this.apiBase}/api/auth/logout/`;
+  private meUrl = `${this.apiBase}/api/auth/me/`;  // Endpoint para la información del usuario
 
   constructor(private http: HttpClient) {}
 
@@ -19,7 +24,11 @@ export class AuthService {
 
   /** Inicia sesión */
   login(username: string, password: string): Observable<any> {
-    return this.http.post(this.loginUrl, { username, password }, { withCredentials: true });
+    return this.http.post(
+      this.loginUrl,
+      { username, password },
+      this.buildCsrfRequestOptions()
+    );
   }
 
   /** Cierra sesión */
@@ -29,12 +38,7 @@ export class AuthService {
         this.http.post(
           this.logoutUrl,
           {},
-          {
-            withCredentials: true,
-            headers: new HttpHeaders({
-              'X-CSRFToken': this.getCookie('csrftoken') || ''
-            })
-          }
+          this.buildCsrfRequestOptions()
         )
       )
     );
@@ -55,5 +59,14 @@ export class AuthService {
   private getCookie(name: string): string | null {
     const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
     return match ? decodeURIComponent(match[2]) : null;
+  }
+
+  private buildCsrfRequestOptions() {
+    const options: { withCredentials: true; headers?: HttpHeaders } = { withCredentials: true };
+    const token = this.getCookie('csrftoken');
+    if (token) {
+      options.headers = new HttpHeaders({ 'X-CSRFToken': token });
+    }
+    return options;
   }
 }

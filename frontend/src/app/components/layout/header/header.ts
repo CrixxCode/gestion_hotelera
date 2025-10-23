@@ -18,6 +18,7 @@ export class Header {
   showLogout = false;
   userName = '';
   userRole = '';
+  private readonly logoutAnimationDuration = 1000;
 
   constructor(private authService: AuthService, private router: Router) { }
 
@@ -67,16 +68,16 @@ export class Header {
   logout(): void {
     this.showLogout = true;
     this.authService.logout().subscribe({
-      next: () => {
-        setTimeout(() => {
-          this.showLogout = false;
-          this.router.navigate(['/login']);
-        }, 1200);
-      },
-      error: () => {
-        this.showLogout = false;
-        this.router.navigate(['/login']);
-      },
+      next: () => this.finishLogoutTransition(),
+      error: () => this.finishLogoutTransition(),
     });
+  }
+
+  private finishLogoutTransition(): void {
+    setTimeout(() => {
+      this.router.navigate(['/login']).finally(() => {
+        this.showLogout = false;
+      });
+    }, this.logoutAnimationDuration);
   }
 }
