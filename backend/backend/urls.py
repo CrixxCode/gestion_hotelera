@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from accounts.views import (PasswordResetRequestView, PasswordResetConfirmView, HealthCheckView)
+from accounts.views import (PasswordResetRequestView, PasswordResetConfirmView, HealthCheckView, ProfileUpdateView)
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
@@ -28,6 +28,7 @@ urlpatterns = [
     path("api/auth/logout/", SessionLogoutView.as_view(), name="session_logout"),
     path("api/auth/password/reset/", PasswordResetRequestView.as_view(), name="password_reset"),
     path("api/auth/password/reset/confirm/", PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
+    path("api/auth/me/update/", ProfileUpdateView.as_view(), name="profile_update"),
 
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),

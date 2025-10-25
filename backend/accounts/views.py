@@ -90,9 +90,8 @@ class SessionLogoutView(APIView):
     """
     POST sin cuerpo -> cierra sesión (elimina cookie 'sessionid').
     Requiere X-CSRFToken porque modifica estado.
-    
-    permission_classes = [IsAuthenticated]
     """
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         logout(request)
@@ -102,9 +101,8 @@ class SessionLogoutView(APIView):
 class MeSessionView(APIView):
     """
     GET -> devuelve el usuario autenticado por sesión.
-    
-    permission_classes = [IsAuthenticated]
     """
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
@@ -252,3 +250,17 @@ class ResourceViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
+
+class ProfileUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Devuelve el perfil actual"""
+        return Response(UserSerializer(request.user).data)
+
+    def put(self, request):
+        """Actualiza el perfil"""
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)

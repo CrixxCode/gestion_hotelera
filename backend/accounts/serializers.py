@@ -44,10 +44,56 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "username", "email", "is_active", "is_staff", "roles"]
+        fields = [
+            "id",
+            "first_name",
+            "last_name",
+            "username",
+            "email",
+            "is_active",
+            "is_staff",
+            "roles"
+        ]
 
 
 class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=8)
+    first_name = serializers.CharField(required=True, max_length=50)
+    last_name = serializers.CharField(required=True, max_length=50)
+    email = serializers.EmailField(required=True)
+    is_active = serializers.BooleanField(default=True)
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "first_name",
+            "last_name",
+            "username",
+            "email",
+            "password",
+            "is_active",
+        ]
+
+    def validate_email(self, value):
+        email = (value or "").strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError("Ya existe un usuario con este correo.")
+        return email
+
+    def validate_password(self, value):
+        from django.contrib.auth import password_validation
+        password_validation.validate_password(value)
+        return value
+
+    def create(self, validated_data):
+        password = validated_data.pop("password")
+        validated_data["email"] = validated_data["email"].strip().lower()
+        user = User(**validated_data)
+        user.set_password(password)
+        user.save()
+        return user
+
     password = serializers.CharField(write_only=True, min_length=8)
 
     class Meta:
