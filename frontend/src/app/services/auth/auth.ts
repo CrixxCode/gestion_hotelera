@@ -79,12 +79,12 @@ export class AuthService {
     return `${this.apiBase}${normalizedPath}`;
   }
 
-  private getCookie(name: string): string | null {
+  getCookie(name: string): string | null {
     const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
     return match ? decodeURIComponent(match[2]) : null;
   }
 
-  private buildCsrfRequestOptions() {
+  buildCsrfRequestOptions() {
     const options: { withCredentials: true; headers?: HttpHeaders } = { withCredentials: true };
     const token = this.getCookie('csrftoken');
     if (token) {

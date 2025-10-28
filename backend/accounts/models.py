@@ -40,6 +40,8 @@ class Resource(models.Model):
     key = models.CharField(max_length=120, unique=True)  # p.ej. "users.read"
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
+    link = models.CharField(blank=True)
+    link_backend = models.CharField(blank=True)
 
     roles = models.ManyToManyField("Role", related_name="resources", through="RoleResource")
 

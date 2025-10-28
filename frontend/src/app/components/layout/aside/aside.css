@@ -1,111 +1,79 @@
-/* ====== PanelMenu base: sin fondo ni bordes ====== */
-.p-panelmenu,
-.p-panelmenu .p-panelmenu-panel,
-.p-panelmenu .p-panelmenu-header,
-.p-panelmenu .p-panelmenu-content {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
+/* === ELEMENTOS PRINCIPALES === */
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.5rem;
+  color: #f9fafb; /* blanco visible */
+  width: 100%;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+  position: relative;
 }
 
-/* ====== Enlaces (texto) ====== */
-.p-panelmenu .p-menuitem-link {
-  background: transparent !important;
-  color: #F9FAFB !important; /* blanco suave */
+.dark .menu-item {
+  color: #f9fafb;
 }
 
-/* Texto del item explícito */
-.p-panelmenu .p-menuitem-link .p-menuitem-text {
-  color: #F9FAFB !important;
+.menu-item:hover {
+  background-color: #374151; /* gris oscuro */
+  color: #ffffff;
 }
 
-/* ====== Íconos ====== */
-.p-panelmenu .p-menuitem-icon,
-.p-panelmenu .p-submenu-icon {
-  color: #F9FAFB !important; /* mismo color que el texto */
-  font-size: 1rem;
+.menu-item i {
+  color: #d1d5db;
+  width: 1.25rem;
+  text-align: center;
+  transition: color 0.2s ease-in-out;
 }
 
-/* ====== Hover ====== */
-.p-panelmenu .p-menuitem-link:hover {
-  background: rgba(245, 158, 11, 0.15) !important;
-  color: #F59E0B !important;
-}
-.p-panelmenu .p-menuitem-link:hover .p-menuitem-text,
-.p-panelmenu .p-menuitem-link:hover .p-menuitem-icon,
-.p-panelmenu .p-menuitem-link:hover .p-submenu-icon {
-  color: #F59E0B !important; /* dorado */
+.menu-item span {
+  margin-left: 0.75rem;
+  color: #f9fafb;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: color 0.2s ease-in-out;
 }
 
-/* ====== Activo (ítem seleccionado) ====== */
-.p-panelmenu .p-menuitem-link-active {
-  background: rgba(245, 158, 11, 0.10) !important;
-  color: #F59E0B !important;
-  font-weight: 600 !important;
-}
-.p-panelmenu .p-menuitem-link-active .p-menuitem-text,
-.p-panelmenu .p-menuitem-link-active .p-menuitem-icon,
-.p-panelmenu .p-menuitem-link-active .p-submenu-icon {
-  color: #F59E0B !important;
+/* === ITEM ACTIVO (resaltado) === */
+.active {
+  background-color: #4b5563; /* gris más claro */
+  color: #ffffff;
+  font-weight: 600;
+  border-left: 4px solid #fbbf24; /* borde dorado */
 }
 
-/* Forzar color blanco en el texto */
-.p-panelmenu .p-menuitem-link .p-menuitem-text {
-  color: #F9FAFB !important;   /* blanco */
-  opacity: 1 !important;       /* evita que quede grisáceo */
+.active i,
+.active span {
+  color: #ffffff;
 }
 
-/* Íconos iguales al texto */
-.p-panelmenu .p-menuitem-icon,
-.p-panelmenu .p-submenu-icon {
-  color: #F9FAFB !important;
-  opacity: 1 !important;
+/* === SUBMENÚS === */
+.submenu {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0 0.5rem 2.75rem;
+  border-radius: 0.5rem;
+  color: #e5e7eb;
+  font-size: 0.9rem;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
 }
 
-/* Hover: texto + íconos dorados */
-.p-panelmenu .p-menuitem-link:hover .p-menuitem-text,
-.p-panelmenu .p-menuitem-link:hover .p-menuitem-icon,
-.p-panelmenu .p-menuitem-link:hover .p-submenu-icon {
-  color: #F59E0B !important;
+.submenu:hover {
+  background-color: #374151;
+  color: #ffffff;
 }
 
-/* Activo: texto + íconos dorados y en negrita */
-.p-panelmenu .p-menuitem-link-active .p-menuitem-text,
-.p-panelmenu .p-menuitem-link-active .p-menuitem-icon,
-.p-panelmenu .p-menuitem-link-active .p-submenu-icon {
-  color: #F59E0B !important;
-  font-weight: 600 !important;
-  opacity: 1 !important;
+/* === SUBMENÚ ACTIVO === */
+.submenu.active {
+  background-color: #4b5563;
+  color: #ffffff;
+  border-left: 3px solid #fbbf24;
 }
 
-html, body {
-  height: 100%;
-  overflow-y: auto; /* el scroll será global, no dentro del aside */
-}
-
-/* === SCROLLBAR PERSONALIZADA === */
-
-/* Estilo base para navegadores basados en WebKit (Chrome, Edge, Safari) */
-::-webkit-scrollbar {
-  width: 6px; /* grosor de la barra vertical */
-  height: 6px; /* grosor de la barra horizontal */
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: rgba(100, 100, 100, 0.4); /* color de la barra */
-  border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(100, 100, 100, 0.6);
-}
-
-::-webkit-scrollbar-track {
-  background: transparent; /* fondo invisible */
-}
-
-/* Firefox */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(100, 100, 100, 0.4) transparent;
+/* === TRANSICIONES GENERALES === */
+.menu-item,
+.submenu {
+  transition: background 0.2s ease, color 0.2s ease, border-left 0.2s ease;
 }

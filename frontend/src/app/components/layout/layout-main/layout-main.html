@@ -10,10 +10,13 @@
            transition-all duration-300 ease-in-out transform
            overflow-hidden shrink-0" [class.w-64]="isAsideOpen()" [class.w-0]="!isAsideOpen() && !isMobile"
     [class.-translate-x-full]="!isAsideOpen() && isMobile" [class.translate-x-0]="isAsideOpen() && isMobile">
-    <div class="w-64 flex flex-col h-full overflow-y-auto">
+
+    <!-- 👇 ESTE es el contenedor que scrollea -->
+    <div class="flex flex-col h-full overflow-y-auto aside-scroll">
       <app-aside></app-aside>
     </div>
   </aside>
+
 
   <!-- HEADER + CONTENT -->
   <div class="flex flex-col h-screen overflow-hidden flex-1">
@@ -22,7 +25,7 @@
     </header>
 
     <section class="flex-1 overflow-y-auto bg-gray-100 px-6 pb-8 text-[#111827]
-             rounded-tl-2xl custom-scroll">
+             custom-scroll">
       <app-content></app-content>
     </section>
   </div>

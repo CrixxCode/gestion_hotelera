@@ -10,9 +10,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.throttling import ScopedRateThrottle
+from accounts.permissions import HasResourceLinkPermission
+from rest_framework.permissions import IsAuthenticated
 
 from .models import Role, Resource
-from .permissions import HasResourceScopes
 from .serializers import (
     RegisterSerializer, UserSerializer, RoleSerializer, ResourceSerializer,
     PasswordChangeSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer
@@ -183,7 +184,7 @@ class PasswordResetConfirmView(APIView):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by("date_joined")
     serializer_class = UserSerializer
-    permission_classes = [HasResourceScopes]
+    permission_classes = [HasResourceLinkPermission]
     required_scopes = ["users.read"]  # lectura por defecto
 
     def get_required_scopes(self):
@@ -200,7 +201,7 @@ class UserViewSet(viewsets.ModelViewSet):
 class RoleViewSet(viewsets.ModelViewSet):
     queryset = Role.objects.all().order_by("name")
     serializer_class = RoleSerializer
-    permission_classes = [HasResourceScopes]
+    permission_classes = [HasResourceLinkPermission]
     required_scopes = ["roles.read"]
 
     def get_required_scopes(self):
@@ -239,7 +240,7 @@ class RoleViewSet(viewsets.ModelViewSet):
 class ResourceViewSet(viewsets.ModelViewSet):
     queryset = Resource.objects.all().order_by("key")
     serializer_class = ResourceSerializer
-    permission_classes = [HasResourceScopes]
+    permission_classes = [HasResourceLinkPermission]
     required_scopes = ["resources.read"]
 
     def get_required_scopes(self):
@@ -264,3 +265,4 @@ class ProfileUpdateView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+    
