@@ -4,6 +4,8 @@ from rest_framework.permissions import BasePermission
 def _require_scopes(user, required: Iterable[str]) -> bool:
     if not user or not user.is_authenticated:
         return False
+    if getattr(user, "is_superuser", False):
+        return True
     user_scopes = user.resource_keys()
     return all(scope in user_scopes for scope in required)
 

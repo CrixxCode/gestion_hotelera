@@ -46,6 +46,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "id",
+            "avatar",
             "first_name",
             "last_name",
             "username",
@@ -67,6 +68,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "id",
+            "avatar",
             "first_name",
             "last_name",
             "username",
@@ -91,33 +93,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         validated_data["email"] = validated_data["email"].strip().lower()
         user = User(**validated_data)
         user.set_password(password)
-        user.save()
-        return user
-
-    password = serializers.CharField(write_only=True, min_length=8)
-
-    class Meta:
-        model = User
-        fields = ["id", "username", "email", "password"]
-
-    def validate_email(self, value: str) -> str:
-        email = (value or "").strip().lower()
-        if not email:
-            raise serializers.ValidationError(_("El email es obligatorio."))
-        if User.objects.filter(email__iexact=email).exists():
-            raise serializers.ValidationError(_("Ya existe un usuario con este email."))
-        return email
-
-    def validate_password(self, value):
-        password_validation.validate_password(value)
-        return value
-
-    def create(self, validated_data):
-        pwd = validated_data.pop("password")
-        if validated_data.get("email"):
-            validated_data["email"] = validated_data["email"].strip().lower()
-        user = User(**validated_data)
-        user.set_password(pwd)
         user.save()
         return user
 

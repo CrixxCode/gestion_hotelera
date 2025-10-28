@@ -18,7 +18,7 @@ export class Aside implements OnInit {
       {
         label: 'Dashboard',
         icon: 'fa-solid fa-house',
-        routerLink: ['/']
+        routerLink: ['/dashboard']
       },
       {
         label: 'Reservas',

@@ -31,9 +31,9 @@
             <p class="text-sm text-[#F59E0B]">{{ userRole }}</p>
           </div>
           <img
-            src="https://i.pravatar.cc/100?img=12"
-            alt="Usuario"
-            class="w-12 h-12 rounded-full border-2 border-[#F59E0B] group-hover:scale-105 transition-transform"
+            [src]="userAvatar"
+            [alt]="userName || 'Usuario'"
+            class="w-12 h-12 rounded-full border-2 border-[#F59E0B] group-hover:scale-105 transition-transform object-cover"
           />
           <i class="fa-solid fa-chevron-down text-gray-600 ml-2"></i>
         </button>

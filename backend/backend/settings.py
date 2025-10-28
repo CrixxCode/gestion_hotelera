@@ -182,6 +182,9 @@ TEMPLATES = [{
     ]},
 }]
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 7  # 7 días por defecto
 SESSION_SAVE_EVERY_REQUEST = True
 

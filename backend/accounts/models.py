@@ -4,6 +4,12 @@ from django.db import models
 
 class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    avatar = models.ImageField(
+        upload_to='avatars/',
+        blank=True,
+        null=True,
+        default='avatars/default-avatar.png',  # fallback para usuarios sin avatar
+    )
     # Campos extra si se requieren en el futuro
     # ejemplo: phone = models.CharField(max_length=20, blank=True)
 

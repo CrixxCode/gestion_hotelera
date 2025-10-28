@@ -18,11 +18,16 @@ export class Header {
   showLogout = false;
   userName = '';
   userRole = '';
+  userAvatar = 'avatar/default-avatar.png';
+  private readonly defaultAvatar = 'avatar/default-avatar.png';
   private readonly logoutAnimationDuration = 1000;
 
   constructor(private authService: AuthService, private router: Router) { }
 
   ngOnInit() {
+    // Asegura que la aplicación arranque siempre en modo claro
+    this.darkMode = false;
+    document.documentElement.classList.remove('dark');
     this.loadUserInfo();
   }
 
@@ -31,11 +36,14 @@ export class Header {
     this.authService.getUserInfo().subscribe({
       next: (res: any) => {
         this.userName = res.username || 'Usuario';  // Asignar nombre de usuario
-        this.userRole = res.role || 'Usuario';  // Asignar rol de usuario
+        this.userRole = this.resolveUserRole(res);
+        const resolvedAvatar = this.authService.buildMediaUrl(res.avatar);
+        this.userAvatar = resolvedAvatar || this.defaultAvatar;
       },
       error: () => {
         this.userName = 'Invitado';
         this.userRole = 'Sin rol';
+        this.userAvatar = this.defaultAvatar;
       }
     });
   }
@@ -79,5 +87,13 @@ export class Header {
         this.showLogout = false;
       });
     }, this.logoutAnimationDuration);
+  }
+
+  private resolveUserRole(user: any): string {
+    if (user?.role) {
+      return user.role;
+    }
+    const firstRole = Array.isArray(user?.roles) ? user.roles[0]?.name : null;
+    return firstRole || 'Usuario';
   }
 }

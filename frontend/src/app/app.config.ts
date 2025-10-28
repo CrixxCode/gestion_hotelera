@@ -1,29 +1,40 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideZoneChangeDetection } from '@angular/core';
+import { ApplicationConfig, importProvidersFrom, provideBrowserGlobalErrorListeners, provideZoneChangeDetection } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { providePrimeNG } from 'primeng/config';
-import Aura from '@primeuix/themes/aura';
+import Lara from '@primeuix/themes/lara';
 import { provideHttpClient, withXsrfConfiguration } from '@angular/common/http';
+
+// ✅ PrimeNG modules para notificaciones y confirmaciones
+import { ToastModule } from 'primeng/toast';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
 
 export const appConfig: ApplicationConfig = {
   providers: [
+    // ✅ Solo los módulos PrimeNG, no BrowserAnimationsModule
+    importProvidersFrom(ToastModule, ConfirmDialogModule),
+
+    // Configuración global
     provideBrowserGlobalErrorListeners(),
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
-    provideAnimationsAsync(),
+    provideAnimationsAsync(), // 👈 reemplaza a BrowserAnimationsModule
+
     provideHttpClient(
       withXsrfConfiguration({
         cookieName: 'csrftoken',
         headerName: 'X-CSRFToken'
       })
     ),
+
+    // Tema PrimeNG (Aura)
     providePrimeNG({
       theme: {
-        preset: Aura,
-        // options: {
-        //   darkModeSelector: 'my-dark-mode' // Clase CSS para modo oscuro
-        // }
+        preset: Lara,
+        options: {
+          darkModeSelector: '.my-app-dark',
+        }
       }
     })
   ]

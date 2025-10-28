@@ -1,10 +1,28 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, Role, Resource, UserRole, RoleResource
+from django.utils.translation import gettext_lazy as _
+
+from .models import Role, Resource, RoleResource, User, UserRole
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    pass
+    fieldsets = BaseUserAdmin.fieldsets + (
+        (_("Información adicional"), {"fields": ("avatar",)}),
+    )
+    add_fieldsets = BaseUserAdmin.add_fieldsets + (
+        (
+            None,
+            {
+                "classes": ("wide",),
+                "fields": (
+                    "username",
+                    "password1",
+                    "password2",
+                    "avatar",
+                ),
+            },
+        ),
+    )
 
 @admin.register(Role)
 class RoleAdmin(admin.ModelAdmin):

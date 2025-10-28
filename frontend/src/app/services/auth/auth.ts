@@ -1,7 +1,7 @@
 // auth.service.ts
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, switchMap, map } from 'rxjs'; 
+import { Observable, switchMap, map } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -15,26 +15,32 @@ export class AuthService {
   private logoutUrl = `${this.apiBase}/api/auth/logout/`;
   private meUrl = `${this.apiBase}/api/auth/me/`;  // Endpoint para la información del usuario
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) { }
 
   /** Obtiene el token CSRF */
   getCsrfToken(): Observable<any> {
     return this.http.get(this.csrfUrl, { withCredentials: true });
   }
 
-  /** Inicia sesión */
+  /** Inicia sesión (flujo completo con CSRF) */
   login(username: string, password: string): Observable<any> {
-    return this.http.post(
-      this.loginUrl,
-      { username, password },
-      this.buildCsrfRequestOptions()
+    // Paso 1: obtener CSRF cookie
+    return this.getCsrfToken().pipe(
+      // Paso 2: hacer login con token y credenciales
+      switchMap(() =>
+        this.http.post(
+          this.loginUrl,
+          { username, password },
+          this.buildCsrfRequestOptions() // incluye X-CSRFToken + withCredentials
+        )
+      )
     );
   }
 
   /** Cierra sesión */
   logout(): Observable<any> {
     return this.getCsrfToken().pipe(
-      switchMap(() => 
+      switchMap(() =>
         this.http.post(
           this.logoutUrl,
           {},
@@ -54,6 +60,23 @@ export class AuthService {
   /** Obtiene la información del usuario (nombre y rol) */
   getUserInfo(): Observable<any> {
     return this.http.get(this.meUrl, { withCredentials: true });
+  }
+
+  /** Devuelve la URL base del backend (útil para componer recursos como media) */
+  getApiBaseUrl(): string {
+    return this.apiBase;
+  }
+
+  /** Normaliza rutas devueltas por la API a URLs completas */
+  buildMediaUrl(path?: string | null): string {
+    if (!path) {
+      return '';
+    }
+    if (/^https?:\/\//i.test(path)) {
+      return path;
+    }
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return `${this.apiBase}${normalizedPath}`;
   }
 
   private getCookie(name: string): string | null {
