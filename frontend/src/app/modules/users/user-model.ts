@@ -1,3 +1,10 @@
+export interface RoleI {
+  id: number;
+  name: string;
+  slug?: string;
+  description?: string;
+}
+
 export interface UserI {
   id?: number;
   username: string;
@@ -6,8 +13,9 @@ export interface UserI {
   last_name: string;
   email: string;
   avatar?: string; // URL o base64
-  role?: {
-    id: number;
-    name: string;
-  };
+  role?: RoleI | null;
+  roles?: RoleI[];
+  status?: 'ACTIVE' | 'INACTIVE';
+  is_active?: boolean;
+  is_staff?: boolean;
 }

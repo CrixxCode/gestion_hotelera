@@ -1,14 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule, NgClass } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TableModule } from 'primeng/table';
-import { ButtonModule } from 'primeng/button';
-import { InputTextModule } from 'primeng/inputtext';
-import { TagModule } from 'primeng/tag';
-import { ToastModule } from 'primeng/toast';
-import { ConfirmDialogModule } from 'primeng/confirmdialog';
-import { ConfirmationService, MessageService } from 'primeng/api';
-
 import { UserService } from '../../../services/user';
 import { UserI } from '../user-model';
 
@@ -17,75 +9,94 @@ import { UserI } from '../user-model';
   standalone: true,
   templateUrl: './user-list.html',
   styleUrls: ['./user-list.css'],
-  imports: [
-    CommonModule,
-    FormsModule,
-    TableModule,
-    ButtonModule,
-    InputTextModule,
-    TagModule,
-    ToastModule,
-    ConfirmDialogModule,
-    NgClass,
-  ],
-  providers: [ConfirmationService, MessageService],
+  imports: [CommonModule, FormsModule, NgClass],
 })
 export class UserList implements OnInit {
   users: UserI[] = [];
+  filteredUsers: UserI[] = [];
   loading = true;
   globalFilter = '';
+  first = 0;
+  rows = 6;
 
-  constructor(
-    private userService: UserService,
-    private confirmationService: ConfirmationService,
-    private messageService: MessageService
-  ) {}
+  constructor(private userService: UserService) {}
 
   ngOnInit(): void {
     this.loadUsers();
   }
 
+  /** Carga los usuarios desde el backend */
   loadUsers(): void {
     this.userService.getUsers().subscribe({
       next: (data) => {
         this.users = data;
+        this.filteredUsers = data;
         this.loading = false;
       },
       error: () => {
-        this.messageService.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'No se pudieron cargar los usuarios',
-        });
+        window.alert('❌ Error al cargar los usuarios.');
         this.loading = false;
       },
     });
   }
 
+  /** Filtro global */
+  onFilterChange(): void {
+    const query = this.globalFilter.toLowerCase().trim();
+    this.filteredUsers = this.users.filter((u) =>
+      [u.username, u.email, u.first_name, u.last_name]
+        .join(' ')
+        .toLowerCase()
+        .includes(query)
+    );
+    this.first = 0;
+  }
+
+  /** Confirmación y eliminación lógica */
   confirmDelete(user: UserI): void {
-    this.confirmationService.confirm({
-      message: `¿Deseas eliminar a ${user.first_name} ${user.last_name}?`,
-      header: 'Confirmar eliminación',
-      icon: 'pi pi-exclamation-triangle',
-      accept: () => {
-        this.userService.deleteUser(user.id!).subscribe({
-          next: () => {
-            this.messageService.add({
-              severity: 'success',
-              summary: 'Eliminado',
-              detail: 'Usuario eliminado correctamente',
-            });
-            this.loadUsers();
-          },
-          error: () => {
-            this.messageService.add({
-              severity: 'error',
-              summary: 'Error',
-              detail: 'No se pudo eliminar el usuario',
-            });
-          },
-        });
-      },
-    });
+    const confirmed = window.confirm(
+      `¿Deseas eliminar a ${user.first_name} ${user.last_name}?`
+    );
+    if (confirmed) {
+      this.userService.deleteUserLogic(user.id!).subscribe({
+        next: () => {
+          window.alert('✅ Usuario eliminado correctamente.');
+          this.loadUsers();
+        },
+        error: () => {
+          window.alert('❌ No se pudo eliminar el usuario.');
+        },
+      });
+    }
+  }
+
+  /** Acciones */
+  onEdit(user: UserI): void {
+    window.alert(`✏️ Editar usuario: ${user.username}`);
+  }
+
+  onView(user: UserI): void {
+    window.alert(`👁️ Ver detalles de: ${user.username}`);
+  }
+
+  /** Paginación manual */
+  nextPage(): void {
+    if (this.first + this.rows < this.filteredUsers.length) {
+      this.first += this.rows;
+    }
+  }
+
+  previousPage(): void {
+    if (this.first > 0) {
+      this.first -= this.rows;
+    }
+  }
+
+  get currentPage(): number {
+    return Math.floor(this.first / this.rows) + 1;
+  }
+
+  get totalPages(): number {
+    return Math.ceil(this.filteredUsers.length / this.rows);
   }
 }
