@@ -4,7 +4,7 @@ from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
 
-from rest_framework import viewsets, mixins, status
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -124,20 +124,6 @@ class PasswordChangeView(APIView):
 
 
 # -----------------------------
-# Registro
-# -----------------------------
-
-class RegisterView(mixins.CreateModelMixin, viewsets.GenericViewSet):
-    """
-    Registro básico. Por seguridad, NO auto-login aquí (flujo explícito de login).
-    """
-    serializer_class = RegisterSerializer
-    permission_classes = [AllowAny]
-    queryset = User.objects.none()       # evita listado accidental
-    http_method_names = ["post"]         # solo creación
-
-
-# -----------------------------
 # Recuperación de contraseña
 # -----------------------------
 
@@ -186,6 +172,13 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
     permission_classes = [HasResourceLinkPermission]
     required_scopes = ["users.read"]  # lectura por defecto
+    serializer_action_classes = {
+        "create": RegisterSerializer,
+        "register": RegisterSerializer,
+    }
+
+    def get_serializer_class(self):
+        return self.serializer_action_classes.get(self.action, self.serializer_class)
 
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
@@ -193,9 +186,20 @@ class UserViewSet(viewsets.ModelViewSet):
         return self.required_scopes
 
     def get_permissions(self):
+        if self.action == "register":
+            return [AllowAny()]
         # engancha scopes dinámicos antes de evaluar permisos
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
+
+    @action(detail=False, methods=["post"], url_path="register")
+    def register(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        data = UserSerializer(user, context=self.get_serializer_context()).data
+        data.pop("password", None)
+        return Response(data, status=status.HTTP_201_CREATED)
 
 
 class RoleViewSet(viewsets.ModelViewSet):

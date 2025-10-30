@@ -1,3 +1,55 @@
+<!-- ====== CONTENEDORES GLOBALES ====== -->
+<p-toast></p-toast>
+<p-confirmDialog></p-confirmDialog>
+
+
+<!-- ====== DIALOGO REGISTRO DE USUARIO ====== -->
+<p-dialog
+  header="Registrar nuevo usuario"
+  [(visible)]="visibleRegisterDialog"
+  [modal]="true"
+  [style]="{ width: '500px' }"
+  [draggable]="false"
+  [resizable]="false"
+  (onHide)="closeRegisterDialog()"
+>
+  <app-user-register (close)="closeRegisterDialog()"></app-user-register>
+</p-dialog>
+
+<!-- ====== DIALOGO DETALLES DE USUARIO ====== -->
+<p-dialog
+  header="Detalles del Usuario"
+  [(visible)]="visibleViewDialog"
+  [modal]="true"
+  [style]="{ width: '450px' }"
+  [draggable]="false"
+  [resizable]="false"
+  (onHide)="visibleViewDialog = false"
+>
+  <app-user-profile
+    [user]="selectedUser"
+    (close)="visibleViewDialog = false"
+  ></app-user-profile>
+</p-dialog>
+
+<!-- ====== DIALOGO EDICION DE USUARIO ====== -->
+<p-dialog
+  header="Editar usuario"
+  [(visible)]="visibleEditDialog"
+  [modal]="true"
+  [style]="{ width: '500px' }"
+  [draggable]="false"
+  [resizable]="false"
+  (onHide)="closeEditDialog()"
+>
+  <app-user-update
+    [user]="selectedUser"
+    (updated)="onUserUpdated()"
+    (close)="closeEditDialog()"
+  ></app-user-update>
+</p-dialog>
+
+<!-- ====== CONTENIDO PRINCIPAL ====== -->
 <div class="w-full min-h-screen bg-gray-100 px-6 py-6 overflow-y-auto">
   <div class="max-w-[1600px] mx-auto space-y-6">
     <!-- ===== ENCABEZADO ===== -->
@@ -8,9 +60,7 @@
 
       <div class="flex gap-2 items-center">
         <div class="relative">
-          <i
-            class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-          ></i>
+          <i class="pi pi-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
           <input
             type="text"
             placeholder="Buscar usuario..."
@@ -20,9 +70,10 @@
           />
         </div>
 
+        <!-- Botón que abre el diálogo -->
         <button
-          class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition"
-          routerLink="/users/create"
+          class="flex items-center gap-2 bg-[#111827] hover:bg-[#1F2937] text-white px-4 py-2 rounded-lg font-medium transition"
+          (click)="openRegisterDialog()"
         >
           <i class="pi pi-plus"></i> Nuevo Usuario
         </button>
@@ -46,46 +97,33 @@
 
         <tbody>
           <tr
-            *ngFor="
-              let user of filteredUsers | slice: first : first + rows;
-              let i = index
-            "
+            *ngFor="let user of filteredUsers | slice: first : first + rows; let i = index"
             class="odd:bg-white even:bg-gray-50 border-b hover:bg-gray-100 transition"
           >
-            <td class="px-6 py-4 font-medium text-gray-900">
-              {{ first + i + 1 }}
-            </td>
+            <td class="px-6 py-4 font-medium text-gray-900">{{ first + i + 1 }}</td>
             <td class="px-6 py-4">{{ user.username }}</td>
-            <td class="px-6 py-4">
-              {{ user.first_name }} {{ user.last_name }}
-            </td>
+            <td class="px-6 py-4">{{ user.first_name }} {{ user.last_name }}</td>
             <td class="px-6 py-4">{{ user.email }}</td>
 
-            <!-- ===== ROLES ===== -->
+            <!-- Rol -->
             <td class="px-6 py-4">
               <ng-container *ngIf="user.roles as roles; else noRole">
                 <ng-container *ngIf="roles.length > 0; else noRole">
-                  <span
-                    class="inline-block bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full"
-                  >
+                  <span class="inline-block bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full">
                     {{ roles[0]?.name }}
-                    <ng-container *ngIf="roles.length > 1">
-                      +{{ roles.length - 1 }}
-                    </ng-container>
+                    <ng-container *ngIf="roles.length > 1">+{{ roles.length - 1 }}</ng-container>
                   </span>
                 </ng-container>
               </ng-container>
 
               <ng-template #noRole>
-                <span
-                  class="inline-block bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full"
-                >
+                <span class="inline-block bg-gray-100 text-gray-600 text-xs font-medium px-2 py-0.5 rounded-full">
                   {{ user.role?.name || 'Sin rol' }}
                 </span>
               </ng-template>
             </td>
 
-            <!-- ===== ESTADO ===== -->
+            <!-- Estado -->
             <td class="px-6 py-4">
               <span
                 [ngClass]="{
@@ -98,7 +136,7 @@
               </span>
             </td>
 
-            <!-- ===== ACCIONES ===== -->
+            <!-- Acciones -->
             <td class="px-6 py-4 text-center">
               <div class="flex justify-center gap-3">
                 <button
@@ -128,7 +166,7 @@
             </td>
           </tr>
 
-          <!-- ===== MENSAJE VACÍO ===== -->
+          <!-- MENSAJE VACÍO -->
           <tr *ngIf="filteredUsers.length === 0">
             <td colspan="7" class="text-center py-6 text-gray-500">
               <i class="pi pi-info-circle mr-2"></i> No se encontraron usuarios.

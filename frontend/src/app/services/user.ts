@@ -61,6 +61,60 @@ export class UserService {
       );
   }
 
+  /** Crea un nuevo usuario */
+  createUser(user: UserI, avatarFile?: File): Observable<UserI> {
+    const formData = new FormData();
+
+    // Campos básicos
+    formData.append('first_name', user.first_name);
+    formData.append('last_name', user.last_name);
+    formData.append('username', user.username);
+    formData.append('email', user.email);
+    formData.append('password', user.password || '');
+
+    // Avatar (solo si se selecciona)
+    if (avatarFile) {
+      formData.append('avatar', avatarFile);
+    }
+
+    // Estado (opcional)
+    if (user.status) {
+      formData.append('status', user.status);
+    }
+
+    // Rol (si usas un solo rol)
+    if (user.role && user.role.id) {
+      formData.append('role', String(user.role.id));
+    }
+
+    return this.http.post<UserI>(
+      this.apiUrl,
+      formData,
+      this.authService.buildCsrfRequestOptions()
+    );
+  }
+
+  /** Actualiza un usuario existente */
+  updateUser(id: number, user: UserI, avatarFile?: File): Observable<UserI> {
+    const formData = new FormData();
+    formData.append('first_name', user.first_name);
+    formData.append('last_name', user.last_name);
+    formData.append('username', user.username);
+    formData.append('email', user.email);
+    formData.append('is_active', user.is_active ? 'true' : 'false');
+
+    if (avatarFile) {
+      formData.append('avatar', avatarFile);
+    }
+
+    return this.http.patch<UserI>(
+      `${this.apiUrl}${id}/`,
+      formData,
+      this.authService.buildCsrfRequestOptions()
+    );
+  }
+
+
   /** Elimina fisicamente un usuario */
   deleteUser(id: number): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}${id}/`, this.authService.buildCsrfRequestOptions());

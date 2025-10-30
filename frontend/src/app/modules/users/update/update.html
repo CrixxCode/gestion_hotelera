@@ -1,0 +1,136 @@
+<form [formGroup]="form" (ngSubmit)="onSubmit()" class="space-y-4">
+  <!-- Avatar -->
+  <div class="flex flex-col items-center mb-4">
+    <div class="relative">
+      <img
+        *ngIf="avatarPreview; else defaultAvatar"
+        [src]="avatarPreview"
+        class="w-28 h-28 rounded-full border border-gray-300 shadow-sm object-cover"
+        alt="Avatar"
+      />
+      <ng-template #defaultAvatar>
+        <div
+          class="w-28 h-28 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-3xl"
+        >
+          <i class="pi pi-user"></i>
+        </div>
+      </ng-template>
+
+      <label
+        for="avatar"
+        class="block text-sm font-medium text-gray-700 mt-3 text-center"
+      >
+        Foto de perfil
+      </label>
+      <input
+        id="avatar"
+        type="file"
+        (change)="onAvatarChange($event)"
+        class="mt-1 text-sm text-gray-600"
+      />
+    </div>
+  </div>
+
+  <!-- Nombre y Apellido -->
+  <div class="grid grid-cols-2 gap-3">
+    <div>
+      <label
+        for="first_name"
+        class="block text-sm font-medium text-gray-700 mb-1"
+        >Nombre</label
+      >
+      <input
+        id="first_name"
+        pInputText
+        formControlName="first_name"
+        class="p-inputtext-sm w-full"
+        placeholder="Nombre"
+      />
+    </div>
+
+    <div>
+      <label
+        for="last_name"
+        class="block text-sm font-medium text-gray-700 mb-1"
+        >Apellido</label
+      >
+      <input
+        id="last_name"
+        pInputText
+        formControlName="last_name"
+        class="p-inputtext-sm w-full"
+        placeholder="Apellido"
+      />
+    </div>
+  </div>
+
+  <!-- Username -->
+  <div>
+    <label
+      for="username"
+      class="block text-sm font-medium text-gray-700 mb-1"
+      >Nombre de usuario</label
+    >
+    <input
+      id="username"
+      pInputText
+      formControlName="username"
+      class="p-inputtext-sm w-full"
+      placeholder="Nombre de usuario"
+    />
+  </div>
+
+  <!-- Correo -->
+  <div>
+    <label
+      for="email"
+      class="block text-sm font-medium text-gray-700 mb-1"
+      >Correo electrónico</label
+    >
+    <input
+      id="email"
+      pInputText
+      type="email"
+      formControlName="email"
+      class="p-inputtext-sm w-full"
+      placeholder="Correo electrónico"
+    />
+  </div>
+
+  <!-- Estado -->
+  <div>
+    <label
+      for="status"
+      class="block text-sm font-medium text-gray-700 mb-1"
+      >Estado</label
+    >
+    <select
+      id="status"
+      formControlName="status"
+      class="border rounded px-2 py-1 text-sm w-full"
+    >
+      <option value="ACTIVE">Activo</option>
+      <option value="INACTIVE">Inactivo</option>
+    </select>
+  </div>
+
+  <!-- Botones -->
+  <div class="flex justify-end gap-3 pt-4">
+    <button
+      pButton
+      type="button"
+      label="Cancelar"
+      icon="pi pi-times"
+      class="p-button-danger text-white bg-rose-600 hover:bg-rose-700 border-none"
+      (click)="cancel()"
+    ></button>
+
+    <button
+      pButton
+      type="submit"
+      label="Actualizar"
+      icon="pi pi-check"
+      class="p-button-success bg-emerald-600 hover:bg-emerald-700 border-none text-white"
+    ></button>
+  </div>
+</form>

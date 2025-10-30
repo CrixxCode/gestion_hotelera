@@ -1,15 +1,38 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule, NgClass } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { UserService } from '../../../services/user';
 import { UserI } from '../user-model';
+
+// PrimeNG
+import { ToastModule } from 'primeng/toast';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { DialogModule } from 'primeng/dialog';
+import { MessageService, ConfirmationService } from 'primeng/api';
+
+// Componentes hijos
+import { UserRegister } from '../register/register';
+import { UserProfile } from '../profile/profile';
+import { UserUpdate } from '../update/update';
 
 @Component({
   selector: 'app-user-list',
   standalone: true,
   templateUrl: './user-list.html',
   styleUrls: ['./user-list.css'],
-  imports: [CommonModule, FormsModule, NgClass],
+  imports: [
+    CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
+    NgClass,
+    ToastModule,
+    ConfirmDialogModule,
+    DialogModule,
+    UserRegister,
+    UserProfile,
+    UserUpdate
+  ],
+  providers: [MessageService, ConfirmationService]
 })
 export class UserList implements OnInit {
   users: UserI[] = [];
@@ -19,7 +42,19 @@ export class UserList implements OnInit {
   first = 0;
   rows = 6;
 
-  constructor(private userService: UserService) {}
+  //  Usuario seleccionado
+  selectedUser: UserI | null = null;
+
+  //  Diálogos
+  visibleRegisterDialog = false;
+  visibleEditDialog = false;
+  visibleViewDialog = false;
+
+  constructor(
+    private userService: UserService,
+    private messageService: MessageService,
+    private confirmationService: ConfirmationService
+  ) { }
 
   ngOnInit(): void {
     this.loadUsers();
@@ -27,6 +62,7 @@ export class UserList implements OnInit {
 
   /** Carga los usuarios desde el backend */
   loadUsers(): void {
+    this.loading = true;
     this.userService.getUsers().subscribe({
       next: (data) => {
         this.users = data;
@@ -34,9 +70,14 @@ export class UserList implements OnInit {
         this.loading = false;
       },
       error: () => {
-        window.alert('❌ Error al cargar los usuarios.');
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'No se pudieron cargar los usuarios.',
+          life: 3000
+        });
         this.loading = false;
-      },
+      }
     });
   }
 
@@ -52,34 +93,87 @@ export class UserList implements OnInit {
     this.first = 0;
   }
 
-  /** Confirmación y eliminación lógica */
-  confirmDelete(user: UserI): void {
-    const confirmed = window.confirm(
-      `¿Deseas eliminar a ${user.first_name} ${user.last_name}?`
-    );
-    if (confirmed) {
-      this.userService.deleteUserLogic(user.id!).subscribe({
-        next: () => {
-          window.alert('✅ Usuario eliminado correctamente.');
-          this.loadUsers();
-        },
-        error: () => {
-          window.alert('❌ No se pudo eliminar el usuario.');
-        },
-      });
-    }
+  // =============================
+  //  CREAR USUARIO
+  // =============================
+  openRegisterDialog(): void {
+    this.visibleRegisterDialog = true;
   }
 
-  /** Acciones */
+  closeRegisterDialog(): void {
+    this.visibleRegisterDialog = false;
+    this.loadUsers(); // 🔁 recargar lista después de registrar
+  }
+
+  // =============================
+  //  EDITAR USUARIO
+  // =============================
   onEdit(user: UserI): void {
-    window.alert(`✏️ Editar usuario: ${user.username}`);
+    this.selectedUser = user;
+    this.visibleEditDialog = true;
   }
 
+  /** Mostrar toast de actualización */
+  onUserUpdated(): void {
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Usuario actualizado',
+      detail: 'Los cambios se guardaron correctamente.',
+      life: 3000
+    });
+  }
+
+
+  closeEditDialog(): void {
+    this.visibleEditDialog = false;
+    this.loadUsers(); // 🔁 recargar lista después de actualizar
+  }
+
+  // =============================
+  //  VER DETALLES
+  // =============================
   onView(user: UserI): void {
-    window.alert(`👁️ Ver detalles de: ${user.username}`);
+    this.selectedUser = user;
+    this.visibleViewDialog = true;
   }
 
-  /** Paginación manual */
+  // =============================
+  //  ELIMINAR USUARIO
+  // =============================
+  confirmDelete(user: UserI): void {
+    this.confirmationService.confirm({
+      message: `¿Deseas eliminar a ${user.first_name} ${user.last_name}?`,
+      header: 'Confirmar eliminación',
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Sí, eliminar',
+      rejectLabel: 'Cancelar',
+      accept: () => {
+        this.userService.deleteUserLogic(user.id!).subscribe({
+          next: () => {
+            this.messageService.add({
+              severity: 'success',
+              summary: 'Eliminado',
+              detail: 'Usuario eliminado correctamente.',
+              life: 3000
+            });
+            this.loadUsers();
+          },
+          error: () => {
+            this.messageService.add({
+              severity: 'error',
+              summary: 'Error',
+              detail: 'No se pudo eliminar el usuario.',
+              life: 3000
+            });
+          }
+        });
+      }
+    });
+  }
+
+  // =============================
+  //  PAGINACIÓN MANUAL
+  // =============================
   nextPage(): void {
     if (this.first + this.rows < this.filteredUsers.length) {
       this.first += this.rows;

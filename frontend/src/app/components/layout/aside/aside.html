@@ -1,4 +1,4 @@
-<div class="aside-container h-full py-4 overflow-y-auto bg-gradient-to-b from-[#111827] to-[#1F2937]">
+<div class="aside-container h-full py-4 overflow-y-auto from-[#111827] to-[#1F2937]">
 
   <!-- Logo -->
   <div class="flex flex-col items-center py-4">
@@ -154,6 +154,7 @@
     </li>
 
     <!-- Seguridad -->
+    @if (userRole === 'ADMIN') {
     <li>
       <button type="button" class="menu-item" data-collapse-toggle="seguridad" aria-controls="seguridad">
         <i class="fa-solid fa-shield-alt w-5"></i>
@@ -161,12 +162,17 @@
         <i class="fa-solid fa-chevron-down text-xs"></i>
       </button>
       <ul id="seguridad" class="hidden py-2 space-y-2">
-        <li><a routerLink="/usuarios" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"
-            class="submenu">Usuarios</a></li>
-        <li><a routerLink="/roles" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"
-            class="submenu">Roles</a></li>
+        <li>
+          <a routerLink="/usuarios" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"
+            class="submenu">Usuarios</a>
+        </li>
+        <li>
+          <a routerLink="/roles" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"
+            class="submenu">Roles</a>
+        </li>
       </ul>
     </li>
+    }
 
     <!-- Reportes -->
     <li>
@@ -179,7 +185,7 @@
     <!-- Configuración -->
     <li>
       <a routerLink="/config" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="menu-item">
-        <i class="fa-solid fa-cogs w-5"></i>
+        <i class="fa-solid fa-gear w-5"></i>
         <span class="ms-3">Configuración</span>
       </a>
     </li>
