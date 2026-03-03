@@ -7,6 +7,7 @@ import { LayoutMain } from './components/layout/layout-main/layout-main';
 import { UserList } from './modules/users/list/user-list';
 import { UserRegister } from './modules/users/register/register';
 import { RolesComponent } from './components/pages/roles/roles';
+import { RecursosComponent } from './components/pages/recursos/recursos';
 
 export const routes: Routes = [
     {
@@ -34,6 +35,7 @@ export const routes: Routes = [
             { path: 'usuarios', component: UserList },
             { path: 'dashboard', component: Dashboard },
             { path: 'roles', component: RolesComponent},
+            { path: 'recursos', component: RecursosComponent},
         ]
     },
 ];

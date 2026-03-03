@@ -313,12 +313,58 @@ class RoleViewSet(viewsets.ModelViewSet):
         qs = qs[:200]
         return Response(UserMiniSerializer(qs, many=True).data, status=status.HTTP_200_OK)
     
+    # -------------------------
+    # Recursos
+    # -------------------------
+    
+    @action(detail=True, methods=["get"], url_path="resources")
+    def resources(self, request, pk=None):
+        """
+        GET /api/roles/<id>/resources/
+        Devuelve los recursos asignados a este rol.
+        """
+        role = self.get_object()
+        qs = role.resources.all().order_by("order", "name", "key")
+        return Response(ResourceSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="assign-resources")
+    def assign_resources(self, request, pk=None):
+        """
+        POST /api/roles/<id>/assign-resources/
+        Body: { "resource_ids": ["uuid1", ...] }
+        """
+        role = self.get_object()
+        ids = request.data.get("resource_ids", [])
+        if not isinstance(ids, list):
+            return Response({"detail": "resource_ids debe ser una lista."}, status=status.HTTP_400_BAD_REQUEST)
+
+        resources = Resource.objects.filter(id__in=ids)
+        role.resources.add(*resources)
+
+        return Response({"assigned": [str(r.id) for r in resources]}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="remove-resources")
+    def remove_resources(self, request, pk=None):
+        """
+        POST /api/roles/<id>/remove-resources/
+        Body: { "resource_ids": ["uuid1", ...] }
+        """
+        role = self.get_object()
+        ids = request.data.get("resource_ids", [])
+        if not isinstance(ids, list):
+            return Response({"detail": "resource_ids debe ser una lista."}, status=status.HTTP_400_BAD_REQUEST)
+
+        resources = Resource.objects.filter(id__in=ids)
+        role.resources.remove(*resources)
+
+        return Response({"removed": [str(r.id) for r in resources]}, status=status.HTTP_200_OK)
+    
 
 class ResourceViewSet(viewsets.ModelViewSet):
-    queryset = Resource.objects.all().order_by("key")
     serializer_class = ResourceSerializer
     permission_classes = [HasResourcePermission]
     required_scopes = ["resources.read"]
+    pagination_class = None
 
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
@@ -328,6 +374,17 @@ class ResourceViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
+
+    def get_queryset(self):
+        qs = Resource.objects.all().order_by("order", "name", "key")
+        q = (self.request.query_params.get("q") or "").strip()
+        if q:
+            qs = qs.filter(
+                models.Q(key__icontains=q) |
+                models.Q(name__icontains=q) |
+                models.Q(description__icontains=q)
+            )
+        return qs
 
 class ProfileUpdateView(APIView):
     permission_classes = [IsAuthenticated]
