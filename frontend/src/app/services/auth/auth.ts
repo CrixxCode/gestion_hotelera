@@ -14,6 +14,8 @@ export class AuthService {
   private loginUrl = `${this.apiBase}/api/auth/login/`;
   private logoutUrl = `${this.apiBase}/api/auth/logout/`;
   private meUrl = `${this.apiBase}/api/auth/me/`;  // Endpoint para la información del usuario
+  private passwordResetRequestUrl = `${this.apiBase}/api/auth/password/reset/`;
+  private passwordResetConfirmUrl = `${this.apiBase}/api/auth/password/reset/confirm/`;
 
   constructor(private http: HttpClient) { }
 
@@ -60,6 +62,16 @@ export class AuthService {
   /** Obtiene la información del usuario (nombre y rol) */
   getUserInfo(): Observable<any> {
     return this.http.get(this.meUrl, { withCredentials: true });
+  }
+
+  /** Solicita el restablecimiento de contraseña (enlace por correo) */
+  requestPasswordReset(email: string, baseUrl: string): Observable<any> {
+    return this.http.post(this.passwordResetRequestUrl, { email, base_url: baseUrl }, this.buildCsrfRequestOptions());
+  }
+
+  /** Confirma el restablecimiento de contraseña (con el token del link) */
+  confirmPasswordReset(uid: string, token: string, new_password: string): Observable<any> {
+    return this.http.post(this.passwordResetConfirmUrl, { uid, token, new_password }, this.buildCsrfRequestOptions());
   }
 
   /** Devuelve la URL base del backend (útil para componer recursos como media) */

@@ -62,7 +62,8 @@ class RegisterSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(required=True, max_length=50)
     last_name = serializers.CharField(required=True, max_length=50)
     email = serializers.EmailField(required=True)
-    is_active = serializers.BooleanField(default=True)
+    is_active = serializers.BooleanField(default=True, required=False)
+    status = serializers.CharField(required=False, write_only=True)  # Aceptar 'status' del frontend
 
     class Meta:
         model = User
@@ -75,7 +76,17 @@ class RegisterSerializer(serializers.ModelSerializer):
             "email",
             "password",
             "is_active",
+            "status",
         ]
+
+    def validate_username(self, value):
+        """Valida que el username sea único (case-insensitive)"""
+        username = (value or "").strip()
+        if not username:
+            raise serializers.ValidationError("El nombre de usuario no puede estar vacío.")
+        if User.objects.filter(username__iexact=username).exists():
+            raise serializers.ValidationError("Ya existe un usuario con este nombre de usuario.")
+        return username
 
     def validate_email(self, value):
         email = (value or "").strip().lower()
@@ -90,7 +101,20 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop("password")
+        status = validated_data.pop("status", "ACTIVE")
+        
+        # Convertir status a is_active
+        is_active = validated_data.pop("is_active", True)
+        if isinstance(status, str):
+            is_active = status.upper() == "ACTIVE"
+        
+        # Normalizar datos
         validated_data["email"] = validated_data["email"].strip().lower()
+        validated_data["username"] = validated_data["username"].strip()
+        validated_data["first_name"] = validated_data.get("first_name", "").strip()
+        validated_data["last_name"] = validated_data.get("last_name", "").strip()
+        validated_data["is_active"] = is_active
+        
         user = User(**validated_data)
         user.set_password(password)
         user.save()
@@ -173,7 +197,7 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@hotel.local")
         msg = EmailMultiAlternatives(subject, text_body, from_email, [email])
         msg.attach_alternative(html_body, "text/html")
-        msg.send(fail_silently=True)
+        msg.send(fail_silently=False)
 
         return {"found": True}
 

@@ -33,7 +33,7 @@ export class UserRegister {
       username: ['', Validators.required],
       email: ['', [Validators.required, Validators.email]],
       password: ['', Validators.required],
-      status: ['ACTIVE'] // ✅ Usuario activo por defecto
+      is_active: [true] // ✅ Usuario activo por defecto
     });
   }
 
@@ -63,14 +63,17 @@ export class UserRegister {
         });
         this.loading = false;
         this.resetForm(); //  limpiar todo
-        this.close.emit();
+        // Pequeño delay para que se procese todo antes de emitir close
+        setTimeout(() => {
+          this.close.emit();
+        }, 500);
       },
       error: (err) => {
-        console.error(err);
+        console.error('Error creando usuario:', err);
         this.messageService.add({
           severity: 'error',
           summary: 'Error',
-          detail: 'No se pudo registrar el usuario.',
+          detail: err.error?.detail || 'No se pudo registrar el usuario.',
           life: 3000
         });
         this.loading = false;
@@ -87,7 +90,7 @@ export class UserRegister {
   /**  Limpia formulario, preview e input file */
   private resetForm(): void {
     this.form.reset({
-      status: 'ACTIVE' // Valor por defecto
+      is_active: true // Valor por defecto
     });
     this.avatarFile = undefined;
     this.avatarPreview = null;

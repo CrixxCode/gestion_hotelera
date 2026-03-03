@@ -77,10 +77,8 @@ export class UserService {
       formData.append('avatar', avatarFile);
     }
 
-    // Estado (opcional)
-    if (user.status) {
-      formData.append('status', user.status);
-    }
+    // Estado (usar is_active)
+    formData.append('is_active', user.is_active ? 'true' : 'false');
 
     // Rol (si usas un solo rol)
     if (user.role && user.role.id) {

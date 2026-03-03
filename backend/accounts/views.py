@@ -170,6 +170,7 @@ class PasswordResetConfirmView(APIView):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by("date_joined")
     serializer_class = UserSerializer
+    pagination_class = None
     permission_classes = [HasResourceLinkPermission]
     required_scopes = ["users.read"]  # lectura por defecto
     serializer_action_classes = {
@@ -186,11 +187,20 @@ class UserViewSet(viewsets.ModelViewSet):
         return self.required_scopes
 
     def get_permissions(self):
-        if self.action == "register":
+        if self.action in ("create", "register"):
             return [AllowAny()]
         # engancha scopes dinámicos antes de evaluar permisos
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
+
+    def create(self, request, *args, **kwargs):
+        """Override de create para usar RegisterSerializer y devolver UserSerializer"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        # Devolver usando UserSerializer para consistencia
+        response_data = UserSerializer(user, context=self.get_serializer_context()).data
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["post"], url_path="register")
     def register(self, request):
@@ -198,7 +208,6 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         data = UserSerializer(user, context=self.get_serializer_context()).data
-        data.pop("password", None)
         return Response(data, status=status.HTTP_201_CREATED)
 
 
