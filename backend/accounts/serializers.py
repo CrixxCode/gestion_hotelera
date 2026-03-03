@@ -1,5 +1,3 @@
-# accounts/serializers.py
-
 from django.contrib.auth import get_user_model, password_validation
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.translation import gettext_lazy as _
@@ -24,7 +22,18 @@ User = get_user_model()
 class ResourceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Resource
-        fields = ["id", "key", "name", "description"]
+        fields = [
+            "id",
+            "key",
+            "name",
+            "description",
+            "link",
+            "link_backend",
+            "icon",
+            "order",
+            "is_menu",
+            "parent",
+        ]
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -41,6 +50,8 @@ class RoleSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     roles = RoleSerializer(many=True, read_only=True)
+    resource_keys = serializers.SerializerMethodField()
+    menu = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -53,8 +64,86 @@ class UserSerializer(serializers.ModelSerializer):
             "email",
             "is_active",
             "is_staff",
-            "roles"
+            "roles",
+            "resource_keys",
+            "menu",
         ]
+
+    def get_resource_keys(self, obj):
+        return sorted(list(obj.resource_keys()))
+
+    def get_menu(self, obj):
+        """
+        Devuelve el menú dinámico basado en los Resources del usuario.
+        Estructura:
+        [
+          {id, label, icon, route, children:[...]}
+        ]
+        """
+
+        # 1) Recursos asignados al usuario (solo los que se muestran en menú)
+        assigned_qs = (
+            Resource.objects
+            .filter(roles__users=obj, is_menu=True)
+            .distinct()
+            .select_related("parent")
+        )
+
+        assigned = list(assigned_qs)
+        if not assigned:
+            return []
+
+        ids = set(r.id for r in assigned)
+
+        # 2) Incluir padres para no perder grupos del menú
+        parent_ids = set(r.parent_id for r in assigned if r.parent_id)
+
+        # Traer padres faltantes recursivamente
+        while True:
+            missing = [pid for pid in parent_ids if pid and pid not in ids]
+            if not missing:
+                break
+            parents = list(
+                Resource.objects.filter(id__in=missing, is_menu=True)
+                .select_related("parent")
+            )
+            if not parents:
+                break
+            for p in parents:
+                ids.add(p.id)
+                if p.parent_id:
+                    parent_ids.add(p.parent_id)
+
+        # 3) Traer todos los recursos del menú (asignados + padres)
+        resources = list(
+            Resource.objects
+            .filter(id__in=ids, is_menu=True)
+            .select_related("parent")
+            .order_by("order", "name")
+        )
+
+        by_id = {r.id: r for r in resources}
+        children_map = {}
+        for r in resources:
+            children_map.setdefault(r.parent_id, []).append(r)
+
+        def node(r: Resource):
+            children = children_map.get(r.id, [])
+            return {
+                "id": str(r.id),
+                "label": r.name,
+                "icon": r.icon or "",
+                "route": r.link or "",
+                "children": [node(ch) for ch in children],
+            }
+
+        # Top-level = parent null o parent fuera del set
+        top = []
+        for r in resources:
+            if r.parent_id is None or r.parent_id not in by_id:
+                top.append(r)
+
+        return [node(r) for r in top]
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -63,7 +152,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     last_name = serializers.CharField(required=True, max_length=50)
     email = serializers.EmailField(required=True)
     is_active = serializers.BooleanField(default=True, required=False)
-    status = serializers.CharField(required=False, write_only=True)  # Aceptar 'status' del frontend
+    status = serializers.CharField(required=False, write_only=True)
 
     class Meta:
         model = User
@@ -80,7 +169,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         ]
 
     def validate_username(self, value):
-        """Valida que el username sea único (case-insensitive)"""
         username = (value or "").strip()
         if not username:
             raise serializers.ValidationError("El nombre de usuario no puede estar vacío.")
@@ -95,26 +183,23 @@ class RegisterSerializer(serializers.ModelSerializer):
         return email
 
     def validate_password(self, value):
-        from django.contrib.auth import password_validation
         password_validation.validate_password(value)
         return value
 
     def create(self, validated_data):
         password = validated_data.pop("password")
         status = validated_data.pop("status", "ACTIVE")
-        
-        # Convertir status a is_active
+
         is_active = validated_data.pop("is_active", True)
         if isinstance(status, str):
             is_active = status.upper() == "ACTIVE"
-        
-        # Normalizar datos
+
         validated_data["email"] = validated_data["email"].strip().lower()
         validated_data["username"] = validated_data["username"].strip()
         validated_data["first_name"] = validated_data.get("first_name", "").strip()
         validated_data["last_name"] = validated_data.get("last_name", "").strip()
         validated_data["is_active"] = is_active
-        
+
         user = User(**validated_data)
         user.set_password(password)
         user.save()
@@ -139,10 +224,6 @@ class PasswordChangeSerializer(serializers.Serializer):
         return user
 
 
-# -----------------------------
-# Reset de contraseña por email (HTML + texto plano)
-# -----------------------------
-
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
@@ -150,9 +231,6 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         return (value or "").strip().lower()
 
     def save(self):
-        """
-        Devuelve {'found': True/False}. Si found=True, envía email HTML con botón.
-        """
         request = self.context.get("request")
         email = self.validated_data["email"]
 
@@ -164,7 +242,7 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         uid = urlsafe_base64_encode(smart_bytes(user.pk))
         token = PasswordResetTokenGenerator().make_token(user)
 
-        base_url = self.context.get("base_url")  # ej: URL del frontend
+        base_url = self.context.get("base_url")
         if base_url:
             reset_url = f"{base_url}?uid={uid}&token={token}"
         else:
@@ -228,14 +306,3 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         user.set_password(self.validated_data["new_password"])
         user.save()
         return user
-
-
-__all__ = [
-    "ResourceSerializer",
-    "RoleSerializer",
-    "UserSerializer",
-    "RegisterSerializer",
-    "PasswordChangeSerializer",
-    "PasswordResetRequestSerializer",
-    "PasswordResetConfirmSerializer",
-]

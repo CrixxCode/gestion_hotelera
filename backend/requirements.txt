@@ -6,3 +6,4 @@ drf-spectacular>=0.27
 django-filter>=24.2
 djangorestframework-simplejwt>=5.3
 psycopg2-binary>=2.9
+pillow>=12.1.1

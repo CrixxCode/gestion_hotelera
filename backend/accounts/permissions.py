@@ -2,52 +2,52 @@ from rest_framework.permissions import BasePermission
 from accounts.models import Resource
 
 
-class HasResourceLinkPermission(BasePermission):
+class HasResourcePermission(BasePermission):
     """
-    Verifica acceso según el link_backend de un recurso.
-    Se concede acceso si la ruta solicitada (request.path)
-    comienza con el link_backend de un Resource asociado a
-    algún rol del usuario autenticado.
-    Incluye depuración para ver qué rutas y recursos compara.
+    1) Si el view define required_scopes (ej: ["users.read"]), valida contra Resource.key del usuario.
+    2) Si NO define required_scopes, hace fallback a la validación por link_backend (compatibilidad).
     """
 
     def has_permission(self, request, view):
         user = request.user
 
-        # 1️⃣ Usuario autenticado
+        # Usuario autenticado
         if not user or not user.is_authenticated:
-            print("🚫 Usuario no autenticado.")
             return False
 
-        # 2️⃣ Superusuario: acceso total
+        # Superusuario: acceso total
         if getattr(user, "is_superuser", False):
-            print(f"✅ Superusuario '{user.username}' con acceso total.")
             return True
 
-        # 3️⃣ Normaliza ruta del request
+        # 1) Validación por Resource.key (recomendado)
+        required = getattr(view, "required_scopes", None)
+
+        # Si el view tiene método para resolver scopes dinámicos, úsalo
+        if hasattr(view, "get_required_scopes") and callable(getattr(view, "get_required_scopes")):
+            try:
+                required = view.get_required_scopes()
+            except Exception:
+                pass
+
+        if required:
+            user_keys = user.resource_keys()
+            # Estricto: debe tener TODOS los scopes requeridos
+            return all(scope in user_keys for scope in required)
+
+        # 2) Fallback por link_backend (tu lógica actual)
         path = (request.path or "").strip().lower()
         if not path.endswith("/"):
             path += "/"
 
-        # 4️⃣ Recursos del usuario
         user_resources = Resource.objects.filter(roles__users=user).distinct()
 
-        # 5️⃣ Imprimir depuración
-        print(f"👤 Usuario autenticado: {user.username}")
-        print(f"📡 Ruta solicitada: {path}")
-        print(f"🎯 Recursos asociados: {list(user_resources.values_list('link_backend', flat=True))}")
-
-        # 6️⃣ Verifica coincidencias
         for resource in user_resources:
             link = (resource.link_backend or "").strip().lower()
             if not link:
                 continue
             if not link.endswith("/"):
                 link += "/"
-
             if path.startswith(link):
-                print(f"✅ Acceso concedido: {path} coincide con {link}")
                 return True
 
-        print(f"❌ Acceso denegado para '{user.username}' en {path}")
         return False

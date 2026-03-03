@@ -1,8 +1,7 @@
-import { AfterViewInit, Component, OnInit } from '@angular/core';
-import { RouterModule } from '@angular/router';
+import { Component, OnInit } from '@angular/core';
+import { Router, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { AuthService } from '../../../services/auth/auth'; // Ojo: importa tu servicio
-import { initFlowbite } from 'flowbite';
+import { AuthService, MenuItem, MeResponse } from '../../../services/auth/auth';
 
 @Component({
   selector: 'app-aside',
@@ -11,51 +10,49 @@ import { initFlowbite } from 'flowbite';
   templateUrl: './aside.html',
   styleUrls: ['./aside.css']
 })
-export class Aside implements OnInit, AfterViewInit {
-  userRole: string | null = null;
+export class Aside implements OnInit {
+  menu: MenuItem[] = [];
+  openGroups: Record<string, boolean> = {};
 
-  constructor(private authService: AuthService) {}
-
-  ngAfterViewInit(): void {
-    initFlowbite();
-  }
+  constructor(
+    private authService: AuthService,
+    private router: Router
+  ) {}
 
   ngOnInit(): void {
-    // Ojo: llama al endpoint /api/auth/me/ para obtener info del usuario autenticado
     this.authService.getUserInfo().subscribe({
-      next: (user) => {
-        this.userRole = this.resolveRole(user);
-        // Reactiva los componentes basados en data-* (Flowbite) para menús dinámicos
-        setTimeout(() => initFlowbite(), 0);
+      next: (user: MeResponse) => {
+        this.menu = Array.isArray(user.menu) ? user.menu : [];
 
-        // Guarda en localStorage si deseas persistir el rol
-        if (this.userRole) {
-          localStorage.setItem('role', this.userRole);
+        // Inicializa estados
+        this.openGroups = {};
+
+        // Auto-abrir grupos que contengan la ruta actual
+        const currentUrl = this.router.url || '';
+
+        for (const item of this.menu) {
+          if (this.isGroup(item)) {
+            const hasActiveChild = (item.children || []).some(ch => (ch.route || '') === currentUrl);
+            this.openGroups[item.id] = hasActiveChild;
+          }
         }
       },
       error: () => {
-        // Si no responde el backend, intenta leer del localStorage
-        const storedRole = localStorage.getItem('role');
-        this.userRole = storedRole ? storedRole.toUpperCase() : null;
+        this.menu = [];
+        this.openGroups = {};
       }
     });
   }
 
-  private resolveRole(user: any): string | null {
-    if (!user) {
-      return null;
-    }
+  toggleGroup(id: string): void {
+    this.openGroups[id] = !this.openGroups[id];
+  }
 
-    if (user.role) {
-      return String(user.role).toUpperCase();
-    }
+  isOpen(id: string): boolean {
+    return !!this.openGroups[id];
+  }
 
-    const firstRole = Array.isArray(user.roles) ? user.roles[0] : null;
-    if (!firstRole) {
-      return null;
-    }
-
-    const slugOrName = firstRole.slug || firstRole.name;
-    return slugOrName ? String(slugOrName).toUpperCase() : null;
+  isGroup(item: MenuItem): boolean {
+    return Array.isArray(item.children) && item.children.length > 0;
   }
 }

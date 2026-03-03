@@ -1,39 +1,55 @@
 // auth.service.ts
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, switchMap, map } from 'rxjs';
+import { Observable, switchMap, map, shareReplay } from 'rxjs';
+import { environment } from '../../../enviorements/environment';
+
+export interface MenuItem {
+  id: string;
+  label: string;
+  icon?: string;
+  route?: string;
+  children?: MenuItem[];
+}
+
+export interface MeResponse {
+  id: string;
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  avatar?: string | null;
+  roles?: any[];
+  resource_keys?: string[];
+  menu?: MenuItem[];
+}
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly apiProtocol = window.location.protocol.startsWith('http') ? window.location.protocol : 'http:';
-  private readonly apiHost = window.location.hostname || 'localhost';
-  private readonly apiPort = '8000';
-  private readonly apiBase = `${this.apiProtocol}//${this.apiHost}:${this.apiPort}`;
+  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
 
   private csrfUrl = `${this.apiBase}/api/auth/csrf/`;
   private loginUrl = `${this.apiBase}/api/auth/login/`;
   private logoutUrl = `${this.apiBase}/api/auth/logout/`;
-  private meUrl = `${this.apiBase}/api/auth/me/`;  // Endpoint para la información del usuario
+  private meUrl = `${this.apiBase}/api/auth/me/`;
   private passwordResetRequestUrl = `${this.apiBase}/api/auth/password/reset/`;
   private passwordResetConfirmUrl = `${this.apiBase}/api/auth/password/reset/confirm/`;
 
-  constructor(private http: HttpClient) { }
+  constructor(private http: HttpClient) {}
 
-  /** Obtiene el token CSRF */
+  /** Obtiene el token CSRF (cookie csrftoken) */
   getCsrfToken(): Observable<any> {
     return this.http.get(this.csrfUrl, { withCredentials: true });
   }
 
   /** Inicia sesión (flujo completo con CSRF) */
   login(username: string, password: string): Observable<any> {
-    // Paso 1: obtener CSRF cookie
     return this.getCsrfToken().pipe(
-      // Paso 2: hacer login con token y credenciales
       switchMap(() =>
         this.http.post(
           this.loginUrl,
           { username, password },
-          this.buildCsrfRequestOptions() // incluye X-CSRFToken + withCredentials
+          this.buildCsrfRequestOptions()
         )
       )
     );
@@ -43,65 +59,67 @@ export class AuthService {
   logout(): Observable<any> {
     return this.getCsrfToken().pipe(
       switchMap(() =>
-        this.http.post(
-          this.logoutUrl,
-          {},
-          this.buildCsrfRequestOptions()
-        )
+        this.http.post(this.logoutUrl, {}, this.buildCsrfRequestOptions())
       )
     );
   }
 
-  /** Verifica si el usuario está autenticado */
+  /** Verifica si hay sesión */
   checkSession(): Observable<boolean> {
-    return this.http.get(this.meUrl, { withCredentials: true }).pipe(
-      map((res: any) => !!res?.username)
+    return this.http.get<MeResponse>(this.meUrl, { withCredentials: true }).pipe(
+      map((res) => !!res?.username)
     );
   }
 
-  /** Obtiene la información del usuario (nombre y rol) */
-  getUserInfo(): Observable<any> {
-    return this.http.get(this.meUrl, { withCredentials: true });
+  /** Obtiene info del usuario autenticado (incluye menu si el backend lo devuelve) */
+  getUserInfo(): Observable<MeResponse> {
+    return this.http.get<MeResponse>(this.meUrl, { withCredentials: true }).pipe(
+      shareReplay(1)
+    );
   }
 
-  /** Solicita el restablecimiento de contraseña (enlace por correo) */
   requestPasswordReset(email: string, baseUrl: string): Observable<any> {
-    return this.http.post(this.passwordResetRequestUrl, { email, base_url: baseUrl }, this.buildCsrfRequestOptions());
+    return this.http.post(
+      this.passwordResetRequestUrl,
+      { email, base_url: baseUrl },
+      this.buildCsrfRequestOptions()
+    );
   }
 
-  /** Confirma el restablecimiento de contraseña (con el token del link) */
   confirmPasswordReset(uid: string, token: string, new_password: string): Observable<any> {
-    return this.http.post(this.passwordResetConfirmUrl, { uid, token, new_password }, this.buildCsrfRequestOptions());
+    return this.http.post(
+      this.passwordResetConfirmUrl,
+      { uid, token, new_password },
+      this.buildCsrfRequestOptions()
+    );
   }
 
-  /** Devuelve la URL base del backend (útil para componer recursos como media) */
   getApiBaseUrl(): string {
     return this.apiBase;
   }
 
-  /** Normaliza rutas devueltas por la API a URLs completas */
   buildMediaUrl(path?: string | null): string {
-    if (!path) {
-      return '';
-    }
-    if (/^https?:\/\//i.test(path)) {
-      return path;
-    }
+    if (!path) return '';
+    if (/^https?:\/\//i.test(path)) return path;
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
     return `${this.apiBase}${normalizedPath}`;
   }
 
-  getCookie(name: string): string | null {
-    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-    return match ? decodeURIComponent(match[2]) : null;
-  }
-
-  buildCsrfRequestOptions() {
+  /**
+   * ✅ IMPORTANTE: debe ser PÚBLICO porque otros services (ej: user.ts)
+   * lo están usando para enviar X-CSRFToken + withCredentials.
+   */
+  public buildCsrfRequestOptions() {
     const options: { withCredentials: true; headers?: HttpHeaders } = { withCredentials: true };
     const token = this.getCookie('csrftoken');
     if (token) {
       options.headers = new HttpHeaders({ 'X-CSRFToken': token });
     }
     return options;
+  }
+
+  private getCookie(name: string): string | null {
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? decodeURIComponent(match[2]) : null;
   }
 }

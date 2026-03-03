@@ -1,79 +1,224 @@
-/* === ELEMENTOS PRINCIPALES === */
-.menu-item {
+/* ===== CONTENEDOR GENERAL ===== */
+.aside-container {
+  height: 100%;
+  padding: 14px 12px;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #111827 0%, #0b1220 100%);
+  color: #f9fafb;
+}
+
+/* Scrollbar elegante */
+.aside-container::-webkit-scrollbar {
+  width: 10px;
+}
+.aside-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.10);
+  border-radius: 999px;
+  border: 2px solid rgba(17, 24, 39, 0.9);
+}
+.aside-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* ===== BRAND ===== */
+.aside-brand {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  padding: 0.6rem 0.8rem;
-  border-radius: 0.5rem;
-  color: #f9fafb; /* blanco visible */
-  width: 100%;
-  transition: all 0.2s ease-in-out;
-  cursor: pointer;
+  padding: 10px 0 14px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 12px;
+}
+
+.brand-logo {
+  height: 64px;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.28));
+}
+
+.brand-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: rgba(249, 250, 251, 0.92);
+  letter-spacing: 0.2px;
+}
+
+/* ===== MENU ROOT ===== */
+.menu-root {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.menu-block {
   position: relative;
 }
 
-.dark .menu-item {
-  color: #f9fafb;
+/* ===== ICON PILL (icono backend) ===== */
+.icon-pill {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.20);
 }
 
-.menu-item:hover {
-  background-color: #374151; /* gris oscuro */
-  color: #ffffff;
-}
-
-.menu-item i {
-  color: #d1d5db;
-  width: 1.25rem;
-  text-align: center;
-  transition: color 0.2s ease-in-out;
-}
-
-.menu-item span {
-  margin-left: 0.75rem;
-  color: #f9fafb;
+.icon-pill i {
+  color: rgba(229, 231, 235, 0.92);
   font-size: 0.95rem;
-  font-weight: 500;
-  transition: color 0.2s ease-in-out;
 }
 
-/* === ITEM ACTIVO (resaltado) === */
-.active {
-  background-color: #4b5563; /* gris más claro */
-  color: #ffffff;
-  font-weight: 600;
-  border-left: 4px solid #fbbf24; /* borde dorado */
-}
-
-.active i,
-.active span {
-  color: #ffffff;
-}
-
-/* === SUBMENÚS === */
-.submenu {
-  display: block;
+/* ===== LINKS / PARENTS (PADRES CON BORDE DERECHO) ===== */
+.menu-parent,
+.menu-link {
   width: 100%;
-  padding: 0.5rem 0 0.5rem 2.75rem;
-  border-radius: 0.5rem;
-  color: #e5e7eb;
-  font-size: 0.9rem;
-  transition: all 0.2s ease-in-out;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 10px 10px;
+  border-radius: 14px;
+
+  color: rgba(249, 250, 251, 0.95);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+
+  /* BORDE DERECHO para recursos padres y links top-level */
+  border-right: 4px solid rgba(251, 191, 36, 0.16);
+
   cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
-.submenu:hover {
-  background-color: #374151;
+.menu-parent .left,
+.menu-link .left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgba(249, 250, 251, 0.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Hover */
+.menu-parent:hover,
+.menu-link:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.11);
+  border-right-color: rgba(251, 191, 36, 0.42);
+}
+
+/* Estado abierto del grupo */
+.menu-parent.is-open {
+  background: rgba(255, 255, 255, 0.06);
+  border-right-color: rgba(251, 191, 36, 0.55);
+}
+
+/* Activo (routerLinkActive="active") */
+.menu-link.active {
+  background: rgba(75, 85, 99, 0.38);
+  border-color: rgba(255, 255, 255, 0.12);
+  border-right-color: rgba(251, 191, 36, 0.85);
+}
+
+.menu-link.active .label,
+.menu-link.active i {
   color: #ffffff;
 }
 
-/* === SUBMENÚ ACTIVO === */
-.submenu.active {
-  background-color: #4b5563;
-  color: #ffffff;
-  border-left: 3px solid #fbbf24;
+/* Chevron */
+.chevron {
+  font-size: 0.8rem;
+  color: rgba(229, 231, 235, 0.75);
+  transition: transform 0.18s ease;
+}
+.chevron.rotate {
+  transform: rotate(180deg);
 }
 
-/* === TRANSICIONES GENERALES === */
-.menu-item,
-.submenu {
-  transition: background 0.2s ease, color 0.2s ease, border-left 0.2s ease;
+/* ===== SUBMENU (animación + guía) ===== */
+.submenu-wrap {
+  overflow: hidden;
+  max-height: 0px;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: max-height 0.22s ease, opacity 0.18s ease, transform 0.18s ease;
+}
+
+.submenu-wrap.open {
+  max-height: 520px; /* suficiente para menús largos */
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.submenu-list {
+  margin: 8px 0 0 0;
+  padding: 8px 8px 8px 44px; /* indent */
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  border-left: 1px dashed rgba(255, 255, 255, 0.10);
+}
+
+/* Item hijo */
+.submenu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  padding: 8px 10px;
+  border-radius: 12px;
+
+  color: rgba(229, 231, 235, 0.88);
+  text-decoration: none;
+
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+/* Puntico guía */
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.45);
+  box-shadow: 0 8px 18px rgba(251, 191, 36, 0.12);
+}
+
+.submenu-item:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.submenu-item.active {
+  background: rgba(75, 85, 99, 0.35);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.submenu-item.active .submenu-label {
+  color: #fff;
+  font-weight: 700;
+}
+
+.submenu-label {
+  font-size: 0.92rem;
+  color: rgba(229, 231, 235, 0.92);
 }
