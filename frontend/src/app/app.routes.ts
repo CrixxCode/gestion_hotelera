@@ -6,6 +6,7 @@ import { ResetPasswordComponent } from './components/auth/reset-password/reset-p
 import { LayoutMain } from './components/layout/layout-main/layout-main';
 import { UserList } from './modules/users/list/user-list';
 import { UserRegister } from './modules/users/register/register';
+import { RolesComponent } from './components/pages/roles/roles';
 
 export const routes: Routes = [
     {
@@ -30,13 +31,9 @@ export const routes: Routes = [
         path: '',
         component: LayoutMain,
         children: [
-            { path: 'dashboard', component: Dashboard },
-            // más rutas internas...
             { path: 'usuarios', component: UserList },
+            { path: 'dashboard', component: Dashboard },
+            { path: 'roles', component: RolesComponent},
         ]
     },
-    // {
-    //     path: '**',
-    //     component: LoginComponent
-    // }
 ];

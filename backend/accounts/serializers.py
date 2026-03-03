@@ -44,6 +44,11 @@ class RoleSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "slug", "description", "resources"]
 
 
+class UserMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["id", "username", "first_name", "last_name", "email", "is_active", "avatar"]
+
 # -----------------------------
 # Usuarios
 # -----------------------------

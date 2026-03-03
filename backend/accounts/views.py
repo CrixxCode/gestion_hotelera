@@ -19,6 +19,11 @@ from .serializers import (
     PasswordChangeSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer
 )
 
+
+from .serializers import RoleSerializer, ResourceSerializer, UserMiniSerializer
+from accounts.permissions import HasResourcePermission
+from django.db import models
+
 User = get_user_model()
 
 
@@ -218,10 +223,10 @@ class RoleViewSet(viewsets.ModelViewSet):
     required_scopes = ["roles.read"]
 
     def get_required_scopes(self):
+        # CRUD y acciones de asignación requieren roles.write
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return ["roles.write"]
-        # Acciones personalizadas POST → exigir 'roles.write'
-        if getattr(self, "action", "") in ("assign_users", "assign_resources"):
+        if getattr(self, "action", "") in ("assign_users", "remove_users", "assign_resources"):
             return ["roles.write"]
         return self.required_scopes
 
@@ -229,26 +234,85 @@ class RoleViewSet(viewsets.ModelViewSet):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
-    @action(detail=True, methods=["post"])
+    # -------------------------
+    # Usuarios por rol
+    # -------------------------
+
+    @action(detail=True, methods=["get"], url_path="users")
+    def users(self, request, pk=None):
+        """
+        GET /api/roles/<id>/users/
+        Devuelve los usuarios asignados a ese rol.
+        """
+        role = self.get_object()
+        qs = role.users.all().order_by("username")
+        return Response(UserMiniSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="assign-users")
     def assign_users(self, request, pk=None):
+        """
+        POST /api/roles/<id>/assign-users/
+        Body: { "user_ids": ["uuid1","uuid2", ...] }
+        Asigna el rol a usuarios.
+        """
         role = self.get_object()
         ids = request.data.get("user_ids", [])
         if not isinstance(ids, list):
             return Response({"detail": "user_ids debe ser una lista."}, status=status.HTTP_400_BAD_REQUEST)
+
         users = User.objects.filter(id__in=ids)
         role.users.add(*users)
-        return Response({"assigned": [str(u.id) for u in users]}, status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=["post"])
-    def assign_resources(self, request, pk=None):
+        return Response(
+            {"assigned": [str(u.id) for u in users]},
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=["post"], url_path="remove-users")
+    def remove_users(self, request, pk=None):
+        """
+        POST /api/roles/<id>/remove-users/
+        Body: { "user_ids": ["uuid1","uuid2", ...] }
+        Remueve el rol de usuarios.
+        """
         role = self.get_object()
-        resource_ids = request.data.get("resource_ids", [])
-        if not isinstance(resource_ids, list):
-            return Response({"detail": "resource_ids debe ser una lista."}, status=status.HTTP_400_BAD_REQUEST)
-        resources = Resource.objects.filter(id__in=resource_ids)
-        role.resources.add(*resources)
-        return Response({"assigned": [str(r.id) for r in resources]}, status=status.HTTP_200_OK)
+        ids = request.data.get("user_ids", [])
+        if not isinstance(ids, list):
+            return Response({"detail": "user_ids debe ser una lista."}, status=status.HTTP_400_BAD_REQUEST)
 
+        users = User.objects.filter(id__in=ids)
+        role.users.remove(*users)
+
+        return Response(
+            {"removed": [str(u.id) for u in users]},
+            status=status.HTTP_200_OK
+        )
+
+    # -------------------------
+    # Catálogo de usuarios (para seleccionar en UI)
+    # -------------------------
+
+    @action(detail=False, methods=["get"], url_path="users-catalog")
+    def users_catalog(self, request):
+        """
+        GET /api/roles/users-catalog/?q=
+        Devuelve usuarios para el selector de asignación.
+        """
+        q = (request.query_params.get("q") or "").strip()
+
+        qs = User.objects.all().order_by("username")
+        if q:
+            qs = qs.filter(
+                models.Q(username__icontains=q)
+                | models.Q(email__icontains=q)
+                | models.Q(first_name__icontains=q)
+                | models.Q(last_name__icontains=q)
+            )
+
+        # límite simple para UI
+        qs = qs[:200]
+        return Response(UserMiniSerializer(qs, many=True).data, status=status.HTTP_200_OK)
+    
 
 class ResourceViewSet(viewsets.ModelViewSet):
     queryset = Resource.objects.all().order_by("key")

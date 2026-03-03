@@ -1,0 +1,295 @@
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div class="ph-left">
+      <div class="ph-title">Gestión de Roles</div>
+      <div class="ph-subtitle">
+        Administra roles, asigna o elimina usuarios y controla el acceso del sistema.
+      </div>
+    </div>
+
+    <div class="ph-right">
+      <button class="btn btn-ghost" (click)="loadRoles()">
+        <i class="fa-solid fa-rotate-right"></i>
+        Actualizar
+      </button>
+      <button class="btn btn-primary" (click)="openCreateRole()">
+        <i class="fa-solid fa-plus"></i>
+        Nuevo rol
+      </button>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="grid">
+
+    <!-- LEFT: Roles list -->
+    <section class="card">
+      <div class="card-head">
+        <div class="card-title">Roles</div>
+        <div class="chip chip-soft">{{ roles.length }} total</div>
+      </div>
+
+      <div class="card-body">
+
+        <div class="search">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input
+            type="text"
+            placeholder="Filtrar roles (nombre o slug)..."
+            [(ngModel)]="roleFilter"
+          />
+          <button class="clear" *ngIf="roleFilter" (click)="roleFilter=''">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="role-list" *ngIf="!loading; else rolesLoading">
+          <button
+            *ngFor="let r of filteredRoles(); trackBy: trackById"
+            class="role-card"
+            [class.active]="selectedRole?.id === r.id"
+            (click)="selectRole(r)"
+          >
+            <div class="rc-top">
+              <div class="rc-name">{{ r.name }}</div>
+              <div class="rc-badges">
+                <span class="badge badge-outline">{{ r.slug }}</span>
+              </div>
+            </div>
+
+            <div class="rc-desc" *ngIf="r.description; else noDesc">
+              {{ r.description }}
+            </div>
+            <ng-template #noDesc>
+              <div class="rc-desc muted">Sin descripción</div>
+            </ng-template>
+
+            <div class="rc-foot">
+              <span class="muted">
+                <i class="fa-solid fa-users"></i>
+                {{ (roleUsersCount[r.id] !== undefined ? roleUsersCount[r.id] : '-') }} usuarios
+              </span>
+              <span class="muted">
+                <i class="fa-solid fa-chevron-right"></i>
+              </span>
+            </div>
+          </button>
+
+          <div class="empty" *ngIf="filteredRoles().length === 0">
+            <div class="empty-title">No hay coincidencias</div>
+            <div class="empty-subtitle">Prueba con otro término de búsqueda.</div>
+          </div>
+        </div>
+
+        <ng-template #rolesLoading>
+          <div class="skeleton-col">
+            <div class="skeleton h-18"></div>
+            <div class="skeleton h-18"></div>
+            <div class="skeleton h-18"></div>
+            <div class="skeleton h-18"></div>
+          </div>
+        </ng-template>
+
+      </div>
+    </section>
+
+    <!-- RIGHT: Role detail -->
+    <section class="card">
+      <div class="card-head card-head-spread">
+        <div>
+          <div class="card-title">
+            {{ selectedRole ? selectedRole.name : 'Detalle del rol' }}
+          </div>
+          <div class="muted" *ngIf="selectedRole; else selectHint">
+            <span class="badge badge-soft">{{ selectedRole.slug }}</span>
+            <span class="sep">•</span>
+            {{ selectedRole.description || 'Sin descripción' }}
+          </div>
+          <ng-template #selectHint>
+            <div class="muted">Selecciona un rol para administrar usuarios.</div>
+          </ng-template>
+        </div>
+
+        <div class="actions" *ngIf="selectedRole">
+          <button class="btn btn-ghost" (click)="openEditRole()">
+            <i class="fa-solid fa-pen"></i>
+            Editar
+          </button>
+          <button class="btn btn-danger" (click)="deleteSelectedRole()">
+            <i class="fa-solid fa-trash"></i>
+            Eliminar
+          </button>
+        </div>
+      </div>
+
+      <div class="card-body" *ngIf="selectedRole; else emptyDetail">
+
+        <!-- Assigned users -->
+        <div class="section-head">
+          <div class="section-title">Usuarios asignados</div>
+          <div class="section-right">
+            <span class="chip">{{ assignedUsers.length }} asignados</span>
+          </div>
+        </div>
+
+        <div class="table-wrap" *ngIf="!loadingUsers; else usersLoading">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Estado</th>
+                <th class="col-actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let u of assignedUsers; trackBy: trackById">
+                <td class="mono">{{ u.username }}</td>
+                <td>{{ fullName(u) }}</td>
+                <td class="muted">{{ u.email }}</td>
+                <td>
+                  <span class="badge" [class.badge-ok]="u.is_active" [class.badge-warn]="!u.is_active">
+                    {{ u.is_active ? 'Activo' : 'Inactivo' }}
+                  </span>
+                </td>
+                <td class="col-actions">
+                  <button class="btn btn-mini btn-danger" (click)="removeUser(u.id)">
+                    Quitar
+                  </button>
+                </td>
+              </tr>
+
+              <tr *ngIf="assignedUsers.length === 0">
+                <td colspan="5" class="muted">No hay usuarios asignados a este rol.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <ng-template #usersLoading>
+          <div class="skeleton-col">
+            <div class="skeleton h-14"></div>
+            <div class="skeleton h-14"></div>
+            <div class="skeleton h-14"></div>
+          </div>
+        </ng-template>
+
+        <div class="divider"></div>
+
+        <!-- Assign users -->
+        <div class="section-head">
+          <div class="section-title">Asignar usuarios</div>
+          <div class="section-right">
+            <span class="chip chip-soft">
+              {{ selectedUserIds.size }} seleccionados
+            </span>
+          </div>
+        </div>
+
+        <div class="assign-bar">
+          <div class="search wide">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input
+              type="text"
+              placeholder="Buscar por username, nombre o email..."
+              [(ngModel)]="q"
+              (input)="searchUsers()"
+            />
+            <button class="clear" *ngIf="q" (click)="q=''; searchUsers()">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <button class="btn btn-primary" (click)="assignSelected()" [disabled]="selectedUserIds.size===0">
+            <i class="fa-solid fa-user-plus"></i>
+            Asignar
+          </button>
+        </div>
+
+        <div class="catalog">
+          <label class="user-item" *ngFor="let u of catalogUsers; trackBy: trackById">
+            <input
+              type="checkbox"
+              [checked]="selectedUserIds.has(u.id)"
+              (change)="toggleUserSelection(u.id)"
+            />
+
+            <div class="ui-main">
+              <div class="ui-top">
+                <span class="ui-username mono">{{ u.username }}</span>
+                <span class="badge badge-soft" [class.badge-warn]="!u.is_active" [class.badge-ok-soft]="u.is_active">
+                  {{ u.is_active ? 'Activo' : 'Inactivo' }}
+                </span>
+              </div>
+              <div class="ui-sub">
+                <span>{{ fullName(u) }}</span>
+                <span class="dot-sep">•</span>
+                <span class="muted">{{ u.email }}</span>
+              </div>
+            </div>
+          </label>
+
+          <div class="empty" *ngIf="catalogUsers.length === 0">
+            <div class="empty-title">No hay usuarios para mostrar</div>
+            <div class="empty-subtitle">Escribe para buscar o revisa permisos.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <ng-template #emptyDetail>
+        <div class="card-body">
+          <div class="empty">
+            <div class="empty-title">Sin rol seleccionado</div>
+            <div class="empty-subtitle">Selecciona un rol del panel izquierdo para administrarlo.</div>
+          </div>
+        </div>
+      </ng-template>
+
+    </section>
+  </div>
+
+  <!-- Modal Crear/Editar -->
+  <div class="modal-backdrop" *ngIf="showRoleModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <div class="modal-title">{{ isEditing ? 'Editar rol' : 'Nuevo rol' }}</div>
+          <div class="muted">Define el rol que administrará recursos y permisos.</div>
+        </div>
+        <button class="btn btn-mini btn-ghost" (click)="showRoleModal=false">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-grid">
+          <label class="field">
+            <span>Nombre</span>
+            <input class="input" [(ngModel)]="roleForm.name" placeholder="Ej: Administrador" />
+          </label>
+
+          <label class="field">
+            <span>Slug</span>
+            <input class="input" [(ngModel)]="roleForm.slug" placeholder="ej: admin, recepcion, ..." />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Descripción</span>
+          <textarea class="input" rows="3" [(ngModel)]="roleForm.description" placeholder="Describe el propósito del rol"></textarea>
+        </label>
+      </div>
+
+      <div class="modal-foot">
+        <button class="btn btn-ghost" (click)="showRoleModal=false">Cancelar</button>
+        <button class="btn btn-primary" (click)="saveRole()">
+          {{ isEditing ? 'Guardar cambios' : 'Crear rol' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
