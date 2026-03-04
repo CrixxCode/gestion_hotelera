@@ -2,6 +2,8 @@
 
 from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.views.decorators.csrf import ensure_csrf_cookie
+import logging
+logger = logging.getLogger(__name__)
 from django.utils.decorators import method_decorator
 
 from rest_framework import viewsets, status

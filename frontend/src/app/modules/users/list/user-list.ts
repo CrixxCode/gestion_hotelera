@@ -45,7 +45,7 @@ export class UserList implements OnInit {
   //  Usuario seleccionado
   selectedUser: UserI | null = null;
 
-  //  Diálogos
+  //  DiÃƒÆ’Ã‚Â¡logos
   visibleRegisterDialog = false;
   visibleEditDialog = false;
   visibleViewDialog = false;
@@ -102,7 +102,7 @@ export class UserList implements OnInit {
 
   closeRegisterDialog(): void {
     this.visibleRegisterDialog = false;
-    this.loadUsers(); // 🔁 recargar lista después de registrar
+    this.loadUsers(); // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â recargar lista despuÃƒÆ’Ã‚Â©s de registrar
   }
 
   // =============================
@@ -113,7 +113,7 @@ export class UserList implements OnInit {
     this.visibleEditDialog = true;
   }
 
-  /** Mostrar toast de actualización */
+  /** Mostrar toast de actualizaciÃƒÆ’Ã‚Â³n */
   onUserUpdated(): void {
     this.messageService.add({
       severity: 'success',
@@ -126,7 +126,7 @@ export class UserList implements OnInit {
 
   closeEditDialog(): void {
     this.visibleEditDialog = false;
-    this.loadUsers(); // 🔁 recargar lista después de actualizar
+    this.loadUsers(); // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â recargar lista despuÃƒÆ’Ã‚Â©s de actualizar
   }
 
   // =============================
@@ -142,11 +142,15 @@ export class UserList implements OnInit {
   // =============================
   confirmDelete(user: UserI): void {
     this.confirmationService.confirm({
-      message: `¿Deseas eliminar a ${user.first_name} ${user.last_name}?`,
-      header: 'Confirmar eliminación',
+      message: `Deseas eliminar a ${user.first_name} ${user.last_name}?`,
+      header: 'Confirmar eliminacion',
       icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Sí, eliminar',
+      acceptLabel: 'Si, eliminar',
       rejectLabel: 'Cancelar',
+      key: 'userDelete',
+      acceptButtonStyleClass: 'p-button-danger',
+      rejectButtonStyleClass: 'p-button-secondary p-button-outlined',
+      defaultFocus: 'reject',
       accept: () => {
         this.userService.deleteUserLogic(user.id!).subscribe({
           next: () => {
@@ -172,7 +176,7 @@ export class UserList implements OnInit {
   }
 
   // =============================
-  //  PAGINACIÓN MANUAL
+  //  PAGINACIÃƒÆ’Ã¢â‚¬Å“N MANUAL
   // =============================
   nextPage(): void {
     if (this.first + this.rows < this.filteredUsers.length) {

@@ -22,7 +22,8 @@ export class Aside implements OnInit {
   ngOnInit(): void {
     this.authService.getUserInfo().subscribe({
       next: (user: MeResponse) => {
-        this.menu = Array.isArray(user.menu) ? user.menu : [];
+        const rawMenu = Array.isArray(user.menu) ? user.menu : [];
+        this.menu = this.normalizeSecurityGroup(rawMenu);
 
         // Inicializa estados
         this.openGroups = {};
@@ -54,5 +55,71 @@ export class Aside implements OnInit {
 
   isGroup(item: MenuItem): boolean {
     return Array.isArray(item.children) && item.children.length > 0;
+  }
+
+  private normalizeSecurityGroup(menu: MenuItem[]): MenuItem[] {
+    const securityLabel = 'seguridad';
+    const securityRoutes = new Set(['/usuarios', '/roles', '/recursos']);
+
+    const normalized = [...menu];
+    const hasSecurityGroup = normalized.some(
+      (item) => (item.label || '').trim().toLowerCase() === securityLabel
+    );
+
+    const extractedItems: MenuItem[] = [];
+    const extractedIds = new Set<string>();
+
+    for (const item of normalized) {
+      if (!this.isGroup(item) && item.route && securityRoutes.has(item.route)) {
+        extractedItems.push(item);
+        extractedIds.add(item.id);
+      }
+    }
+
+    if (extractedItems.length === 0) {
+      return normalized;
+    }
+
+    const filteredTopLevel = normalized.filter((item) => !extractedIds.has(item.id));
+
+    if (hasSecurityGroup) {
+      const updated = [...filteredTopLevel];
+      const securityIndex = updated.findIndex(
+        (item) => (item.label || '').trim().toLowerCase() === securityLabel
+      );
+      if (securityIndex < 0) return updated;
+
+      const existingSecurity = { ...updated[securityIndex] };
+      const existingChildren = Array.isArray(existingSecurity.children) ? [...existingSecurity.children] : [];
+      const existingChildRoutes = new Set(existingChildren.map((child) => child.route || ''));
+
+      for (const item of extractedItems) {
+        if (item.route && !existingChildRoutes.has(item.route)) {
+          existingChildren.push(item);
+        }
+      }
+
+      existingSecurity.children = existingChildren;
+      existingSecurity.icon = existingSecurity.icon || 'fa-solid fa-shield-halved';
+      updated[securityIndex] = existingSecurity;
+      return updated;
+    }
+
+    const firstExtractedIndex = normalized.findIndex((item) => extractedIds.has(item.id));
+    const insertAt = firstExtractedIndex >= 0 ? firstExtractedIndex : filteredTopLevel.length;
+
+    const securityGroup: MenuItem = {
+      id: 'security-group',
+      label: 'Seguridad',
+      icon: 'fa-solid fa-shield-halved',
+      route: '',
+      children: extractedItems
+    };
+
+    return [
+      ...filteredTopLevel.slice(0, insertAt),
+      securityGroup,
+      ...filteredTopLevel.slice(insertAt)
+    ];
   }
 }

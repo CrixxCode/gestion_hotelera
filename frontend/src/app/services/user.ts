@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { UserI } from '../modules/users/user-model';
 import { AuthService } from './auth/auth';
+import { environment } from '../../enviorements/environment';
 
 interface PaginatedResponse<T> {
   count: number;
@@ -13,7 +14,8 @@ interface PaginatedResponse<T> {
 
 @Injectable({ providedIn: 'root' })
 export class UserService {
-  private apiUrl = 'http://127.0.0.1:8000/api/users/';
+  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly usersUrl = `${this.apiBase}/api/users/`;
 
   constructor(
     private http: HttpClient,
@@ -24,7 +26,7 @@ export class UserService {
   getUsers(): Observable<UserI[]> {
     return this.http
       .get<UserI[] | PaginatedResponse<UserI>>(
-        this.apiUrl,
+        this.usersUrl,
         this.authService.buildCsrfRequestOptions()
       )
       .pipe(
@@ -86,7 +88,7 @@ export class UserService {
     }
 
     return this.http.post<UserI>(
-      this.apiUrl,
+      this.usersUrl,
       formData,
       this.authService.buildCsrfRequestOptions()
     );
@@ -106,7 +108,7 @@ export class UserService {
     }
 
     return this.http.patch<UserI>(
-      `${this.apiUrl}${id}/`,
+      `${this.usersUrl}${id}/`,
       formData,
       this.authService.buildCsrfRequestOptions()
     );
@@ -115,7 +117,7 @@ export class UserService {
 
   /** Elimina fisicamente un usuario */
   deleteUser(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}${id}/`, this.authService.buildCsrfRequestOptions());
+    return this.http.delete<void>(`${this.usersUrl}${id}/`, this.authService.buildCsrfRequestOptions());
   }
 
   /** Elimina logicamente un usuario (por ejemplo, desactiva el estado) */
@@ -123,7 +125,7 @@ export class UserService {
     // Supone que el backend permite PATCH a /api/users/:id/ con {"is_active": false}
     const body = { is_active: false }; // o { status: 'INACTIVE' } segun tu modelo
     return this.http.patch<UserI>(
-      `${this.apiUrl}${id}/`,
+      `${this.usersUrl}${id}/`,
       body,
       this.authService.buildCsrfRequestOptions()
     );
