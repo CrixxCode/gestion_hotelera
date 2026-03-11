@@ -8,6 +8,8 @@ import { UserList } from './modules/users/list/user-list';
 import { UserRegister } from './modules/users/register/register';
 import { RolesComponent } from './components/pages/roles/roles';
 import { RecursosComponent } from './components/pages/recursos/recursos';
+import { ListClients } from './modules/clients/list-clients/list-clients';
+import { HotelSettings } from './components/pages/hotel-settings/hotel-settings';
 
 export const routes: Routes = [
     {
@@ -34,8 +36,10 @@ export const routes: Routes = [
         children: [
             { path: 'usuarios', component: UserList },
             { path: 'dashboard', component: Dashboard },
-            { path: 'roles', component: RolesComponent},
-            { path: 'recursos', component: RecursosComponent},
+            { path: 'roles', component: RolesComponent },
+            { path: 'recursos', component: RecursosComponent },
+            { path: 'clientes', component: ListClients },
+            { path: 'hotel-config', component: HotelSettings },
         ]
     },
 ];

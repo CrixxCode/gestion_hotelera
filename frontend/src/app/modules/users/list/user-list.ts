@@ -10,7 +10,7 @@ import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { DialogModule } from 'primeng/dialog';
 import { MessageService, ConfirmationService } from 'primeng/api';
 
-// Componentes hijos
+// Child components
 import { UserRegister } from '../register/register';
 import { UserProfile } from '../profile/profile';
 import { UserUpdate } from '../update/update';
@@ -37,36 +37,73 @@ import { UserUpdate } from '../update/update';
 export class UserList implements OnInit {
   users: UserI[] = [];
   filteredUsers: UserI[] = [];
+
   loading = true;
   globalFilter = '';
+  statusFilter: 'ALL' | 'ACTIVE' | 'INACTIVE' = 'ALL';
+  roleFilter: 'ALL' | 'WITH_ROLE' | 'WITHOUT_ROLE' = 'ALL';
+
   first = 0;
   rows = 6;
 
-  //  Usuario seleccionado
   selectedUser: UserI | null = null;
 
-  //  DiÃƒÆ’Ã‚Â¡logos
   visibleRegisterDialog = false;
   visibleEditDialog = false;
   visibleViewDialog = false;
+
+  statCards = [
+    {
+      label: 'Total usuarios',
+      value: '0',
+      sub: 'Cuentas registradas',
+      icon: 'users',
+      color: '#3b82f6',
+      bg: '#e8f1ff'
+    },
+    {
+      label: 'Usuarios activos',
+      value: '0',
+      sub: 'Acceso habilitado',
+      icon: 'user-check',
+      color: '#059669',
+      bg: '#e8faf2'
+    },
+    {
+      label: 'Con roles',
+      value: '0',
+      sub: 'Permisos asignados',
+      icon: 'shield',
+      color: '#d97706',
+      bg: '#fff6df'
+    },
+    {
+      label: 'Nuevos este mes',
+      value: '0',
+      sub: 'Altas recientes',
+      icon: 'user-plus',
+      color: '#7c3aed',
+      bg: '#f3edff'
+    }
+  ];
 
   constructor(
     private userService: UserService,
     private messageService: MessageService,
     private confirmationService: ConfirmationService
-  ) { }
+  ) {}
 
   ngOnInit(): void {
     this.loadUsers();
   }
 
-  /** Carga los usuarios desde el backend */
   loadUsers(): void {
     this.loading = true;
     this.userService.getUsers().subscribe({
       next: (data) => {
         this.users = data;
-        this.filteredUsers = data;
+        this.updateStats();
+        this.applyFilters();
         this.loading = false;
       },
       error: () => {
@@ -81,39 +118,36 @@ export class UserList implements OnInit {
     });
   }
 
-  /** Filtro global */
   onFilterChange(): void {
+    this.applyFilters();
+  }
+
+  applyFilters(): void {
     const query = this.globalFilter.toLowerCase().trim();
-    this.filteredUsers = this.users.filter((u) =>
-      [u.username, u.email, u.first_name, u.last_name]
-        .join(' ')
-        .toLowerCase()
-        .includes(query)
+
+    this.filteredUsers = this.users.filter((user) =>
+      this.matchesSearch(user, query) &&
+      this.matchesStatus(user) &&
+      this.matchesRole(user)
     );
+
     this.first = 0;
   }
 
-  // =============================
-  //  CREAR USUARIO
-  // =============================
   openRegisterDialog(): void {
     this.visibleRegisterDialog = true;
   }
 
   closeRegisterDialog(): void {
     this.visibleRegisterDialog = false;
-    this.loadUsers(); // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â recargar lista despuÃƒÆ’Ã‚Â©s de registrar
+    this.loadUsers();
   }
 
-  // =============================
-  //  EDITAR USUARIO
-  // =============================
   onEdit(user: UserI): void {
     this.selectedUser = user;
     this.visibleEditDialog = true;
   }
 
-  /** Mostrar toast de actualizaciÃƒÆ’Ã‚Â³n */
   onUserUpdated(): void {
     this.messageService.add({
       severity: 'success',
@@ -123,23 +157,16 @@ export class UserList implements OnInit {
     });
   }
 
-
   closeEditDialog(): void {
     this.visibleEditDialog = false;
-    this.loadUsers(); // ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â recargar lista despuÃƒÆ’Ã‚Â©s de actualizar
+    this.loadUsers();
   }
 
-  // =============================
-  //  VER DETALLES
-  // =============================
   onView(user: UserI): void {
     this.selectedUser = user;
     this.visibleViewDialog = true;
   }
 
-  // =============================
-  //  ELIMINAR USUARIO
-  // =============================
   confirmDelete(user: UserI): void {
     this.confirmationService.confirm({
       message: `Deseas eliminar a ${user.first_name} ${user.last_name}?`,
@@ -152,7 +179,9 @@ export class UserList implements OnInit {
       rejectButtonStyleClass: 'p-button-secondary p-button-outlined',
       defaultFocus: 'reject',
       accept: () => {
-        this.userService.deleteUserLogic(user.id!).subscribe({
+        if (!user.id) return;
+
+        this.userService.deleteUserLogic(user.id).subscribe({
           next: () => {
             this.messageService.add({
               severity: 'success',
@@ -175,9 +204,6 @@ export class UserList implements OnInit {
     });
   }
 
-  // =============================
-  //  PAGINACIÃƒÆ’Ã¢â‚¬Å“N MANUAL
-  // =============================
   nextPage(): void {
     if (this.first + this.rows < this.filteredUsers.length) {
       this.first += this.rows;
@@ -190,11 +216,128 @@ export class UserList implements OnInit {
     }
   }
 
+  goToPage(page: number): void {
+    const total = this.totalPages || 1;
+    if (page < 1 || page > total) return;
+    this.first = (page - 1) * this.rows;
+  }
+
   get currentPage(): number {
     return Math.floor(this.first / this.rows) + 1;
   }
 
   get totalPages(): number {
     return Math.ceil(this.filteredUsers.length / this.rows);
+  }
+
+  get visibleUsers(): UserI[] {
+    return this.filteredUsers.slice(this.first, this.first + this.rows);
+  }
+
+  getPageStart(): number {
+    if (this.filteredUsers.length === 0) return 0;
+    return this.first + 1;
+  }
+
+  getPageEnd(): number {
+    return Math.min(this.first + this.rows, this.filteredUsers.length);
+  }
+
+  getPages(): number[] {
+    return Array.from({ length: this.totalPages }, (_, index) => index + 1);
+  }
+
+  getActiveCount(): number {
+    return this.users.filter((user) => this.isActive(user)).length;
+  }
+
+  getUsersWithRoleCount(): number {
+    return this.users.filter((user) => this.hasAnyRole(user)).length;
+  }
+
+  getNewThisMonthCount(): number {
+    const now = new Date();
+
+    return this.users.filter((user) => {
+      const rawDate =
+        (user as any).created_at ??
+        (user as any).createdAt ??
+        (user as any).date_joined ??
+        null;
+
+      if (!rawDate) return false;
+
+      const created = new Date(rawDate);
+      if (Number.isNaN(created.getTime())) return false;
+
+      return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
+    }).length;
+  }
+
+  getRoleLabel(user: UserI): string {
+    if (user.roles && user.roles.length > 0) {
+      return user.roles[0].name;
+    }
+
+    return user.role?.name || 'Sin rol';
+  }
+
+  getExtraRolesCount(user: UserI): number {
+    if (!user.roles || user.roles.length <= 1) return 0;
+    return user.roles.length - 1;
+  }
+
+  isActive(user: UserI): boolean {
+    if (user.status) return user.status === 'ACTIVE';
+    return !!user.is_active;
+  }
+
+  getUserInitials(user: UserI): string {
+    const first = user.first_name?.trim().charAt(0) || '';
+    const last = user.last_name?.trim().charAt(0) || '';
+    return `${first}${last}`.toUpperCase() || 'US';
+  }
+
+  resolveAvatar(src?: string | null): string | null {
+    if (!src) return null;
+    if (src.startsWith('http://') || src.startsWith('https://')) return src;
+    return `http://127.0.0.1:8000${src.startsWith('/') ? '' : '/'}${src}`;
+  }
+
+  private updateStats(): void {
+    this.statCards[0].value = `${this.users.length}`;
+    this.statCards[1].value = `${this.getActiveCount()}`;
+    this.statCards[2].value = `${this.getUsersWithRoleCount()}`;
+    this.statCards[3].value = `${this.getNewThisMonthCount()}`;
+  }
+
+  private matchesSearch(user: UserI, query: string): boolean {
+    if (!query) return true;
+
+    const searchable = [
+      user.username,
+      user.email,
+      user.first_name,
+      user.last_name,
+      this.getRoleLabel(user)
+    ]
+      .join(' ')
+      .toLowerCase();
+
+    return searchable.includes(query);
+  }
+
+  private matchesStatus(user: UserI): boolean {
+    if (this.statusFilter === 'ALL') return true;
+    return this.statusFilter === 'ACTIVE' ? this.isActive(user) : !this.isActive(user);
+  }
+
+  private matchesRole(user: UserI): boolean {
+    if (this.roleFilter === 'ALL') return true;
+    return this.roleFilter === 'WITH_ROLE' ? this.hasAnyRole(user) : !this.hasAnyRole(user);
+  }
+
+  private hasAnyRole(user: UserI): boolean {
+    return (user.roles && user.roles.length > 0) || !!user.role;
   }
 }

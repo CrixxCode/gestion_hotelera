@@ -2,7 +2,6 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from rest_framework.routers import DefaultRouter
 from accounts.views import (PasswordResetRequestView, PasswordResetConfirmView, HealthCheckView, ProfileUpdateView)
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
@@ -10,17 +9,11 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from accounts.views import (
     CsrfInitView, SessionLoginView, SessionLogoutView, MeSessionView,
-    UserViewSet, RoleViewSet, ResourceViewSet,
 )
-
-router = DefaultRouter()
-router.register(r"users", UserViewSet, basename="users")
-router.register(r"roles", RoleViewSet, basename="roles")
-router.register(r"resources", ResourceViewSet, basename="resources")
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/", include(router.urls)),
+    path("api/", include("accounts.urls")),
 
     path("health/", HealthCheckView.as_view(), name="healthcheck"),
 
@@ -34,6 +27,9 @@ urlpatterns = [
 
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+
+    path("api/", include("apps.clients.urls")),
+    path("api/", include("apps.hotel_settings.urls")),
 
 ]
 

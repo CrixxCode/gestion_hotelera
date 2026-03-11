@@ -1,7 +1,7 @@
-import { Component, EventEmitter, Output, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Component, EventEmitter, HostListener, OnInit, Output } from '@angular/core';
 import { Router } from '@angular/router';
-import { AuthService } from '../../../services/auth/auth';  // Asegúrate de que esté bien importado
+import { AuthService } from '../../../services/auth/auth';
 import { LogoutScreen } from '../../pages/logout-screen/logout-screen';
 
 @Component({
@@ -10,7 +10,7 @@ import { LogoutScreen } from '../../pages/logout-screen/logout-screen';
   imports: [CommonModule, LogoutScreen],
   templateUrl: './header.html',
 })
-export class Header {
+export class Header implements OnInit {
   @Output() menuToggle = new EventEmitter<void>();
 
   menuOpen = false;
@@ -19,23 +19,26 @@ export class Header {
   userName = '';
   userRole = '';
   userAvatar = 'avatar/default-avatar.png';
+
   private readonly defaultAvatar = 'avatar/default-avatar.png';
   private readonly logoutAnimationDuration = 1000;
 
-  constructor(private authService: AuthService, private router: Router) { }
+  constructor(
+    private authService: AuthService,
+    private router: Router
+  ) {}
 
-  ngOnInit() {
-    // Asegura que la aplicación arranque siempre en modo claro
+  ngOnInit(): void {
+    // Asegura que la aplicacion arranque siempre en modo claro
     this.darkMode = false;
     document.documentElement.classList.remove('dark');
     this.loadUserInfo();
   }
 
-  // Cargar la información del usuario (nombre y rol)
   loadUserInfo(): void {
     this.authService.getUserInfo().subscribe({
       next: (res: any) => {
-        this.userName = res.username || 'Usuario';  // Asignar nombre de usuario
+        this.userName = res.username || 'Usuario';
         this.userRole = this.resolveUserRole(res);
         const resolvedAvatar = this.authService.buildMediaUrl(res.avatar);
         this.userAvatar = resolvedAvatar || this.defaultAvatar;
@@ -44,7 +47,7 @@ export class Header {
         this.userName = 'Invitado';
         this.userRole = 'Sin rol';
         this.userAvatar = this.defaultAvatar;
-      }
+      },
     });
   }
 
@@ -96,4 +99,5 @@ export class Header {
     const firstRole = Array.isArray(user?.roles) ? user.roles[0]?.name : null;
     return firstRole || 'Usuario';
   }
+
 }

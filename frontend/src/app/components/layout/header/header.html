@@ -1,30 +1,27 @@
-<header class="w-full h-20 px-6 flex items-center bg-gray-100 border-b border-gray-200">
+<header class="w-full h-20 px-3 sm:px-6 flex items-center bg-gray-100 border-b border-gray-200">
   <div class="flex items-center justify-between w-full">
-    
-    <!-- IZQUIERDA: Botón hamburguesa -->
+    <!-- IZQUIERDA: Boton hamburguesa -->
     <div class="flex items-center">
       <button
         class="p-2 rounded-lg bg-[#1F2937] hover:bg-[#4b5563] inline-flex items-center justify-center"
         (click)="menuToggle.emit()"
-        aria-label="Abrir menú lateral"
+        aria-label="Abrir menu lateral"
       >
         <i class="fa-solid fa-bars text-lg text-[#F9FAFB]"></i>
       </button>
     </div>
 
-    <!-- DERECHA: Notificaciones + Menú usuario -->
-    <div class="flex items-center gap-6 ml-auto relative">
-      <!-- Notificaciones -->
+    <!-- DERECHA: Notificaciones + menu usuario -->
+    <div class="flex items-center gap-3 sm:gap-6 relative ml-auto">
       <button class="p-2 rounded-lg hover:bg-[#1F2937] hover:text-white transition-colors">
         <i class="fa-regular fa-bell text-lg"></i>
       </button>
 
-      <!-- Menú usuario -->
       <div class="relative">
         <button
           class="flex items-center gap-3 group"
           (click)="toggleMenu()"
-          aria-label="Abrir menú de usuario"
+          aria-label="Abrir menu de usuario"
         >
           <div class="text-right leading-tight">
             <p class="font-medium text-gray-800">{{ userName }}</p>
@@ -38,7 +35,6 @@
           <i class="fa-solid fa-chevron-down text-gray-600 ml-2"></i>
         </button>
 
-        <!-- Menú desplegable -->
         <div
           *ngIf="menuOpen"
           class="absolute right-0 mt-3 w-56 bg-white rounded-lg shadow-lg border border-gray-100 z-50 animate-fade-in"
@@ -59,7 +55,7 @@
                 (click)="openSettings()"
               >
                 <i class="fa-solid fa-gear text-gray-600 w-5"></i>
-                Configuración general
+                Configuracion general
               </button>
             </li>
             <li>
@@ -77,7 +73,7 @@
                 (click)="logout()"
               >
                 <i class="fa-solid fa-right-from-bracket w-5"></i>
-                Cerrar sesión
+                Cerrar sesion
               </button>
             </li>
           </ul>

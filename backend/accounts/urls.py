@@ -10,5 +10,4 @@ router.register(r"resources", ResourceViewSet, basename="resources")
 
 urlpatterns = [
     path("", include(router.urls)),
-    path("<int:pk>/", UserViewSet.as_view({"get": "retrieve", "put": "update", "patch": "partial_update"}), name="user-detail"),
 ]

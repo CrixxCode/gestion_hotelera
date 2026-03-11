@@ -1,17 +1,15 @@
 import { Component, EventEmitter, Input, Output, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ButtonModule } from 'primeng/button';
-import { InputTextModule } from 'primeng/inputtext';
-import { FileUploadModule } from 'primeng/fileupload';
 import { UserI } from '../user-model';
 import { UserService } from '../../../services/user';
 
 @Component({
   selector: 'app-user-update',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, ButtonModule, InputTextModule, FileUploadModule],
-  templateUrl: './update.html'
+  imports: [CommonModule, ReactiveFormsModule],
+  templateUrl: './update.html',
+  styleUrls: ['./update.css']
 })
 export class UserUpdate implements OnChanges {
   @Input() user: UserI | null = null;
@@ -63,7 +61,7 @@ export class UserUpdate implements OnChanges {
       is_active: statusValue,
     };
 
-    this.userService.updateUser(this.user.id, updatedUser, this.avatarFile!).subscribe({
+    this.userService.updateUser(this.user.id, updatedUser, this.avatarFile || undefined).subscribe({
       next: () => {
         this.updated.emit();
         this.close.emit();

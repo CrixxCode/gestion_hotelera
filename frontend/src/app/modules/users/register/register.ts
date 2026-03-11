@@ -10,6 +10,7 @@ import { ToastModule } from 'primeng/toast';
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule, ToastModule],
   templateUrl: './register.html',
+  styleUrls: ['./register.css'],
 })
 export class UserRegister {
   @Output() close = new EventEmitter<void>();
@@ -73,7 +74,7 @@ export class UserRegister {
         this.messageService.add({
           severity: 'error',
           summary: 'Error',
-          detail: err.error?.detail || 'No se pudo registrar el usuario.',
+          detail: this.getCreateErrorMessage(err),
           life: 3000
         });
         this.loading = false;
@@ -99,5 +100,42 @@ export class UserRegister {
     if (this.fileInput) {
       this.fileInput.nativeElement.value = '';
     }
+  }
+
+  private getCreateErrorMessage(err: any): string {
+    const backendError = err?.error;
+    const fieldErrors = backendError?.errors;
+
+    if (fieldErrors && typeof fieldErrors === 'object') {
+      const messages = Object.entries(fieldErrors).flatMap(([field, value]) => {
+        const values = Array.isArray(value) ? value : [value];
+        return values
+          .filter((item) => item !== null && item !== undefined && `${item}`.trim() !== '')
+          .map((item) => `${this.getFieldLabel(field)}: ${item}`);
+      });
+
+      if (messages.length > 0) {
+        return messages.join(' | ');
+      }
+    }
+
+    if (typeof backendError?.detail === 'string' && backendError.detail.trim()) {
+      return backendError.detail;
+    }
+
+    return 'No se pudo registrar el usuario.';
+  }
+
+  private getFieldLabel(field: string): string {
+    const labels: Record<string, string> = {
+      username: 'Usuario',
+      email: 'Correo',
+      password: 'Contrasena',
+      first_name: 'Nombre',
+      last_name: 'Apellido',
+      non_field_errors: 'Validacion'
+    };
+
+    return labels[field] || field;
   }
 }

@@ -1,36 +1,24 @@
-"""
+﻿"""
 Management command: seed_rbac
-==============================
-Crea (o actualiza) los Resources, Roles y el superusuario demo.
+=============================
+Creates or updates Resources, Roles, and demo superuser.
 
-Uso:
-    python manage.py seed_rbac                  # seed completo
-    python manage.py seed_rbac --only-resources # solo crea/actualiza resources
-    python manage.py seed_rbac --assign-admin   # asigna rol admin a todos los superusuarios
-
-Los fields de cada Resource:
-  key           → identificador de permiso  (ej: "users.read")
-  name          → etiqueta en el menú
-  icon          → clase CSS del ícono (PrimeIcons → "pi pi-xxx")
-  link          → ruta Angular (ej: "/usuarios")
-  link_backend  → ruta API (ej: "/api/users/")
-  is_menu       → ¿aparece en el menú lateral?
-  order         → posición en el menú (menor = primero)
-  parent_key    → key del resource padre (para sub-menús), None = raíz
+Usage:
+    python manage.py seed_rbac                  # full seed
+    python manage.py seed_rbac --only-resources # only resources
+    python manage.py seed_rbac --assign-admin   # assign admin role to all superusers
 """
 
-from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
-from accounts.models import Role, Resource
+from django.core.management.base import BaseCommand
+
+from accounts.models import Resource, Role
 
 User = get_user_model()
 
-# ──────────────────────────────────────────────────────────────────────────────
-# RESOURCES
-# Tupla: (key, name, icon, link, link_backend, is_menu, order, parent_key)
-# ──────────────────────────────────────────────────────────────────────────────
+# Tuple format:
+# (key, name, icon, link, link_backend, is_menu, order, parent_key)
 RESOURCES = [
-    # ── Dashboard ────────────────────────────────────────────────────────────
     (
         "dashboard.view",
         "Dashboard",
@@ -41,7 +29,6 @@ RESOURCES = [
         1,
         None,
     ),
-    # ── Usuarios ─────────────────────────────────────────────────────────────
     (
         "users.read",
         "Usuarios",
@@ -58,11 +45,30 @@ RESOURCES = [
         "",
         "",
         "/api/users/",
-        False,   # no aparece en menú; es sólo un permiso
+        False,
         0,
         None,
     ),
-    # ── Roles ─────────────────────────────────────────────────────────────────
+    (
+        "clients.read",
+        "Clientes y huespedes",
+        "pi pi-id-card",
+        "/clientes",
+        "/api/clients/",
+        True,
+        3,
+        None,
+    ),
+    (
+        "clients.write",
+        "Gestionar clientes",
+        "",
+        "",
+        "/api/clients/",
+        False,
+        0,
+        None,
+    ),
     (
         "roles.read",
         "Roles",
@@ -70,7 +76,7 @@ RESOURCES = [
         "/roles",
         "/api/roles/",
         True,
-        3,
+        4,
         None,
     ),
     (
@@ -83,7 +89,6 @@ RESOURCES = [
         0,
         None,
     ),
-    # ── Recursos ──────────────────────────────────────────────────────────────
     (
         "resources.read",
         "Recursos",
@@ -91,7 +96,7 @@ RESOURCES = [
         "/recursos",
         "/api/resources/",
         True,
-        4,
+        5,
         None,
     ),
     (
@@ -104,10 +109,9 @@ RESOURCES = [
         0,
         None,
     ),
-    # ── Perfil / contraseña ───────────────────────────────────────────────────
     (
         "auth.password.change",
-        "Cambiar contraseña",
+        "Cambiar contrasena",
         "pi pi-key",
         "",
         "/api/auth/password/change/",
@@ -117,9 +121,7 @@ RESOURCES = [
     ),
 ]
 
-# ──────────────────────────────────────────────────────────────────────────────
-# ROLES  →  { slug: [list of resource keys] }
-# ──────────────────────────────────────────────────────────────────────────────
+# Role definitions: slug -> metadata + resource keys
 ROLES = {
     "admin": {
         "name": "Administrador",
@@ -128,6 +130,8 @@ ROLES = {
             "dashboard.view",
             "users.read",
             "users.write",
+            "clients.read",
+            "clients.write",
             "roles.read",
             "roles.write",
             "resources.read",
@@ -137,10 +141,11 @@ ROLES = {
     },
     "manager": {
         "name": "Gerente",
-        "description": "Acceso de lectura y gestión básica.",
+        "description": "Acceso de lectura y gestion basica.",
         "keys": [
             "dashboard.view",
             "users.read",
+            "clients.read",
             "roles.read",
             "resources.read",
             "auth.password.change",
@@ -148,9 +153,10 @@ ROLES = {
     },
     "staff": {
         "name": "Personal",
-        "description": "Acceso básico al sistema.",
+        "description": "Acceso basico al sistema.",
         "keys": [
             "dashboard.view",
+            "clients.read",
             "auth.password.change",
         ],
     },
@@ -158,24 +164,22 @@ ROLES = {
 
 
 class Command(BaseCommand):
-    help = "Crea o actualiza Resources, Roles y el superusuario demo del sistema."
+    help = "Creates or updates Resources, Roles and demo superuser."
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--only-resources",
             action="store_true",
-            help="Solo crea/actualiza los Resources (no toca roles ni usuarios).",
+            help="Only create/update Resources (do not touch roles or users).",
         )
         parser.add_argument(
             "--assign-admin",
             action="store_true",
-            help="Asigna el rol 'admin' a todos los superusuarios existentes.",
+            help="Assign 'admin' role to all existing superusers.",
         )
 
-    # ──────────────────────────────────────────────────────────────────────────
-
     def handle(self, *args, **options):
-        self.stdout.write(self.style.MIGRATE_HEADING("\n🌱  Iniciando seed RBAC...\n"))
+        self.stdout.write(self.style.MIGRATE_HEADING("\nStarting RBAC seed...\n"))
 
         self._seed_resources()
 
@@ -186,16 +190,11 @@ class Command(BaseCommand):
         if options["assign_admin"]:
             self._assign_admin_to_superusers()
 
-        self.stdout.write(self.style.SUCCESS("\n✅  Seed RBAC completado.\n"))
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # Helpers
-    # ──────────────────────────────────────────────────────────────────────────
+        self.stdout.write(self.style.SUCCESS("\nRBAC seed completed.\n"))
 
     def _seed_resources(self):
-        self.stdout.write("  📦  Creando / actualizando Resources...")
+        self.stdout.write("  Creating/updating Resources...")
 
-        # Índice por key para resolver parent_key
         created_map: dict[str, Resource] = {}
 
         for key, name, icon, link, link_backend, is_menu, order, parent_key in RESOURCES:
@@ -214,11 +213,11 @@ class Command(BaseCommand):
                 },
             )
             created_map[key] = obj
-            verb = "CREADO  " if created else "actualizado"
-            self.stdout.write(f"      {verb} → {key}")
+            verb = "CREATED" if created else "updated"
+            self.stdout.write(f"      {verb} -> {key}")
 
     def _seed_roles(self):
-        self.stdout.write("  🛡️   Creando / actualizando Roles...")
+        self.stdout.write("  Creating/updating Roles...")
 
         for slug, data in ROLES.items():
             role, created = Role.objects.update_or_create(
@@ -231,13 +230,11 @@ class Command(BaseCommand):
             resources = list(Resource.objects.filter(key__in=data["keys"]))
             role.resources.set(resources)
 
-            verb = "CREADO  " if created else "actualizado"
-            self.stdout.write(
-                f"      {verb} → {slug}  ({len(resources)} recursos asignados)"
-            )
+            verb = "CREATED" if created else "updated"
+            self.stdout.write(f"      {verb} -> {slug} ({len(resources)} resources)")
 
     def _seed_superuser(self):
-        self.stdout.write("  👤  Verificando superusuario demo...")
+        self.stdout.write("  Checking demo superuser...")
 
         if not User.objects.filter(username="admin").exists():
             admin_user = User.objects.create_superuser(
@@ -248,35 +245,24 @@ class Command(BaseCommand):
             admin_role = Role.objects.filter(slug="admin").first()
             if admin_role:
                 admin_user.roles.add(admin_role)
-            self.stdout.write(
-                self.style.SUCCESS(
-                    "      ✔  Superusuario creado → admin / admin12345"
-                )
-            )
-            self.stdout.write(
-                self.style.WARNING(
-                    "      ⚠️  ¡Cambia la contraseña en producción!"
-                )
-            )
+
+            self.stdout.write(self.style.SUCCESS("      Superuser created -> admin / admin12345"))
+            self.stdout.write(self.style.WARNING("      Change this password in production."))
         else:
-            # Si ya existe, asegúrate de que tenga el rol admin
             existing = User.objects.get(username="admin")
             admin_role = Role.objects.filter(slug="admin").first()
             if admin_role and not existing.roles.filter(slug="admin").exists():
                 existing.roles.add(admin_role)
-                self.stdout.write(
-                    "      ✔  Rol 'admin' asignado al superusuario existente."
-                )
+                self.stdout.write("      Assigned 'admin' role to existing superuser.")
             else:
-                self.stdout.write("      ─  Superusuario 'admin' ya existe y tiene su rol.")
+                self.stdout.write("      Superuser 'admin' already exists and has role.")
 
     def _assign_admin_to_superusers(self):
-        self.stdout.write("  🔑  Asignando rol 'admin' a todos los superusuarios...")
+        self.stdout.write("  Assigning 'admin' role to all superusers...")
+
         admin_role = Role.objects.filter(slug="admin").first()
         if not admin_role:
-            self.stdout.write(
-                self.style.ERROR("      ✗  Rol 'admin' no encontrado. Ejecuta el seed completo primero.")
-            )
+            self.stdout.write(self.style.ERROR("      Role 'admin' not found. Run full seed first."))
             return
 
         superusers = User.objects.filter(is_superuser=True)
@@ -285,9 +271,9 @@ class Command(BaseCommand):
             if not user.roles.filter(slug="admin").exists():
                 user.roles.add(admin_role)
                 count += 1
-                self.stdout.write(f"      ✔  {user.username}")
+                self.stdout.write(f"      {user.username}")
 
         if count == 0:
-            self.stdout.write("      ─  Todos los superusuarios ya tenían el rol 'admin'.")
+            self.stdout.write("      All superusers already had 'admin' role.")
         else:
-            self.stdout.write(self.style.SUCCESS(f"      ✔  {count} superusuario(s) actualizado(s)."))
+            self.stdout.write(self.style.SUCCESS(f"      Updated {count} superuser(s)."))

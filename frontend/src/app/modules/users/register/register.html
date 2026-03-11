@@ -1,67 +1,87 @@
-<form [formGroup]="form" (ngSubmit)="onSubmit()" class="space-y-4" enctype="multipart/form-data">
-  <!-- Avatar -->
-  <div class="flex flex-col items-center">
-    <label class="block text-sm font-medium text-gray-700 mb-1">Avatar</label>
-    <input
-      #fileInput
-      type="file"
-      (change)="onFileChange($event)"
-      accept="image/*"
-      class="text-sm text-gray-600 border border-gray-300 rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
-    />
-
-    <div *ngIf="avatarPreview" class="mt-3">
-      <img
-        [src]="avatarPreview"
-        alt="Vista previa del avatar"
-        class="w-24 h-24 rounded-full object-cover border-2 border-gray-300 shadow-md transition-transform duration-200 hover:scale-105"
-      />
+<form [formGroup]="form" (ngSubmit)="onSubmit()" class="drawer-form" enctype="multipart/form-data">
+  <header class="drawer-head">
+    <div>
+      <h2>Nuevo usuario</h2>
+      <p>Completa la informacion base para registrar una nueva cuenta</p>
     </div>
-  </div>
 
-  <!-- Campos de texto -->
-  <div>
-    <label class="block text-sm font-medium text-gray-700">Nombre</label>
-    <input formControlName="first_name" type="text" class="w-full border rounded px-3 py-2" />
-  </div>
-
-  <div>
-    <label class="block text-sm font-medium text-gray-700">Apellidos</label>
-    <input formControlName="last_name" type="text" class="w-full border rounded px-3 py-2" />
-  </div>
-
-  <div>
-    <label class="block text-sm font-medium text-gray-700">Nombre de usuario</label>
-    <input formControlName="username" type="text" class="w-full border rounded px-3 py-2" />
-  </div>
-
-  <div>
-    <label class="block text-sm font-medium text-gray-700">Correo electrónico</label>
-    <input formControlName="email" type="email" class="w-full border rounded px-3 py-2" />
-  </div>
-
-  <div>
-    <label class="block text-sm font-medium text-gray-700">Contraseña</label>
-    <input formControlName="password" type="password" class="w-full border rounded px-3 py-2" />
-  </div>
-
-  <!-- Botones -->
-  <div class="flex justify-end gap-3 pt-3">
-    <button
-      type="button"
-      class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition cursor-pointer"
-      (click)="onCancel()"
-    >
-      <i class="pi pi-times mr-1"></i> Cancelar
+    <button type="button" class="head-close" (click)="onCancel()" title="Cerrar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
+      </svg>
     </button>
+  </header>
 
-    <button
-      type="submit"
-      [disabled]="loading"
-      class="bg-[#111827] hover:bg-[#1F2937] text-white px-4 py-2 rounded-lg transition cursor-pointer"
-    >
-      <i class="pi pi-user-plus mr-1"></i>
+  <div class="drawer-body">
+    <section>
+      <h3>Perfil</h3>
+      <div class="avatar-block">
+        <div class="avatar-preview" *ngIf="avatarPreview; else noAvatar">
+          <img [src]="avatarPreview" alt="Vista previa del avatar" />
+        </div>
+
+        <ng-template #noAvatar>
+          <div class="avatar-empty">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </div>
+        </ng-template>
+
+        <label class="file-field">
+          <span>Avatar</span>
+          <input #fileInput type="file" (change)="onFileChange($event)" accept="image/*" />
+        </label>
+      </div>
+    </section>
+
+    <section>
+      <h3>Datos personales</h3>
+      <div class="grid two">
+        <label>
+          <span>Nombre *</span>
+          <input formControlName="first_name" type="text" />
+        </label>
+
+        <label>
+          <span>Apellidos *</span>
+          <input formControlName="last_name" type="text" />
+        </label>
+      </div>
+    </section>
+
+    <section>
+      <h3>Cuenta</h3>
+      <div class="grid one">
+        <label>
+          <span>Nombre de usuario *</span>
+          <input formControlName="username" type="text" />
+        </label>
+
+        <label>
+          <span>Correo electronico *</span>
+          <input formControlName="email" type="email" />
+        </label>
+
+        <label>
+          <span>Contrasena *</span>
+          <input formControlName="password" type="password" />
+        </label>
+
+        <label class="switch">
+          <span>Usuario activo</span>
+          <input formControlName="is_active" type="checkbox" />
+        </label>
+      </div>
+    </section>
+  </div>
+
+  <footer class="drawer-foot">
+    <button type="button" class="btn btn-light" (click)="onCancel()">Cancelar</button>
+    <button type="submit" [disabled]="loading" class="btn btn-dark">
       {{ loading ? 'Registrando...' : 'Registrar' }}
     </button>
-  </div>
+  </footer>
 </form>

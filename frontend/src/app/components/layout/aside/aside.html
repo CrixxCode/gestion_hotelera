@@ -5,64 +5,76 @@
     <span class="brand-title">HotelManager Pro</span>
   </div>
 
-  <ul class="menu-root">
-    @for (item of menu; track item.id) {
-      @if (isGroup(item)) {
-        <li class="menu-block">
-          <button
-            type="button"
-            class="menu-parent"
-            [class.is-open]="isOpen(item.id)"
-            (click)="toggleGroup(item.id)"
-          >
-            <span class="left">
-              <span class="icon-pill">
-                <i [class]="item.icon || 'fa-solid fa-circle'"></i>
+  <div class="menu-scroll">
+    <ul class="menu-root">
+      @for (item of menu; track item.id) {
+        @if (isGroup(item)) {
+          <li class="menu-block">
+            <button
+              type="button"
+              class="menu-parent"
+              [class.is-open]="isOpen(item.id)"
+              (click)="toggleGroup(item.id)"
+            >
+              <span class="left">
+                <span class="icon-pill">
+                  <i [class]="item.icon || 'fa-solid fa-circle'"></i>
+                </span>
+                <span class="label">{{ item.label }}</span>
               </span>
-              <span class="label">{{ item.label }}</span>
-            </span>
 
-            <span class="right">
-              <i class="fa-solid fa-chevron-down chevron" [class.rotate]="isOpen(item.id)"></i>
-            </span>
-          </button>
-
-          <div class="submenu-wrap" [class.open]="isOpen(item.id)">
-            <ul class="submenu-list">
-              @for (child of item.children; track child.id) {
-                <li>
-                  <a
-                    class="submenu-item"
-                    [routerLink]="child.route"
-                    routerLinkActive="active"
-                    [routerLinkActiveOptions]="{ exact: true }"
-                  >
-                    <span class="submenu-label">{{ child.label }}</span>
-                  </a>
-                </li>
-              }
-            </ul>
-          </div>
-
-        </li>
-      }
-      @else {
-        <li class="menu-block">
-          <a
-            class="menu-link"
-            [routerLink]="item.route"
-            routerLinkActive="active"
-            [routerLinkActiveOptions]="{ exact: true }"
-          >
-            <span class="left">
-              <span class="icon-pill">
-                <i [class]="item.icon || 'fa-solid fa-circle'"></i>
+              <span class="right">
+                <i class="fa-solid fa-chevron-down chevron" [class.rotate]="isOpen(item.id)"></i>
               </span>
-              <span class="label">{{ item.label }}</span>
-            </span>
-          </a>
-        </li>
+            </button>
+
+            <div class="submenu-wrap" [class.open]="isOpen(item.id)">
+              <ul class="submenu-list">
+                @for (child of item.children; track child.id) {
+                  <li>
+                    <a
+                      class="submenu-item"
+                      [routerLink]="child.route"
+                      routerLinkActive="active"
+                      [routerLinkActiveOptions]="{ exact: true }"
+                    >
+                      <span class="submenu-label">{{ child.label }}</span>
+                    </a>
+                  </li>
+                }
+              </ul>
+            </div>
+
+          </li>
+        }
+        @else {
+          <li class="menu-block">
+            <a
+              class="menu-link"
+              [routerLink]="item.route"
+              routerLinkActive="active"
+              [routerLinkActiveOptions]="{ exact: true }"
+            >
+              <span class="left">
+                <span class="icon-pill">
+                  <i [class]="item.icon || 'fa-solid fa-circle'"></i>
+                </span>
+                <span class="label">{{ item.label }}</span>
+              </span>
+            </a>
+          </li>
+        }
       }
-    }
-  </ul>
+    </ul>
+  </div>
+
+  <div class="aside-footer-clock">
+    <span class="clock-icon">
+      <i class="fa-regular fa-clock"></i>
+    </span>
+    <div class="clock-text">
+      <p class="clock-time">{{ currentTime }}</p>
+      <p class="clock-date">{{ currentDate }}</p>
+    </div>
+  </div>
 </div>

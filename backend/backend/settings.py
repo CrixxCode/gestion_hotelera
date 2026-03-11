@@ -29,6 +29,8 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
 
     "accounts",
+    "apps.clients",
+    "apps.hotel_settings",
 ]
 
 MIDDLEWARE = [

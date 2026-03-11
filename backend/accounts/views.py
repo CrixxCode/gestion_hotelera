@@ -13,17 +13,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.throttling import ScopedRateThrottle
 from accounts.permissions import HasResourcePermission
-from rest_framework.permissions import IsAuthenticated
 
 from .models import Role, Resource
 from .serializers import (
     RegisterSerializer, UserSerializer, RoleSerializer, ResourceSerializer,
-    PasswordChangeSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer
+    UserMiniSerializer, PasswordChangeSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer
 )
-
-
-from .serializers import RoleSerializer, ResourceSerializer, UserMiniSerializer
-from accounts.permissions import HasResourcePermission
 from django.db import models
 
 User = get_user_model()

@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService, MenuItem, MeResponse } from '../../../services/auth/auth';
@@ -10,9 +10,12 @@ import { AuthService, MenuItem, MeResponse } from '../../../services/auth/auth';
   templateUrl: './aside.html',
   styleUrls: ['./aside.css']
 })
-export class Aside implements OnInit {
+export class Aside implements OnInit, OnDestroy {
   menu: MenuItem[] = [];
   openGroups: Record<string, boolean> = {};
+  currentTime = '';
+  currentDate = '';
+  private clockTimer?: ReturnType<typeof setInterval>;
 
   constructor(
     private authService: AuthService,
@@ -20,6 +23,7 @@ export class Aside implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.startClock();
     this.authService.getUserInfo().subscribe({
       next: (user: MeResponse) => {
         const rawMenu = Array.isArray(user.menu) ? user.menu : [];
@@ -43,6 +47,12 @@ export class Aside implements OnInit {
         this.openGroups = {};
       }
     });
+  }
+
+  ngOnDestroy(): void {
+    if (this.clockTimer) {
+      clearInterval(this.clockTimer);
+    }
   }
 
   toggleGroup(id: string): void {
@@ -121,5 +131,34 @@ export class Aside implements OnInit {
       securityGroup,
       ...filteredTopLevel.slice(insertAt)
     ];
+  }
+
+  private startClock(): void {
+    const locale = 'es-CO';
+    const timeZone = 'America/Bogota';
+    const timeFormatter = new Intl.DateTimeFormat(locale, {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+      timeZone,
+    });
+    const dateFormatter = new Intl.DateTimeFormat(locale, {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      timeZone,
+    });
+
+    const updateClock = () => {
+      const now = new Date();
+      this.currentTime = timeFormatter.format(now);
+      const date = dateFormatter.format(now);
+      this.currentDate = date.charAt(0).toUpperCase() + date.slice(1);
+    };
+
+    updateClock();
+    this.clockTimer = setInterval(updateClock, 1000);
   }
 }

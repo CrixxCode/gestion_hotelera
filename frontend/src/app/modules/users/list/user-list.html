@@ -1,156 +1,213 @@
 <p-toast></p-toast>
 <p-confirmDialog key="userDelete" styleClass="user-delete-confirm"></p-confirmDialog>
 
-<p-dialog header="Registrar nuevo usuario" [(visible)]="visibleRegisterDialog" [modal]="true"
-  [style]="{ width: '500px' }" [draggable]="false" [resizable]="false" (onHide)="closeRegisterDialog()">
+<p-dialog [(visible)]="visibleRegisterDialog" [modal]="true" [position]="'right'" [dismissableMask]="true"
+  [showHeader]="false" [style]="{ width: '470px', maxWidth: '100vw', height: '100vh', margin: '0' }"
+  [contentStyle]="{ padding: '0', overflow: 'hidden' }" styleClass="user-drawer-dialog"
+  [draggable]="false" [resizable]="false" (onHide)="closeRegisterDialog()">
   <app-user-register (close)="closeRegisterDialog()"></app-user-register>
 </p-dialog>
 
-<p-dialog header="Detalles del Usuario" [(visible)]="visibleViewDialog" [modal]="true" [style]="{ width: '450px' }"
+<p-dialog [(visible)]="visibleViewDialog" [modal]="true" [position]="'right'" [dismissableMask]="true"
+  [showHeader]="false" [style]="{ width: '450px', maxWidth: '100vw', height: '100vh', margin: '0' }"
+  [contentStyle]="{ padding: '0', overflow: 'hidden' }" styleClass="user-drawer-dialog user-profile-dialog"
   [draggable]="false" [resizable]="false" (onHide)="visibleViewDialog = false">
   <app-user-profile [user]="selectedUser" (close)="visibleViewDialog = false"></app-user-profile>
 </p-dialog>
 
-<p-dialog header="Editar usuario" [(visible)]="visibleEditDialog" [modal]="true" [style]="{ width: '500px' }"
+<p-dialog [(visible)]="visibleEditDialog" [modal]="true" [position]="'right'" [dismissableMask]="true"
+  [showHeader]="false" [style]="{ width: '470px', maxWidth: '100vw', height: '100vh', margin: '0' }"
+  [contentStyle]="{ padding: '0', overflow: 'hidden' }" styleClass="user-drawer-dialog"
   [draggable]="false" [resizable]="false" (onHide)="closeEditDialog()">
   <app-user-update [user]="selectedUser" (updated)="onUserUpdated()" (close)="closeEditDialog()"></app-user-update>
 </p-dialog>
 
-<div class="wrap">
-  <div class="topbar">
-    <div class="title">
-      <div class="h1">Usuarios</div>
-      <div class="sub">Administra usuarios, su estado y acciones de gestión.</div>
-    </div>
+<div class="users-page">
+  <header class="page-header">
+    <h1>Usuarios</h1>
+    <p>Gestiona cuentas de acceso, roles y estado de disponibilidad</p>
+  </header>
 
-    <div class="actions">
-      <button class="btn ghost" (click)="loadUsers()">
-        <i class="fa-solid fa-rotate-right"></i>
-        Actualizar
-      </button>
-      <button class="btn primary" (click)="openRegisterDialog()">
-        <i class="fa-solid fa-plus"></i>
-        Nuevo usuario
-      </button>
-    </div>
-  </div>
+  <section class="stats-grid">
+    <article class="stat-card" *ngFor="let card of statCards">
+      <div class="stat-main">
+        <span class="stat-label">{{ card.label }}</span>
+        <strong class="stat-value">{{ card.value }}</strong>
+        <span class="stat-sub">{{ card.sub }}</span>
+      </div>
 
-  <div class="filters card">
-    <div class="search">
-      <i class="fa-solid fa-magnifying-glass"></i>
-      <input type="text" placeholder="Buscar por usuario, nombre o email..." [(ngModel)]="globalFilter"
-        (input)="onFilterChange()" />
-      @if (globalFilter) {
-      <button class="icon-btn" (click)="globalFilter=''; onFilterChange()">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-      }
-    </div>
+      <span class="stat-icon" [ngStyle]="{ 'background-color': card.bg, color: card.color }">
+        <ng-container [ngSwitch]="card.icon">
+          <svg *ngSwitchCase="'users'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="8.5" cy="7" r="3" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a3 3 0 0 1 0 5.75" />
+          </svg>
 
-    <div class="stats">
-      <span class="pill soft">Total: {{ filteredUsers.length }}</span>
-      <span class="pill">Pág. {{ currentPage }} de {{ totalPages || 1 }}</span>
-    </div>
-  </div>
+          <svg *ngSwitchCase="'user-check'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+            <path d="m16.5 11.5 2 2 3.5-3.5" />
+          </svg>
 
-  <div class="main card">
-    <div class="main-head">
-      <div class="mh-title">Listado de usuarios</div>
-      <div class="mh-sub muted">Vista y gestión rápida de cuentas registradas.</div>
+          <svg *ngSwitchCase="'shield'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M12 2 4 5v6c0 5.2 3.4 9.9 8 11 4.6-1.1 8-5.8 8-11V5l-8-3z" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
+
+          <svg *ngSwitchCase="'user-plus'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+            <path d="M19 8v6" />
+            <path d="M16 11h6" />
+          </svg>
+        </ng-container>
+      </span>
+    </article>
+  </section>
+
+  <section class="table-card">
+    <div class="table-toolbar">
+      <div class="toolbar-left">
+        <label class="search-wrap">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="7"></circle>
+            <path d="m20 20-3.5-3.5"></path>
+          </svg>
+          <input type="text" placeholder="Buscar usuario, nombre o correo..." [(ngModel)]="globalFilter"
+            (input)="onFilterChange()" />
+          <button *ngIf="globalFilter" type="button" class="clear-btn" (click)="globalFilter=''; onFilterChange()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6 6 18"></path>
+              <path d="m6 6 12 12"></path>
+            </svg>
+          </button>
+        </label>
+
+        <select [(ngModel)]="statusFilter" (change)="onFilterChange()">
+          <option value="ALL">Todos</option>
+          <option value="ACTIVE">Activos</option>
+          <option value="INACTIVE">Inactivos</option>
+        </select>
+
+        <select [(ngModel)]="roleFilter" (change)="onFilterChange()">
+          <option value="ALL">Todos</option>
+          <option value="WITH_ROLE">Con rol</option>
+          <option value="WITHOUT_ROLE">Sin rol</option>
+        </select>
+      </div>
+
+      <div class="toolbar-right">
+        <button type="button" class="btn btn-light" (click)="loadUsers()">Actualizar</button>
+        <button type="button" class="btn btn-dark" (click)="openRegisterDialog()">+ Nuevo usuario</button>
+      </div>
     </div>
 
     <div class="table-wrap">
-      <table class="users-table">
+      <table>
         <thead>
           <tr>
-            <th>#</th>
             <th>Usuario</th>
-            <th>Nombre completo</th>
-            <th>Email</th>
+            <th>Contacto</th>
             <th>Rol</th>
             <th>Estado</th>
-            <th class="text-center">Acciones</th>
+            <th>Acciones</th>
           </tr>
         </thead>
 
         <tbody>
-          @if (loading) {
-          <tr>
-            <td colspan="7" class="empty-cell">Cargando usuarios...</td>
+          <tr *ngIf="loading">
+            <td colspan="5" class="table-empty">Cargando usuarios...</td>
           </tr>
-          } @else {
-          @for (user of filteredUsers | slice: first : first + rows; track user.id; let i = $index) {
-          <tr>
-            <td class="mono">{{ first + i + 1 }}</td>
-            <td>{{ user.username }}</td>
-            <td>{{ user.first_name }} {{ user.last_name }}</td>
-            <td>{{ user.email }}</td>
 
+          <tr *ngIf="!loading && visibleUsers.length === 0">
+            <td colspan="5" class="table-empty">No se encontraron usuarios</td>
+          </tr>
+
+          <tr *ngFor="let user of visibleUsers" (click)="onView(user)">
             <td>
-              <ng-container *ngIf="user.roles as roles; else noRole">
-                <ng-container *ngIf="roles.length > 0; else noRole">
-                  <span class="badge role">{{ roles[0]?.name }}<ng-container *ngIf="roles.length > 1"> +{{ roles.length
-                      - 1 }}</ng-container></span>
+              <div class="user-cell">
+                <ng-container *ngIf="resolveAvatar(user.avatar) as avatarUrl; else initialsAvatar">
+                  <img [src]="avatarUrl" alt="Avatar" class="avatar avatar-img" />
                 </ng-container>
-              </ng-container>
+                <ng-template #initialsAvatar>
+                  <div class="avatar">{{ getUserInitials(user) }}</div>
+                </ng-template>
 
-              <ng-template #noRole>
-                <span class="badge neutral">{{ user.role?.name || 'Sin rol' }}</span>
-              </ng-template>
+                <div>
+                  <p class="user-name">{{ user.first_name }} {{ user.last_name }}</p>
+                  <p class="user-id">&#64;{{ user.username }}</p>
+                </div>
+              </div>
             </td>
 
             <td>
-              <span class="status" [ngClass]="{
-                      'ok': user.status === 'ACTIVE',
-                      'off': user.status === 'INACTIVE'
-                    }">
-                {{ user.status === 'ACTIVE' ? 'Activo' : 'Inactivo' }}
+              <p class="contact-main">{{ user.email }}</p>
+              <p class="contact-sub">{{ isActive(user) ? 'Acceso activo' : 'Acceso deshabilitado' }}</p>
+            </td>
+
+            <td>
+              <span class="chip" [class.chip-neutral]="!getRoleLabel(user) || getRoleLabel(user) === 'Sin rol'">
+                {{ getRoleLabel(user) }}
+                <span *ngIf="getExtraRolesCount(user) > 0">+{{ getExtraRolesCount(user) }}</span>
               </span>
             </td>
 
             <td>
-              <div class="row-actions">
-                <button class="icon-action info" (click)="onView(user)" title="Ver detalles">
-                  <i class="pi pi-eye"></i>
+              <span class="chip chip-status" [ngClass]="{ 'chip-ok': isActive(user), 'chip-off': !isActive(user) }">
+                <span class="status-dot"></span>
+                {{ isActive(user) ? 'Activo' : 'Inactivo' }}
+              </span>
+            </td>
+
+            <td (click)="$event.stopPropagation()">
+              <div class="actions">
+                <button type="button" (click)="onView(user)" title="Ver detalle">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
                 </button>
 
-                <button class="icon-action edit" (click)="onEdit(user)" title="Editar usuario">
-                  <i class="pi pi-pencil"></i>
+                <button type="button" title="Editar" (click)="onEdit(user)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                  </svg>
                 </button>
 
-                <button class="icon-action danger" (click)="confirmDelete(user)" title="Eliminar usuario">
-                  <i class="pi pi-trash"></i>
+                <button type="button" class="danger" title="Eliminar" (click)="confirmDelete(user)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4h8v2" />
+                    <path d="M19 6l-1 14H6L5 6" />
+                    <path d="M10 11v6M14 11v6" />
+                  </svg>
                 </button>
               </div>
             </td>
           </tr>
-          }
-
-          @if (filteredUsers.length === 0) {
-          <tr>
-            <td colspan="7" class="empty-cell">
-              <i class="pi pi-info-circle"></i>
-              No se encontraron usuarios.
-            </td>
-          </tr>
-          }
-          }
         </tbody>
       </table>
     </div>
 
-    <div class="pager">
-      <button class="btn ghost" (click)="previousPage()" [disabled]="first === 0">
-        <i class="fa-solid fa-chevron-left"></i>
-        Anterior
-      </button>
+    <footer class="table-footer">
+      <span>
+        Mostrando {{ getPageStart() }} - {{ getPageEnd() }} de {{ filteredUsers.length }} usuarios
+      </span>
 
-      <span class="muted">PÃ¡gina {{ currentPage }} de {{ totalPages || 1 }}</span>
+      <div class="pager">
+        <button type="button" (click)="previousPage()" [disabled]="first === 0">Anterior</button>
 
-      <button class="btn ghost" (click)="nextPage()" [disabled]="first + rows >= filteredUsers.length">
-        Siguiente
-        <i class="fa-solid fa-chevron-right"></i>
-      </button>
-    </div>
-  </div>
+        <button type="button" *ngFor="let page of getPages()" (click)="goToPage(page)" [class.active]="currentPage === page">
+          {{ page }}
+        </button>
+
+        <button type="button" (click)="nextPage()" [disabled]="first + rows >= filteredUsers.length">Siguiente</button>
+      </div>
+    </footer>
+  </section>
 </div>
+
+
