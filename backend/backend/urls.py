@@ -31,6 +31,8 @@ urlpatterns = [
     path("api/", include("apps.clients.urls")),
     path("api/", include("apps.hotel_settings.urls")),
 
+    path("api/", include("apps.rooms.urls"))
+
 ]
 
 if settings.DEBUG:

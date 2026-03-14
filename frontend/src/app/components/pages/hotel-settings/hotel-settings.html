@@ -529,6 +529,15 @@
       <div class="flex items-center gap-2">
         <button
           type="button"
+          class="rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+          [disabled]="loading || saving || !canEdit || !settingsId"
+          (click)="clearAllSettings()"
+        >
+          Borrar configuracion
+        </button>
+
+        <button
+          type="button"
           class="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           [disabled]="loading || !hasChanges || saving || !canEdit"
           (click)="discardChanges()"

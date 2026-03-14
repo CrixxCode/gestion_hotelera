@@ -242,6 +242,46 @@ export class HotelSettings implements OnInit {
     this.loadCurrentSettings();
   }
 
+  clearAllSettings(): void {
+    if (!this.canEdit || this.saving) return;
+
+    if (!this.settingsId) {
+      this.errorMessage = 'No hay configuracion activa para eliminar.';
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Esta accion eliminara toda la configuracion del hotel. Deseas continuar?'
+    );
+    if (!confirmed) return;
+
+    this.saving = true;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    this.settingsSvc
+      .clearSettings()
+      .pipe(switchMap(() => this.settingsSvc.getCurrentSettings()))
+      .subscribe({
+        next: (fresh) => {
+          this.saving = false;
+          this.applySettings(fresh);
+          this.initialSnapshot = this.currentSnapshot();
+          this.successMessage = 'Configuracion eliminada correctamente.';
+        },
+        error: (error) => {
+          this.saving = false;
+          if (error?.status === 404) {
+            this.applySettings(null);
+            this.initialSnapshot = this.currentSnapshot();
+            this.successMessage = 'No habia configuracion activa.';
+            return;
+          }
+          this.errorMessage = 'No se pudo eliminar la configuracion del hotel.';
+        },
+      });
+  }
+
   resetOperationDefaults(): void {
     if (!this.canEdit) return;
     this.form.check_in_time = '14:00';
