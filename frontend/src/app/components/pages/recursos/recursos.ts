@@ -271,7 +271,7 @@ export class RecursosComponent implements OnInit {
           this.loadResources(this.qResources);
           if (this.selectedRole) this.loadAssignedForRole();
         },
-        error: () => this.toast('No se pudo actualizar el recurso.', 'danger'),
+        error: (error) => this.toast(this.extractErrorMessage(error, 'No se pudo actualizar el recurso.'), 'danger'),
       });
     } else {
       this.svc.createResource(payload).subscribe({
@@ -280,7 +280,7 @@ export class RecursosComponent implements OnInit {
           this.showDrawer = false;
           this.loadResources(this.qResources);
         },
-        error: () => this.toast('No se pudo crear el recurso.', 'danger'),
+        error: (error) => this.toast(this.extractErrorMessage(error, 'No se pudo crear el recurso.'), 'danger'),
       });
     }
   }
@@ -310,5 +310,32 @@ export class RecursosComponent implements OnInit {
   parentOptions(): Resource[] {
     if (!this.isEditing || !this.editingId) return this.resources;
     return this.resources.filter(r => r.id !== this.editingId);
+  }
+
+  private extractErrorMessage(error: unknown, fallback: string): string {
+    if (!error || typeof error !== 'object') return fallback;
+
+    const payload = (error as { error?: unknown }).error;
+    if (!payload || typeof payload !== 'object') return fallback;
+
+    const detail = (payload as Record<string, unknown>)['detail'];
+    if (typeof detail === 'string' && detail.trim()) return detail;
+
+    const errors = (payload as Record<string, unknown>)['errors'];
+    if (errors && typeof errors === 'object') {
+      for (const key of Object.keys(errors as Record<string, unknown>)) {
+        const value = (errors as Record<string, unknown>)[key];
+        if (typeof value === 'string' && value.trim()) return `${key}: ${value}`;
+        if (Array.isArray(value) && value.length && typeof value[0] === 'string') return `${key}: ${value[0]}`;
+      }
+    }
+
+    for (const key of Object.keys(payload as Record<string, unknown>)) {
+      const value = (payload as Record<string, unknown>)[key];
+      if (typeof value === 'string' && value.trim()) return value;
+      if (Array.isArray(value) && value.length && typeof value[0] === 'string') return value[0];
+    }
+
+    return fallback;
   }
 }

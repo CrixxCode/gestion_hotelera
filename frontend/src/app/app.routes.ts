@@ -10,6 +10,8 @@ import { RolesComponent } from './components/pages/roles/roles';
 import { RecursosComponent } from './components/pages/recursos/recursos';
 import { ListClients } from './modules/clients/list-clients/list-clients';
 import { HotelSettings } from './components/pages/hotel-settings/hotel-settings';
+import { MasterDataComponent } from './components/pages/master-data/master-data';
+import { ListRooms } from './modules/rooms/list-rooms/list-rooms';
 
 export const routes: Routes = [
     {
@@ -39,7 +41,11 @@ export const routes: Routes = [
             { path: 'roles', component: RolesComponent },
             { path: 'recursos', component: RecursosComponent },
             { path: 'clientes', component: ListClients },
+            { path: 'habitaciones', component: ListRooms },
+            { path: 'rooms', component: ListRooms },
             { path: 'hotel-config', component: HotelSettings },
+            { path: 'master-data', component: MasterDataComponent },
         ]
     },
 ];
+

@@ -1,0 +1,239 @@
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <div class="h1">Master Data</div>
+      <div class="sub">Administra catalogos maestros de tipo y estado en un solo lugar.</div>
+    </div>
+
+    <div class="actions">
+      <button class="btn ghost" (click)="loadMasterData()" [disabled]="loading">
+        <i class="fa-solid fa-rotate-right"></i>
+        Actualizar
+      </button>
+      <button class="btn primary" (click)="openCreate()">
+        <i class="fa-solid fa-plus"></i>
+        Nuevo valor
+      </button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-chip"><i class="fa-solid fa-database"></i></div>
+      <div class="stat-content">
+        <div class="stat-value">{{ totalItems }}</div>
+        <div class="stat-label">Registros totales</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-chip ok"><i class="fa-solid fa-check"></i></div>
+      <div class="stat-content">
+        <div class="stat-value">{{ activeItems }}</div>
+        <div class="stat-label">Activos</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-chip off"><i class="fa-solid fa-pause"></i></div>
+      <div class="stat-content">
+        <div class="stat-value">{{ inactiveItems }}</div>
+        <div class="stat-label">Inactivos</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-chip group"><i class="fa-solid fa-layer-group"></i></div>
+      <div class="stat-content">
+        <div class="stat-value">{{ totalGroups }}</div>
+        <div class="stat-label">Grupos</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card filters">
+    <label class="field search-field">
+      <span>Buscar</span>
+      <div class="search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input [(ngModel)]="search" (input)="applyFilters()" placeholder="Codigo, nombre o descripcion..." />
+        @if (search) {
+          <button class="icon-btn" (click)="search=''; applyFilters()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        }
+      </div>
+    </label>
+
+    <label class="field">
+      <span>Grupo</span>
+      <select class="input" [(ngModel)]="selectedGroup" (change)="applyFilters()">
+        <option value="ALL">Todos</option>
+        @for (group of groups; track group.code) {
+          <option [value]="group.code">{{ group.label }} ({{ group.code }})</option>
+        }
+      </select>
+    </label>
+
+    <div class="field">
+      <span>Estado</span>
+      <div class="segmented">
+        <button class="seg" [class.active]="selectedStatus === 'ALL'" (click)="selectedStatus='ALL'; applyFilters()">Todos</button>
+        <button class="seg" [class.active]="selectedStatus === 'ACTIVE'" (click)="selectedStatus='ACTIVE'; applyFilters()">Activos</button>
+        <button class="seg" [class.active]="selectedStatus === 'INACTIVE'" (click)="selectedStatus='INACTIVE'; applyFilters()">Inactivos</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card table-card">
+    <div class="table-head">
+      <div class="table-title">Listado maestro</div>
+      <div class="table-meta">{{ filteredItems.length }} resultados</div>
+    </div>
+
+    @if (loading) {
+      <div class="state">
+        <span class="spinner"></span>
+        Cargando catalogo...
+      </div>
+    } @else if (filteredItems.length === 0) {
+      <div class="state">No hay datos para los filtros seleccionados.</div>
+    } @else {
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Grupo</th>
+              <th>Codigo</th>
+              <th>Nombre</th>
+              <th>Descripcion</th>
+              <th>Orden</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of filteredItems; track item.id) {
+              <tr>
+                <td>
+                  <div class="cell-main">{{ item.group_label || item.group }}</div>
+                  <div class="cell-sub">{{ item.group }}</div>
+                </td>
+                <td>
+                  <span class="mono">{{ item.code }}</span>
+                </td>
+                <td>{{ item.name }}</td>
+                <td class="desc">{{ item.description || '-' }}</td>
+                <td>{{ item.sort_order }}</td>
+                <td>
+                  <span class="status" [class.ok]="item.is_active" [class.off]="!item.is_active">
+                    {{ getStatusLabel(item) }}
+                  </span>
+                </td>
+                <td>
+                  <div class="row-actions">
+                    <button class="btn xs ghost" (click)="openEdit(item)">Editar</button>
+                    <button class="btn xs danger" (click)="askDelete(item)">Eliminar</button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  @if (showDrawer) {
+    <div class="overlay" (click)="closeDrawer()"></div>
+    <div class="drawer" (click)="$event.stopPropagation()">
+      <div class="drawer-head">
+        <div>
+          <div class="drawer-badge">Catalogo maestro</div>
+          <div class="drawer-title">{{ isEditing ? 'Editar valor' : 'Nuevo valor' }}</div>
+          <div class="muted">Define grupo, codigo, metadata y estado.</div>
+        </div>
+        <button class="icon-btn close-btn" (click)="closeDrawer()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="drawer-body">
+        <label class="field">
+          <span>Grupo</span>
+          <select class="input" [(ngModel)]="form.group">
+            <option value="" disabled>Selecciona grupo</option>
+            @for (group of groups; track group.code) {
+              <option [value]="group.code">{{ group.label }} ({{ group.code }})</option>
+            }
+          </select>
+        </label>
+
+        <div class="grid2">
+          <label class="field">
+            <span>Codigo</span>
+            <input class="input" [(ngModel)]="form.code" placeholder="Ej: ROOM_AVAILABLE" />
+          </label>
+
+          <label class="field">
+            <span>Orden</span>
+            <input class="input" type="number" [(ngModel)]="form.sort_order" />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Nombre</span>
+          <input class="input" [(ngModel)]="form.name" placeholder="Ej: Disponible" />
+        </label>
+
+        <label class="field">
+          <span>Descripcion</span>
+          <textarea class="input" rows="3" [(ngModel)]="form.description"></textarea>
+        </label>
+
+        <label class="field">
+          <span>Metadata (JSON)</span>
+          <textarea class="input mono" rows="8" [(ngModel)]="form.metadataText"></textarea>
+        </label>
+
+        <label class="field switch">
+          <span>Estado</span>
+          <button
+            type="button"
+            class="toggle"
+            [class.active]="form.is_active"
+            (click)="form.is_active = !form.is_active"
+          >
+            <span class="toggle-thumb"></span>
+            <span class="toggle-text">{{ form.is_active ? 'Activo' : 'Inactivo' }}</span>
+          </button>
+        </label>
+      </div>
+
+      <div class="drawer-foot">
+        <button class="btn ghost" (click)="closeDrawer()">Cancelar</button>
+        <button class="btn primary" [disabled]="saving" (click)="save()">
+          {{ saving ? 'Guardando...' : (isEditing ? 'Guardar cambios' : 'Crear valor') }}
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (showDeleteConfirm) {
+    <div class="overlay" (click)="showDeleteConfirm=false; deleteTarget=null"></div>
+    <div class="confirm" (click)="$event.stopPropagation()">
+      <div class="c-title">Eliminar valor</div>
+      <div class="c-sub">
+        Se eliminara <b>{{ deleteTarget?.code }}</b> del grupo <b>{{ deleteTarget?.group }}</b>. Si esta en uso, el sistema bloqueara la accion.
+      </div>
+      <div class="c-actions">
+        <button class="btn ghost" (click)="showDeleteConfirm=false; deleteTarget=null">Cancelar</button>
+        <button class="btn danger" (click)="confirmDelete()">Eliminar</button>
+      </div>
+    </div>
+  }
+
+  <div class="toast" [class.show]="toastVisible" [class.ok]="toastKind==='success'" [class.bad]="toastKind==='danger'">
+    {{ toastText }}
+  </div>
+</div>

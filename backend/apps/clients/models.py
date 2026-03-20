@@ -1,67 +1,39 @@
 from django.db import models
 
+from apps.master_data.models import MasterData
+
 
 class Client(models.Model):
-
-    # Tipos de cliente según frecuencia o valor del huésped
-    class ClientType(models.TextChoices):
-        VIP = "VIP", "VIP"
-        FREQUENT = "FRECUENTE", "Frecuente"
-        REGULAR = "REGULAR", "Regular"
-
-    # Estado actual del cliente dentro del sistema
-    class ClientStatus(models.TextChoices):
-        ACTIVE = "ACTIVO", "Activo"
-        INACTIVE = "INACTIVO", "Inactivo"
-        CURRENT_GUEST = "HUESPED_ACTUAL", "Huesped Actual"
-
-    # ====== Datos personales del cliente ======
-
-    # Tipo de documento (CC, Passport, etc.)
-    document_type = models.CharField(max_length=40)
-
-    # Número de documento único
+    # Personal data
+    document_type = models.ForeignKey(
+        MasterData,
+        on_delete=models.PROTECT,
+        related_name="clients_document_type",
+        limit_choices_to={"group": MasterData.Group.DOCUMENT_TYPE},
+    )
     document_number = models.CharField(max_length=40, unique=True)
-
-    # Nombres del cliente
     first_name = models.CharField(max_length=120)
-
-    # Apellidos del cliente
     last_name = models.CharField(max_length=120)
-
-    # Email del cliente
     email = models.EmailField(max_length=120, unique=True)
-
-    # Teléfono del cliente
     phone = models.CharField(max_length=40, blank=True, null=True)
-
-    # País de origen
     country = models.CharField(max_length=80, blank=True, null=True)
 
-    # ====== Información de comportamiento del cliente ======
-
-    # Tipo de cliente (VIP, frecuente, regular)
-    client_type = models.CharField(
-        max_length=20,
-        choices=ClientType.choices,
-        default=ClientType.REGULAR
+    # Behavioral data
+    client_type = models.ForeignKey(
+        MasterData,
+        on_delete=models.PROTECT,
+        related_name="clients_type",
+        limit_choices_to={"group": MasterData.Group.CLIENT_TYPE},
     )
-
-    # Contador acumulado de noches hospedadas
-    # Ejemplo: 9 noches totales en el hotel
     total_stay_nights = models.PositiveIntegerField(default=0)
-
-    # Fecha de la última estancia (normalmente la fecha de check-out)
     last_stay = models.DateField(blank=True, null=True)
-
-    # Estado actual del cliente
-    status = models.CharField(
-        max_length=20,
-        choices=ClientStatus.choices,
-        default=ClientStatus.ACTIVE
+    status = models.ForeignKey(
+        MasterData,
+        on_delete=models.PROTECT,
+        related_name="clients_status",
+        limit_choices_to={"group": MasterData.Group.CLIENT_STATUS},
     )
 
-    # Fecha de creación del registro
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -72,17 +44,37 @@ class Client(models.Model):
     def full_name(self):
         return f"{self.first_name} {self.last_name}".strip()
 
-    def resolve_client_type_by_stay_nights(self):
+    @property
+    def document_type_code(self):
+        return self.document_type.code if self.document_type else None
+
+    @property
+    def client_type_code(self):
+        return self.client_type.code if self.client_type else None
+
+    @property
+    def status_code(self):
+        return self.status.code if self.status else None
+
+    def resolve_client_type_code_by_stay_nights(self):
         nights = self.total_stay_nights or 0
         if nights >= 30:
-            return self.ClientType.VIP
+            return "VIP"
         if nights >= 10:
-            return self.ClientType.FREQUENT
-        return self.ClientType.REGULAR
+            return "FRECUENTE"
+        return "REGULAR"
 
     def save(self, *args, **kwargs):
-        # Mantiene client_type sincronizado con las noches acumuladas.
-        self.client_type = self.resolve_client_type_by_stay_nights()
+        # Keep client_type synchronized with accumulated nights.
+        auto_client_type_code = self.resolve_client_type_code_by_stay_nights()
+        auto_client_type = MasterData.objects.filter(
+            group=MasterData.Group.CLIENT_TYPE,
+            code=auto_client_type_code,
+        ).first()
+
+        if auto_client_type:
+            self.client_type = auto_client_type
+
         super().save(*args, **kwargs)
 
     def __str__(self):

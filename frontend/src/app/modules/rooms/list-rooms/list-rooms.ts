@@ -1,0 +1,413 @@
+import { CommonModule } from '@angular/common';
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { catchError, forkJoin, of } from 'rxjs';
+import { RoomService } from '../../../services/room';
+import {
+  AmenityI,
+  HotelFloorI,
+  RateI,
+  RoomI,
+  RoomPanelI,
+  RoomStatus,
+  RoomTypeI,
+  RoomVisualStatus
+} from '../room-model';
+import { CreateRoom } from '../create-room/create-room';
+import { UpdateRoom } from '../update-room/update-room';
+import { RoomDetail } from '../room-detail/room-detail';
+
+type ViewMode = 'cards' | 'table';
+
+type StatusStyle = {
+  bg: string;
+  color: string;
+  dot: string;
+  border: string;
+  buttonBg: string;
+  buttonColor: string;
+};
+
+@Component({
+  selector: 'app-list-rooms',
+  standalone: true,
+  imports: [CommonModule, FormsModule, CreateRoom, UpdateRoom, RoomDetail],
+  templateUrl: './list-rooms.html',
+  styleUrls: ['./list-rooms.css']
+})
+export class ListRooms implements OnInit {
+  loading = false;
+  errorMessage = '';
+
+  rooms: RoomI[] = [];
+  filteredRooms: RoomI[] = [];
+
+  floors: HotelFloorI[] = [];
+  roomTypes: RoomTypeI[] = [];
+  amenities: AmenityI[] = [];
+  rates: RateI[] = [];
+
+  search = '';
+  statusFilter: RoomVisualStatus | 'ALL' = 'ALL';
+  floorFilter: number | 'ALL' = 'ALL';
+  viewMode: ViewMode = 'cards';
+
+  showCreateDrawer = false;
+  showUpdateDrawer = false;
+  selectedRoom: RoomI | null = null;
+  roomToEdit: RoomI | null = null;
+
+  private roomTypeMap = new Map<number, RoomTypeI>();
+  private activeRateMap = new Map<number, RateI>();
+
+  readonly statusTabs: Array<{ key: RoomVisualStatus | 'ALL'; label: string }> = [
+    { key: 'ALL', label: 'Todas' },
+    { key: 'DISPONIBLE', label: 'Disponible' },
+    { key: 'OCUPADA', label: 'Ocupada' },
+    { key: 'POR_SALIR_HOY', label: 'Por salir hoy' },
+    { key: 'MANTENIMIENTO', label: 'Mantenimiento' }
+  ];
+
+  readonly statusOptions: Array<{ value: RoomVisualStatus | 'ALL'; label: string }> = [
+    { value: 'ALL', label: 'Todos los estados' },
+    { value: 'DISPONIBLE', label: 'Disponible' },
+    { value: 'OCUPADA', label: 'Ocupada' },
+    { value: 'POR_SALIR_HOY', label: 'Por salir hoy' },
+    { value: 'MANTENIMIENTO', label: 'Mantenimiento' },
+    { value: 'LIMPIEZA', label: 'Limpieza' },
+    { value: 'FUERA_DE_SERVICIO', label: 'Fuera de servicio' }
+  ];
+
+  constructor(private roomService: RoomService) {}
+
+  ngOnInit(): void {
+    this.loadModuleData();
+  }
+
+  get totalRooms(): number {
+    return this.rooms.length;
+  }
+
+  get availableCount(): number {
+    return this.rooms.filter((room) => room.status === 'DISPONIBLE').length;
+  }
+
+  get occupiedCount(): number {
+    return this.rooms.filter((room) => room.status === 'OCUPADA').length;
+  }
+
+  get maintenanceCount(): number {
+    return this.rooms.filter((room) => room.status === 'MANTENIMIENTO').length;
+  }
+
+  get leavingTodayCount(): number {
+    return this.rooms.filter((room) => this.isPorSalirHoy(room)).length;
+  }
+
+  loadModuleData(): void {
+    this.loading = true;
+    this.errorMessage = '';
+
+    forkJoin({
+      rooms: this.roomService.listRooms().pipe(catchError(() => of([] as RoomI[]))),
+      roomTypes: this.roomService.listRoomTypes().pipe(catchError(() => of([] as RoomTypeI[]))),
+      amenities: this.roomService.listAmenities().pipe(catchError(() => of([] as AmenityI[]))),
+      floors: this.roomService.listFloors().pipe(catchError(() => of([] as HotelFloorI[]))),
+      rates: this.roomService.listRates().pipe(catchError(() => of([] as RateI[])))
+    }).subscribe({
+      next: ({ rooms, roomTypes, amenities, floors, rates }) => {
+        this.loading = false;
+        this.rooms = rooms;
+        this.roomTypes = roomTypes;
+        this.amenities = amenities;
+        this.floors = floors;
+        this.rates = rates;
+        this.buildMaps();
+        this.applyFilters();
+      },
+      error: () => {
+        this.loading = false;
+        this.errorMessage = 'No se pudo cargar el módulo de habitaciones.';
+      }
+    });
+  }
+
+  refreshRooms(): void {
+    this.roomService.listRooms().subscribe({
+      next: (rooms) => {
+        this.rooms = rooms;
+        this.applyFilters();
+      },
+      error: () => {
+        this.errorMessage = 'No se pudieron actualizar las habitaciones.';
+      }
+    });
+  }
+
+  applyFilters(): void {
+    const searchValue = this.search.toLowerCase().trim();
+
+    this.filteredRooms = this.rooms.filter((room) => {
+      const visualStatus = this.getVisualStatus(room);
+      const statusMatch = this.statusFilter === 'ALL' ? true : visualStatus === this.statusFilter;
+      const floorMatch = this.floorFilter === 'ALL' ? true : room.floor === this.floorFilter;
+
+      const roomType = this.getRoomType(room);
+      const searchPool = [
+        room.number,
+        room.notes || '',
+        room.floor_name || '',
+        room.room_type_name || '',
+        roomType?.name || '',
+        roomType?.bed_type || ''
+      ]
+        .join(' ')
+        .toLowerCase();
+
+      const searchMatch = !searchValue || searchPool.includes(searchValue);
+      return statusMatch && floorMatch && searchMatch;
+    });
+  }
+
+  selectStatus(status: RoomVisualStatus | 'ALL'): void {
+    this.statusFilter = status;
+    this.applyFilters();
+  }
+
+  setViewMode(mode: ViewMode): void {
+    this.viewMode = mode;
+  }
+
+  openCreateDrawer(): void {
+    this.selectedRoom = null;
+    this.roomToEdit = null;
+    this.showUpdateDrawer = false;
+    this.showCreateDrawer = true;
+  }
+
+  closeCreateDrawer(): void {
+    this.showCreateDrawer = false;
+  }
+
+  onRoomCreated(): void {
+    this.showCreateDrawer = false;
+    this.refreshRooms();
+  }
+
+  openDetail(room: RoomI): void {
+    this.showCreateDrawer = false;
+    this.showUpdateDrawer = false;
+    this.roomToEdit = null;
+    this.selectedRoom = room;
+  }
+
+  closeDetail(): void {
+    this.selectedRoom = null;
+  }
+
+  openUpdateDrawer(room: RoomI): void {
+    this.selectedRoom = null;
+    this.showCreateDrawer = false;
+    this.roomToEdit = room;
+    this.showUpdateDrawer = true;
+  }
+
+  openUpdateFromDetail(room: RoomI): void {
+    this.closeDetail();
+    this.openUpdateDrawer(room);
+  }
+
+  closeUpdateDrawer(): void {
+    this.showUpdateDrawer = false;
+    this.roomToEdit = null;
+  }
+
+  onRoomUpdated(): void {
+    this.showUpdateDrawer = false;
+    this.roomToEdit = null;
+    this.refreshRooms();
+  }
+
+  getStatusCount(status: RoomVisualStatus | 'ALL'): number {
+    if (status === 'ALL') return this.rooms.length;
+    return this.rooms.filter((room) => this.getVisualStatus(room) === status).length;
+  }
+
+  getRoomTypeName(room: RoomI): string {
+    return this.getRoomType(room)?.name || room.room_type_name || 'Sin tipo';
+  }
+
+  getRoomTypeBeds(room: RoomI): string {
+    const roomType = this.getRoomType(room);
+    if (!roomType) return 'Sin configuración';
+
+    const bedCount = roomType.bed_count || 0;
+    const bedType = roomType.bed_type || 'cama';
+    const capacity = roomType.capacity || 1;
+    return `${bedCount} ${bedType} · ${capacity} huésped(es)`;
+  }
+
+  getPriceLabel(room: RoomI): string {
+    if (!room.room_type) return '--';
+    const rate = this.activeRateMap.get(room.room_type);
+    if (!rate?.price) return '--';
+    const asNumber = Number(rate.price);
+    if (Number.isNaN(asNumber)) return `${rate.price}`;
+
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      maximumFractionDigits: 0
+    }).format(asNumber);
+  }
+
+  getStatusLabel(room: RoomI): string {
+    const visualStatus = this.getVisualStatus(room);
+    switch (visualStatus) {
+      case 'DISPONIBLE':
+        return 'Disponible';
+      case 'OCUPADA':
+        return 'Ocupada';
+      case 'POR_SALIR_HOY':
+        return 'Por salir hoy';
+      case 'MANTENIMIENTO':
+        return 'Mantenimiento';
+      case 'LIMPIEZA':
+        return 'Limpieza';
+      case 'FUERA_DE_SERVICIO':
+        return 'Fuera de servicio';
+      default:
+        return 'Sin estado';
+    }
+  }
+
+  getStatusStyle(room: RoomI): StatusStyle {
+    const visualStatus = this.getVisualStatus(room);
+
+    switch (visualStatus) {
+      case 'DISPONIBLE':
+        return {
+          bg: '#e9f9ef',
+          color: '#0f9f56',
+          dot: '#21c06a',
+          border: '#2bc769',
+          buttonBg: '#0f1f41',
+          buttonColor: '#ffffff'
+        };
+      case 'OCUPADA':
+        return {
+          bg: '#eaf1ff',
+          color: '#2f69e2',
+          dot: '#3979ff',
+          border: '#3f7fff',
+          buttonBg: '#e6eaf0',
+          buttonColor: '#334155'
+        };
+      case 'POR_SALIR_HOY':
+        return {
+          bg: '#fff7cc',
+          color: '#ad7a00',
+          dot: '#f1bf24',
+          border: '#e6b100',
+          buttonBg: '#ef4444',
+          buttonColor: '#ffffff'
+        };
+      case 'MANTENIMIENTO':
+        return {
+          bg: '#ffeceb',
+          color: '#c8372e',
+          dot: '#ef4444',
+          border: '#ef4444',
+          buttonBg: '#f2f4f8',
+          buttonColor: '#98a2b3'
+        };
+      case 'LIMPIEZA':
+        return {
+          bg: '#ecfeff',
+          color: '#0e7490',
+          dot: '#06b6d4',
+          border: '#06b6d4',
+          buttonBg: '#f2f4f8',
+          buttonColor: '#475569'
+        };
+      default:
+        return {
+          bg: '#f1f5f9',
+          color: '#4b5563',
+          dot: '#9ca3af',
+          border: '#94a3b8',
+          buttonBg: '#f2f4f8',
+          buttonColor: '#98a2b3'
+        };
+    }
+  }
+
+  canPrimaryAction(room: RoomI): boolean {
+    const visualStatus = this.getVisualStatus(room);
+    return visualStatus !== 'MANTENIMIENTO' && visualStatus !== 'LIMPIEZA' && visualStatus !== 'FUERA_DE_SERVICIO';
+  }
+
+  getPrimaryActionLabel(room: RoomI): string {
+    const visualStatus = this.getVisualStatus(room);
+    if (visualStatus === 'DISPONIBLE') return 'Check-In';
+    if (visualStatus === 'POR_SALIR_HOY') return 'Check-Out';
+    if (visualStatus === 'OCUPADA') return 'Ver detalles';
+    return 'No disponible';
+  }
+
+  onPrimaryAction(room: RoomI): void {
+    if (!this.canPrimaryAction(room)) return;
+    this.openDetail(room);
+  }
+
+  getMaintenanceText(room: RoomI): string {
+    if (room.status !== 'MANTENIMIENTO') return '';
+    return room.notes?.trim() || 'Mantenimiento preventivo en proceso';
+  }
+
+  trackByRoom(_: number, room: RoomI): number {
+    return room.id;
+  }
+
+  trackById(_: number, item: { id: number }): number {
+    return item.id;
+  }
+
+  private buildMaps(): void {
+    this.roomTypeMap = new Map(this.roomTypes.map((roomType) => [roomType.id, roomType]));
+
+    this.activeRateMap.clear();
+    for (const rate of this.rates) {
+      if (!rate?.room_type || !rate.is_active) continue;
+
+      const existing = this.activeRateMap.get(rate.room_type);
+      if (!existing) {
+        this.activeRateMap.set(rate.room_type, rate);
+        continue;
+      }
+
+      const existingDate = existing.created_at ? new Date(existing.created_at).getTime() : 0;
+      const currentDate = rate.created_at ? new Date(rate.created_at).getTime() : 0;
+
+      if (currentDate >= existingDate) {
+        this.activeRateMap.set(rate.room_type, rate);
+      }
+    }
+  }
+
+  private getRoomType(room: RoomI): RoomTypeI | null {
+    if (!room.room_type) return null;
+    return this.roomTypeMap.get(room.room_type) || null;
+  }
+
+  private getVisualStatus(room: RoomI): RoomVisualStatus {
+    if (this.isPorSalirHoy(room)) return 'POR_SALIR_HOY';
+    return room.status;
+  }
+
+  private isPorSalirHoy(room: RoomI): boolean {
+    if (room.status !== 'OCUPADA') return false;
+    const notes = (room.notes || '').toUpperCase();
+    return notes.includes('[POR_SALIR_HOY]');
+  }
+}

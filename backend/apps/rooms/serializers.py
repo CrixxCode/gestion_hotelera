@@ -1,5 +1,10 @@
+from django.utils.text import slugify
 from rest_framework import serializers
-from .models import RoomType, Rate, Amenity, Room, MaintenanceOrder, CleaningTask
+
+from apps.master_data.models import MasterData
+from apps.master_data.serializers import MasterDataCodeField
+from .models import Rate, Amenity, Room, MaintenanceOrder, CleaningTask
+
 
 class AmenitySerializer(serializers.ModelSerializer):
     class Meta:
@@ -7,53 +12,178 @@ class AmenitySerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ("id", "created_at")
 
+
 class RoomTypeSerializer(serializers.ModelSerializer):
+    capacity = serializers.IntegerField(required=False, min_value=1, default=1)
+    bed_count = serializers.IntegerField(required=False, min_value=1, default=1)
+    bed_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
     class Meta:
-        model = RoomType
-        fields = "__all__"
+        model = MasterData
+        fields = (
+            "id",
+            "code",
+            "name",
+            "description",
+            "capacity",
+            "bed_count",
+            "bed_type",
+            "is_active",
+            "created_at",
+        )
         read_only_fields = ("id", "created_at")
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        metadata = instance.metadata or {}
+        data["capacity"] = int(metadata.get("capacity", 1))
+        data["bed_count"] = int(metadata.get("bed_count", 1))
+        data["bed_type"] = metadata.get("bed_type")
+        return data
+
+    def validate_code(self, value):
+        return str(value).strip().upper()
+
+    def create(self, validated_data):
+        metadata = {
+            "capacity": validated_data.pop("capacity", 1),
+            "bed_count": validated_data.pop("bed_count", 1),
+            "bed_type": validated_data.pop("bed_type", None),
+        }
+
+        code = validated_data.get("code")
+        if not code:
+            generated = slugify(validated_data.get("name", "")).replace("-", "_").upper()
+            validated_data["code"] = generated or "ROOM_TYPE"
+
+        return MasterData.objects.create(
+            group=MasterData.Group.ROOM_TYPE,
+            metadata=metadata,
+            **validated_data,
+        )
+
+    def update(self, instance, validated_data):
+        metadata = dict(instance.metadata or {})
+
+        if "capacity" in validated_data:
+            metadata["capacity"] = validated_data.pop("capacity")
+        if "bed_count" in validated_data:
+            metadata["bed_count"] = validated_data.pop("bed_count")
+        if "bed_type" in validated_data:
+            metadata["bed_type"] = validated_data.pop("bed_type")
+
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+
+        instance.group = MasterData.Group.ROOM_TYPE
+        instance.metadata = metadata
+        instance.save()
+        return instance
+
+
 class RateSerializer(serializers.ModelSerializer):
+    room_type = serializers.PrimaryKeyRelatedField(
+        queryset=MasterData.objects.filter(group=MasterData.Group.ROOM_TYPE)
+    )
+    room_type_name = serializers.CharField(source="room_type.name", read_only=True)
+
     class Meta:
         model = Rate
         fields = "__all__"
         read_only_fields = ("id", "created_at")
 
+
 class RoomSerializer(serializers.ModelSerializer):
+    room_type = serializers.PrimaryKeyRelatedField(
+        queryset=MasterData.objects.filter(group=MasterData.Group.ROOM_TYPE),
+        allow_null=True,
+        required=False,
+    )
     room_type_name = serializers.CharField(source="room_type.name", read_only=True)
     floor_name = serializers.CharField(source="floor.name", read_only=True)
     florr_number = serializers.IntegerField(source="floor.floor_number", read_only=True)
 
-    amenities = AmenitySerializer(many=True, read_only=True)
+    status = MasterDataCodeField(group=MasterData.Group.ROOM_STATUS)
+    status_label = serializers.CharField(source="status.name", read_only=True)
 
+    amenities = AmenitySerializer(many=True, read_only=True)
     amenity_ids = serializers.PrimaryKeyRelatedField(
         queryset=Amenity.objects.all(),
         source="amenities",
         many=True,
         write_only=True,
-        required=False
+        required=False,
     )
 
     class Meta:
         model = Room
-        fields = "__all__"
+        fields = (
+            "id",
+            "number",
+            "room_type",
+            "room_type_name",
+            "floor",
+            "floor_name",
+            "florr_number",
+            "status",
+            "status_label",
+            "notes",
+            "amenities",
+            "amenity_ids",
+            "created_at",
+        )
         read_only_fields = ("id", "created_at")
+
 
 class MaintenanceOrderSerializer(serializers.ModelSerializer):
     room_number = serializers.CharField(source="room.number", read_only=True)
+    priority = MasterDataCodeField(group=MasterData.Group.MAINTENANCE_PRIORITY)
+    status = MasterDataCodeField(group=MasterData.Group.MAINTENANCE_STATUS)
+    priority_label = serializers.CharField(source="priority.name", read_only=True)
+    status_label = serializers.CharField(source="status.name", read_only=True)
 
     class Meta:
         model = MaintenanceOrder
-        fields = "__all__"
+        fields = (
+            "id",
+            "room",
+            "room_number",
+            "title",
+            "description",
+            "priority",
+            "priority_label",
+            "status",
+            "status_label",
+            "reported_at",
+            "completed_at",
+        )
         read_only_fields = ("id", "reported_at")
+
 
 class CleaningTaskSerializer(serializers.ModelSerializer):
     room_number = serializers.CharField(source="room.number", read_only=True)
+    task_type = MasterDataCodeField(group=MasterData.Group.CLEANING_TASK_TYPE)
+    status = MasterDataCodeField(group=MasterData.Group.CLEANING_STATUS)
+    task_type_label = serializers.CharField(source="task_type.name", read_only=True)
+    status_label = serializers.CharField(source="status.name", read_only=True)
 
     class Meta:
         model = CleaningTask
-        fields = "__all__"
+        fields = (
+            "id",
+            "room",
+            "room_number",
+            "task_type",
+            "task_type_label",
+            "status",
+            "status_label",
+            "scheduled_for",
+            "completed_at",
+            "notes",
+            "created_at",
+        )
         read_only_fields = ("id", "created_at")
+
 
 class RoomAmenityMiniSerializer(serializers.ModelSerializer):
     class Meta:
@@ -62,9 +192,22 @@ class RoomAmenityMiniSerializer(serializers.ModelSerializer):
 
 
 class RoomTypeMiniSerializer(serializers.ModelSerializer):
+    capacity = serializers.SerializerMethodField()
+    bed_count = serializers.SerializerMethodField()
+    bed_type = serializers.SerializerMethodField()
+
     class Meta:
-        model = RoomType
+        model = MasterData
         fields = ("id", "name", "capacity", "bed_count", "bed_type")
+
+    def get_capacity(self, obj):
+        return int((obj.metadata or {}).get("capacity", 1))
+
+    def get_bed_count(self, obj):
+        return int((obj.metadata or {}).get("bed_count", 1))
+
+    def get_bed_type(self, obj):
+        return (obj.metadata or {}).get("bed_type")
 
 
 class RateMiniSerializer(serializers.ModelSerializer):
@@ -72,21 +215,17 @@ class RateMiniSerializer(serializers.ModelSerializer):
         model = Rate
         fields = ("id", "name", "price")
 
-class RoomPanelSerializer(serializers.ModelSerializer):
-    # Tipo de habitación resumido
-    room_type = RoomTypeMiniSerializer(read_only=True)
 
-    # Amenidades resumidas
+class RoomPanelSerializer(serializers.ModelSerializer):
+    room_type = RoomTypeMiniSerializer(read_only=True)
     amenities = RoomAmenityMiniSerializer(many=True, read_only=True)
 
-    # Información del piso
     floor_name = serializers.CharField(source="floor.name", read_only=True)
     floor_number = serializers.IntegerField(source="floor.floor_number", read_only=True)
 
-    # Etiqueta visible del estado
-    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    status = serializers.CharField(source="status.code", read_only=True)
+    status_label = serializers.CharField(source="status.name", read_only=True)
 
-    # Campos calculados
     rate = serializers.SerializerMethodField()
     active_maintenance = serializers.SerializerMethodField()
     current_guest = serializers.SerializerMethodField()
@@ -111,10 +250,6 @@ class RoomPanelSerializer(serializers.ModelSerializer):
         )
 
     def get_rate(self, obj):
-        """
-        Devuelve una tarifa activa asociada al tipo de habitación.
-        Si hay varias, toma la más reciente.
-        """
         if not obj.room_type:
             return None
 
@@ -125,11 +260,8 @@ class RoomPanelSerializer(serializers.ModelSerializer):
         return RateMiniSerializer(rate).data
 
     def get_active_maintenance(self, obj):
-        """
-        Devuelve una orden de mantenimiento activa si existe.
-        """
         maintenance = obj.maintenance_orders.filter(
-            status__in=["PENDIENTE", "EN_PROCESO"]
+            status__code__in=["PENDIENTE", "EN_PROCESO"]
         ).order_by("-reported_at").first()
 
         if not maintenance:
@@ -139,24 +271,16 @@ class RoomPanelSerializer(serializers.ModelSerializer):
             "id": maintenance.id,
             "title": maintenance.title,
             "description": maintenance.description,
-            "priority": maintenance.priority,
+            "priority": maintenance.priority_code,
             "priority_label": maintenance.get_priority_display(),
-            "status": maintenance.status,
+            "status": maintenance.status_code,
             "status_label": maintenance.get_status_display(),
             "reported_at": maintenance.reported_at,
             "completed_at": maintenance.completed_at,
         }
 
     def get_current_guest(self, obj):
-        """
-        Este campo depende del módulo de reservas.
-        Por ahora devuelve None hasta integrar reservation/client.
-        """
         return None
 
     def get_active_reservation(self, obj):
-        """
-        Este campo depende del módulo de reservas.
-        Por ahora devuelve None hasta integrar reservation.
-        """
         return None

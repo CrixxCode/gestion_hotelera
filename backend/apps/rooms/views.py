@@ -1,7 +1,10 @@
-from rest_framework import viewsets, filters
+from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import RoomType, Rate, Amenity, Room, MaintenanceOrder, CleaningTask
+
+from accounts.permissions import HasResourcePermission
+from apps.master_data.models import MasterData
+from .models import Rate, Amenity, Room, MaintenanceOrder, CleaningTask
 from .serializers import (
     RoomTypeSerializer,
     RateSerializer,
@@ -11,19 +14,19 @@ from .serializers import (
     CleaningTaskSerializer,
     RoomPanelSerializer,
 )
-from accounts.permissions import HasResourcePermission
+
 
 class RoomTypeViewSet(viewsets.ModelViewSet):
-    queryset = RoomType.objects.all().order_by("name")
+    queryset = MasterData.objects.filter(group=MasterData.Group.ROOM_TYPE).order_by("name")
     serializer_class = RoomTypeSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
     required_scopes = ["room_type.read"]
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["name", "description", "bed_type"]
-    ordering_fields = ["id", "name", "capacity", "created_at"]
-    ordering = ["name"]
+    search_fields = ["code", "name", "description"]
+    ordering_fields = ["id", "code", "name", "sort_order", "created_at"]
+    ordering = ["sort_order", "name"]
 
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
@@ -34,6 +37,16 @@ class RoomTypeViewSet(viewsets.ModelViewSet):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
+    def get_queryset(self):
+        return super().get_queryset().filter(group=MasterData.Group.ROOM_TYPE)
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+    def perform_update(self, serializer):
+        serializer.save()
+
+
 class RateViewSet(viewsets.ModelViewSet):
     queryset = Rate.objects.select_related("room_type").all().order_by("-created_at")
     serializer_class = RateSerializer
@@ -42,7 +55,7 @@ class RateViewSet(viewsets.ModelViewSet):
     required_scopes = ["rates.read"]
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["name", "room_type__name"]
+    search_fields = ["name", "room_type__name", "room_type__code"]
     ordering_fields = ["id", "name", "price", "start_date", "end_date", "created_at"]
     ordering = ["-created_at"]
 
@@ -54,6 +67,7 @@ class RateViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
+
 
 class AmenityViewSet(viewsets.ModelViewSet):
     queryset = Amenity.objects.all().order_by("name")
@@ -72,20 +86,34 @@ class AmenityViewSet(viewsets.ModelViewSet):
             return ["amenities.write"]
         return self.required_scopes
 
-    def get_permission(self):
+    def get_permissions(self):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
+
 class RoomViewSet(viewsets.ModelViewSet):
-    queryset = Room.objects.select_related("room_type", "floor").prefetch_related("amenities", "maintenance_orders").all().order_by("number")
+    queryset = (
+        Room.objects.select_related("room_type", "floor", "status")
+        .prefetch_related("amenities", "maintenance_orders")
+        .all()
+        .order_by("number")
+    )
     serializer_class = RoomSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
     required_scopes = ["rooms.read"]
 
-    filter_backend = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["number", "room_type_name", "floor_name", "notes", "status"]
-    ordering_fields = ["id", "number", "status", "created_at"]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = [
+        "number",
+        "room_type__name",
+        "room_type__code",
+        "floor__name",
+        "notes",
+        "status__code",
+        "status__name",
+    ]
+    ordering_fields = ["id", "number", "created_at"]
     ordering = ["number"]
 
     def get_required_scopes(self):
@@ -97,25 +125,49 @@ class RoomViewSet(viewsets.ModelViewSet):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        status_code = (self.request.query_params.get("status") or "").strip().upper()
+        floor = (self.request.query_params.get("floor") or "").strip()
+        room_type = (self.request.query_params.get("room_type") or "").strip()
+
+        if status_code:
+            queryset = queryset.filter(status__code=status_code)
+        if floor.isdigit():
+            queryset = queryset.filter(floor_id=int(floor))
+        if room_type:
+            if room_type.isdigit():
+                queryset = queryset.filter(room_type_id=int(room_type))
+            else:
+                queryset = queryset.filter(room_type__code=room_type.upper())
+
+        return queryset
+
     @action(detail=True, methods=["GET"], name="panel")
     def panel(self, request, pk=None):
-        """
-        Devuelve un detalle enriquecido de la habitacion
-        """
         room = self.get_object()
         serializer = RoomPanelSerializer(room, context=self.get_serializer_context())
         return Response(serializer.data)
 
+
 class MaintenanceOrderViewSet(viewsets.ModelViewSet):
-    queryset = MaintenanceOrder.objects.select_related("room").all().order_by("-reported_at")
+    queryset = MaintenanceOrder.objects.select_related("room", "priority", "status").all().order_by("-reported_at")
     serializer_class = MaintenanceOrderSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
     required_scopes = ["maintenance_orders.read"]
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["title", "description", "room__number", "priority", "status"]
-    ordering_fields = ["id", "priority", "status", "reported_at", "completed_at"]
+    search_fields = [
+        "title",
+        "description",
+        "room__number",
+        "priority__code",
+        "priority__name",
+        "status__code",
+        "status__name",
+    ]
+    ordering_fields = ["id", "reported_at", "completed_at"]
     ordering = ["-reported_at"]
 
     def get_required_scopes(self):
@@ -127,16 +179,24 @@ class MaintenanceOrderViewSet(viewsets.ModelViewSet):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
+
 class CleaningTaskViewSet(viewsets.ModelViewSet):
-    queryset = CleaningTask.objects.select_related("room").all().order_by("-created_at")
+    queryset = CleaningTask.objects.select_related("room", "task_type", "status").all().order_by("-created_at")
     serializer_class = CleaningTaskSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
     required_scopes = ["cleaning_tasks.read"]
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["room_number", "notes", "task_type", "status"]
-    ordering_fields = ["id", "task_type", "status", "scheduled_for", "created_at", "completed_at"]
+    search_fields = [
+        "room__number",
+        "notes",
+        "task_type__code",
+        "task_type__name",
+        "status__code",
+        "status__name",
+    ]
+    ordering_fields = ["id", "scheduled_for", "created_at", "completed_at"]
     ordering = ["-created_at"]
 
     def get_required_scopes(self):

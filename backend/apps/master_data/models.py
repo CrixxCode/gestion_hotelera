@@ -1,0 +1,66 @@
+from django.db import models
+
+
+class MasterData(models.Model):
+    class Group(models.TextChoices):
+        DOCUMENT_TYPE = "DOCUMENT_TYPE", "Document type"
+        CLIENT_TYPE = "CLIENT_TYPE", "Client type"
+        CLIENT_STATUS = "CLIENT_STATUS", "Client status"
+
+        ROOM_TYPE = "ROOM_TYPE", "Room type"
+        ROOM_STATUS = "ROOM_STATUS", "Room status"
+
+        MAINTENANCE_PRIORITY = "MAINTENANCE_PRIORITY", "Maintenance priority"
+        MAINTENANCE_STATUS = "MAINTENANCE_STATUS", "Maintenance status"
+
+        CLEANING_TASK_TYPE = "CLEANING_TASK_TYPE", "Cleaning task type"
+        CLEANING_STATUS = "CLEANING_STATUS", "Cleaning status"
+
+    group = models.CharField(max_length=60, choices=Group.choices, db_index=True)
+    code = models.CharField(max_length=80)
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True, null=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "master_data"
+        ordering = ["group", "sort_order", "name"]
+        unique_together = ("group", "code")
+
+    def save(self, *args, **kwargs):
+        if self.code:
+            self.code = str(self.code).strip().upper()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.group}:{self.code} - {self.name}"
+
+
+class RoomTypeManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(group=MasterData.Group.ROOM_TYPE)
+
+
+class RoomType(MasterData):
+    objects = RoomTypeManager()
+
+    class Meta:
+        proxy = True
+        verbose_name = "Room type"
+        verbose_name_plural = "Room types"
+
+    @property
+    def capacity(self):
+        return int((self.metadata or {}).get("capacity", 1))
+
+    @property
+    def bed_count(self):
+        return int((self.metadata or {}).get("bed_count", 1))
+
+    @property
+    def bed_type(self):
+        return (self.metadata or {}).get("bed_type")
