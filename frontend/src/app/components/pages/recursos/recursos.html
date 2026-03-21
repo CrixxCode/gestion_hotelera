@@ -1,12 +1,12 @@
-<div class="wrap">
-  <div class="topbar">
-    <div>
-      <div class="h1">Recursos</div>
-      <div class="sub">Gestiona recursos y asígnalos a roles.</div>
+﻿<div class="resources-page">
+  <header class="page-header">
+    <div class="header-copy">
+      <h1>Recursos del Sistema</h1>
+      <p>Gestiona los permisos y acciones disponibles para asignar a roles.</p>
     </div>
 
-    <div class="actions">
-      <button class="btn ghost" (click)="loadResources(qResources)">
+    <div class="header-actions">
+      <button class="btn ghost" (click)="loadResources(searchQuery)">
         <i class="fa-solid fa-rotate-right"></i>
         Actualizar
       </button>
@@ -15,248 +15,428 @@
         Nuevo recurso
       </button>
     </div>
-  </div>
+  </header>
 
-  <!-- Roles arriba -->
-  <div class="rolesbar card">
-    <div class="search">
-      <i class="fa-solid fa-magnifying-glass"></i>
-      <input [(ngModel)]="rolesQuery" placeholder="Buscar rol..." />
-      @if (rolesQuery) {
-        <button class="icon-btn" (click)="rolesQuery=''"><i class="fa-solid fa-xmark"></i></button>
-      }
-    </div>
+  <section class="stats-grid">
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Total Recursos</span>
+        <span class="stat-icon blue"><i class="fa-solid fa-shield-halved"></i></span>
+      </div>
+      <div class="stat-value">{{ totalResources() }}</div>
+      <div class="stat-note">Permisos configurados</div>
+    </article>
 
-    <div class="chips">
-      @for (r of filteredRoles(); track r.id) {
-        <button class="chip" [class.active]="selectedRole?.id===r.id" (click)="selectRole(r)">
-          <span class="c-name">{{ r.name }}</span>
-          <span class="c-slug">{{ r.slug }}</span>
-        </button>
-      }
-      @if (!loadingRoles && filteredRoles().length===0) {
-        <div class="muted">No hay roles para mostrar.</div>
-      }
-    </div>
-  </div>
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Activos</span>
+        <span class="stat-icon green"><i class="fa-solid fa-lock-open"></i></span>
+      </div>
+      <div class="stat-value">{{ activeResources() }}</div>
+      <div class="stat-note positive">{{ activePercent() }}% del total</div>
+    </article>
 
-  <!-- Recursos: transferencia -->
-  <div class="main card">
-    <div class="main-head">
-      <div class="mh">
-        <div class="mh-title">Asignación de recursos</div>
-        <div class="mh-sub muted">
-          Rol seleccionado: <b>{{ selectedRole?.name || '—' }}</b>
-        </div>
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Inactivos</span>
+        <span class="stat-icon slate"><i class="fa-solid fa-lock"></i></span>
+      </div>
+      <div class="stat-value">{{ inactiveResources() }}</div>
+      <div class="stat-note">Recursos deshabilitados</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Modulos</span>
+        <span class="stat-icon violet"><i class="fa-solid fa-cube"></i></span>
+      </div>
+      <div class="stat-value">{{ modulesCount() }}</div>
+      <div class="stat-note">Areas del sistema</div>
+    </article>
+  </section>
+
+  <section class="table-card">
+    <div class="table-toolbar">
+      <div class="search-field">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input [(ngModel)]="searchQuery" (input)="onSearchInput()" placeholder="Buscar recurso..." />
+        @if (searchQuery) {
+          <button class="icon-btn" (click)="clearSearch()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        }
       </div>
 
-      <div class="mh-search">
-        <div class="search mini">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <input [(ngModel)]="qResources" (input)="onResourcesSearchInput()" placeholder="Buscar recursos (key/name)..." />
-          @if (qResources) {
-            <button class="icon-btn" (click)="qResources=''; loadResources('')"><i class="fa-solid fa-xmark"></i></button>
+      <select class="tool-select" [(ngModel)]="moduleFilter">
+        @for (option of moduleOptions; track option.value) {
+          <option [value]="option.value">{{ option.label }} ({{ option.count }})</option>
+        }
+      </select>
+
+      <select class="tool-select" [(ngModel)]="actionFilter">
+        @for (option of actionOptions; track option.value) {
+          <option [value]="option.value">{{ option.label }} ({{ option.count }})</option>
+        }
+      </select>
+
+      <select class="tool-select" [(ngModel)]="stateFilter">
+        <option value="all">Todos</option>
+        <option value="active">Activos</option>
+        <option value="inactive">Inactivos</option>
+      </select>
+
+      <button class="btn ghost" (click)="exportResourcesCsv()">
+        <i class="fa-solid fa-file-export"></i>
+        Exportar
+      </button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>RECURSO</th>
+            <th>CODIGO</th>
+            <th>MODULO</th>
+            <th>ACCION</th>
+            <th>ROLES</th>
+            <th>ESTADO</th>
+            <th>ACCIONES</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          @if (loadingResources) {
+            @for (item of [1, 2, 3, 4, 5, 6]; track item) {
+              <tr>
+                <td colspan="7">
+                  <div class="loading-row">
+                    <span class="loading-dot"></span>
+                    Cargando recursos...
+                  </div>
+                </td>
+              </tr>
+            }
+          } @else if (filteredResources().length === 0) {
+            <tr>
+              <td colspan="7">
+                <div class="empty-row">No se encontraron recursos con los filtros actuales.</div>
+              </td>
+            </tr>
+          } @else {
+            @for (resource of filteredResources(); track resource.id) {
+              <tr>
+                <td>
+                  <div class="resource-cell">
+                    <span class="resource-icon" [style.background]="resourceAccent(resource)">
+                      <i [class]="resourceIconClass(resource)"></i>
+                    </span>
+                    <div class="resource-meta">
+                      <div class="resource-name">{{ resource.name }}</div>
+                      <div class="resource-desc">{{ resource.description || 'Sin descripcion' }}</div>
+                    </div>
+                  </div>
+                </td>
+
+                <td>
+                  <div class="code-pill">
+                    <span>{{ resource.key }}</span>
+                    <button class="icon-btn tiny" title="Copiar codigo" (click)="copyText(resource.key)">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </div>
+                </td>
+
+                <td>
+                  <span class="module-pill">
+                    <i [class]="moduleIconClass(resource)"></i>
+                    {{ resourceModuleLabel(resource) }}
+                  </span>
+                </td>
+
+                <td>
+                  <span class="action-pill" [class.tone-create]="actionTone(resource) === 'create'"
+                    [class.tone-view]="actionTone(resource) === 'view'"
+                    [class.tone-edit]="actionTone(resource) === 'edit'"
+                    [class.tone-danger]="actionTone(resource) === 'danger'">
+                    {{ resourceActionLabel(resource) }}
+                  </span>
+                </td>
+
+                <td>
+                  <span class="count-pill" [title]="resourceRolesNames(resource.id)">
+                    @if (loadingRoles || loadingRoleUsage) {
+                      ...
+                    } @else {
+                      {{ resourceRolesCount(resource.id) }}
+                    }
+                  </span>
+                </td>
+
+                <td>
+                  <span class="state-pill" [class.off]="!resource.is_menu">{{ resourceStateLabel(resource) }}</span>
+                </td>
+
+                <td>
+                  <div class="row-actions">
+                    <button class="row-btn" title="Ver" (click)="openView(resource)">
+                      <i class="fa-regular fa-eye"></i>
+                    </button>
+                    <button class="row-btn" title="Editar" (click)="openEdit(resource)">
+                      <i class="fa-regular fa-pen-to-square"></i>
+                    </button>
+                    <button class="row-btn danger" title="Eliminar" (click)="askDelete(resource)">
+                      <i class="fa-regular fa-trash-can"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <footer class="table-footer">
+      Mostrando {{ filteredResources().length }} de {{ totalResources() }} recursos
+    </footer>
+  </section>
+
+  @if (showDrawer) {
+    <div class="overlay" (click)="closeDrawer()"></div>
+
+    <aside class="side-panel" (click)="$event.stopPropagation()">
+      <header class="panel-header">
+        <div class="panel-avatar" [style.background]="selectedResource ? resourceAccent(selectedResource) : '#0f1f41'">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+
+        <div class="panel-title">
+          @if (drawerMode === 'create') {
+            <h2>Nuevo Recurso</h2>
+            <p>Crea un nuevo permiso para el sistema.</p>
+          } @else if (drawerMode === 'edit') {
+            <h2>Editar Recurso</h2>
+            <p>Modifica la informacion del recurso.</p>
+          } @else if (selectedResource) {
+            <h2>{{ selectedResource.name }}</h2>
+            <div class="panel-badges">
+              <span class="state-pill" [class.off]="!selectedResource.is_menu">{{ resourceStateLabel(selectedResource) }}</span>
+              <span class="action-pill" [class.tone-create]="actionTone(selectedResource) === 'create'"
+                [class.tone-view]="actionTone(selectedResource) === 'view'"
+                [class.tone-edit]="actionTone(selectedResource) === 'edit'"
+                [class.tone-danger]="actionTone(selectedResource) === 'danger'">
+                {{ resourceActionLabel(selectedResource) }}
+              </span>
+            </div>
           }
         </div>
-      </div>
-    </div>
 
-    <div class="main-body">
-      @if (!selectedRole) {
-        <div class="empty">
-          <div class="e-title">Selecciona un rol</div>
-          <div class="e-sub">Debes seleccionar un rol para asignar recursos.</div>
-        </div>
-      } @else {
+        <button class="icon-btn" (click)="closeDrawer()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </header>
 
-        <div class="transfer">
-          <!-- Disponibles -->
-          <div class="panel">
-            <div class="panel-head">
-              <div>
-                <div class="p-title">Disponibles</div>
-                <div class="muted">Total: {{ availableResources().length }} | Seleccionados: {{ selectedAvailableIds.size }}</div>
-              </div>
-              <button class="btn xs ghost" (click)="openCreate()">Crear recurso</button>
+      @if (drawerMode === 'view' && selectedResource) {
+        <div class="panel-body">
+          <section class="code-card">
+            <span>Codigo del recurso</span>
+            <div class="code-line">
+              <strong>{{ selectedResource.key }}</strong>
+              <button class="icon-btn tiny" (click)="copyText(selectedResource.key)">
+                <i class="fa-regular fa-copy"></i>
+              </button>
             </div>
+          </section>
 
-            <div class="list">
-              @for (res of availableResources(); track res.id) {
-                <div class="row" [class.selected]="selectedAvailableIds.has(res.id)" (click)="toggleAvailable(res.id)">
-                  <div class="row-main">
-                    <div class="row-top">
-                      <span class="mono">{{ res.key }}</span>
-                      @if (res.is_menu) { <span class="tag">MENU</span> }
-                    </div>
-                    <div class="row-sub">
-                      <span>{{ res.name }}</span>
-                      @if (res.link) { <span class="dot">•</span><span class="muted">{{ res.link }}</span> }
-                    </div>
-                  </div>
-                  <i class="fa-solid fa-check row-tick" aria-hidden="true"></i>
-                </div>
-              }
+          <section class="panel-block">
+            <h3>Descripcion</h3>
+            <p>{{ selectedResource.description || 'Sin descripcion registrada.' }}</p>
+          </section>
 
-              @if (availableResources().length === 0) {
-                <div class="empty small">
-                  <div class="e-title">Sin disponibles</div>
-                  <div class="e-sub">No hay recursos disponibles para asignar.</div>
-                </div>
-              }
-            </div>
-          </div>
-
-          <!-- Controles -->
-          <div class="ctrl">
-            <button class="ctrl-btn" [disabled]="selectedAvailableIds.size===0" (click)="assignSelected()">
-              <i class="fa-solid fa-arrow-right"></i><span>Asignar</span>
-            </button>
-            <button class="ctrl-btn" [disabled]="selectedAssignedIds.size===0" (click)="removeSelected()">
-              <i class="fa-solid fa-arrow-left"></i><span>Quitar</span>
-            </button>
-            <div class="hint muted">Selecciona recursos y muévelos.</div>
-          </div>
-
-          <!-- Asignados -->
-          <div class="panel">
-            <div class="panel-head">
-              <div>
-                <div class="p-title">Asignados</div>
-                <div class="muted">Total: {{ assigned.length }} | Seleccionados: {{ selectedAssignedIds.size }}</div>
-              </div>
-            </div>
-
-            <div class="list">
-              @if (loadingAssigned) {
-                <div class="muted">Cargando recursos del rol...</div>
-              } @else {
-                @for (res of assigned; track res.id) {
-                  <div class="row" [class.selected]="selectedAssignedIds.has(res.id)" (click)="toggleAssigned(res.id)">
-                    <div class="row-main">
-                      <div class="row-top">
-                        <span class="mono">{{ res.key }}</span>
-                        @if (res.is_menu) { <span class="tag">MENU</span> }
-                      </div>
-                      <div class="row-sub">
-                        <span>{{ res.name }}</span>
-                        @if (res.link) { <span class="dot">•</span><span class="muted">{{ res.link }}</span> }
-                      </div>
-
-                      <div class="row-actions">
-                        <button class="btn xs ghost" (click)="$event.stopPropagation(); openEdit(res)">Editar</button>
-                        <button class="btn xs danger" (click)="$event.stopPropagation(); askDelete(res)">Eliminar</button>
-                      </div>
-                    </div>
-                    <i class="fa-solid fa-check row-tick" aria-hidden="true"></i>
-                  </div>
+          <section class="quick-grid">
+            <article class="quick-card">
+              <span>Modulo</span>
+              <strong>{{ resourceModuleLabel(selectedResource) }}</strong>
+            </article>
+            <article class="quick-card">
+              <span>Roles asignados</span>
+              <strong>
+                @if (loadingRoles || loadingRoleUsage) {
+                  ...
+                } @else {
+                  {{ resourceRolesCount(selectedResource.id) }}
                 }
+              </strong>
+            </article>
+          </section>
 
-                @if (assigned.length === 0) {
-                  <div class="empty small">
-                    <div class="e-title">Sin asignaciones</div>
-                    <div class="e-sub">Este rol aún no tiene recursos.</div>
-                  </div>
-                }
-              }
-            </div>
-          </div>
+          <section class="panel-block">
+            <h3>Informacion tecnica</h3>
+            <div class="info-row"><span>Ruta frontend</span><b>{{ selectedResource.link || 'N/D' }}</b></div>
+            <div class="info-row"><span>Ruta backend</span><b>{{ selectedResource.link_backend || 'N/D' }}</b></div>
+            <div class="info-row"><span>Icono</span><b>{{ selectedResource.icon || 'N/D' }}</b></div>
+            <div class="info-row"><span>Orden</span><b>{{ selectedResource.order ?? 0 }}</b></div>
+          </section>
+
+          @if (resourceRolesCount(selectedResource.id) > 0) {
+            <section class="warning-box">
+              <div class="warning-title">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                Este recurso esta asignado a {{ resourceRolesCount(selectedResource.id) }} rol(es)
+              </div>
+              <p>Los cambios pueden afectar los usuarios vinculados a esos roles.</p>
+            </section>
+          }
         </div>
 
+        <footer class="panel-footer">
+          <button class="btn ghost" (click)="closeDrawer()">Cerrar</button>
+          <button class="btn primary" (click)="openEdit(selectedResource)">
+            <i class="fa-regular fa-pen-to-square"></i>
+            Editar
+          </button>
+        </footer>
       }
-    </div>
-  </div>
 
-  <!-- Drawer CRUD -->
-  @if (showDrawer) {
-    <div class="overlay" (click)="showDrawer=false"></div>
-    <div class="drawer" (click)="$event.stopPropagation()">
-      <div class="drawer-head">
-        <div>
-          <div class="drawer-title">{{ isEditing ? 'Editar recurso' : 'Nuevo recurso' }}</div>
-          <div class="muted">Key (único) + datos del recurso y configuración de menú.</div>
+      @if (drawerMode !== 'view') {
+        <div class="panel-body">
+          <section class="panel-block">
+            <h3>Informacion basica</h3>
+
+            <label class="field">
+              <span>Nombre del recurso</span>
+              <input class="input" [(ngModel)]="form.name" placeholder="Ej: Crear usuario" />
+            </label>
+
+            <label class="field">
+              <span>Codigo unico</span>
+              <div class="inline-input">
+                <input class="input" [(ngModel)]="form.key" (ngModelChange)="onFormKeyInput()" placeholder="users.create" />
+                <button class="icon-btn" (click)="copyText(form.key)">
+                  <i class="fa-regular fa-copy"></i>
+                </button>
+              </div>
+              <small>Este codigo se usa para identificar el permiso en el sistema.</small>
+            </label>
+
+            <label class="field">
+              <span>Descripcion</span>
+              <textarea class="input" rows="3" [(ngModel)]="form.description" placeholder="Describe que permite hacer este recurso..."></textarea>
+            </label>
+          </section>
+
+          <section class="panel-block">
+            <h3>Clasificacion</h3>
+
+            <label class="field">
+              <span>Modulo</span>
+              <select class="input" [(ngModel)]="formModule" (ngModelChange)="onClassificationChange()">
+                <option [ngValue]="''">Selecciona un modulo</option>
+                @for (module of formModuleChoices(); track module) {
+                  <option [value]="module">{{ module }}</option>
+                }
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Tipo de accion</span>
+              <select class="input" [(ngModel)]="formAction" (ngModelChange)="onClassificationChange()">
+                <option [ngValue]="''">Selecciona el tipo de accion</option>
+                @for (action of formActionChoices(); track action) {
+                  <option [value]="action">{{ action }}</option>
+                }
+              </select>
+            </label>
+          </section>
+
+          <section class="panel-block">
+            <h3>Estado</h3>
+
+            <label class="switch-row">
+              <div>
+                <strong>Recurso activo</strong>
+                <p>El recurso estara disponible para asignar a roles.</p>
+              </div>
+
+              <span class="switch-control">
+                <input type="checkbox" [(ngModel)]="form.is_menu" />
+                <span class="slider"></span>
+              </span>
+            </label>
+          </section>
+
+          <section class="panel-block">
+            <h3>Opciones tecnicas</h3>
+
+            <div class="grid-2">
+              <label class="field">
+                <span>Ruta frontend</span>
+                <input class="input" [(ngModel)]="form.link" placeholder="/recursos" />
+              </label>
+              <label class="field">
+                <span>Ruta backend</span>
+                <input class="input" [(ngModel)]="form.link_backend" placeholder="/api/resources/" />
+              </label>
+            </div>
+
+            <div class="grid-2">
+              <label class="field">
+                <span>Icono</span>
+                <input class="input" [(ngModel)]="form.icon" placeholder="fa-solid fa-shield-halved" />
+              </label>
+              <label class="field">
+                <span>Orden</span>
+                <input class="input" type="number" min="0" [(ngModel)]="form.order" />
+              </label>
+            </div>
+
+            <label class="field">
+              <span>Padre (menu)</span>
+              <select class="input" [(ngModel)]="form.parent">
+                <option [ngValue]="null">Sin padre</option>
+                @for (parent of parentOptions(); track parent.id) {
+                  <option [ngValue]="parent.id">{{ parent.name }} ({{ parent.key }})</option>
+                }
+              </select>
+            </label>
+          </section>
+
+          @if (drawerMode === 'edit' && selectedResource && resourceRolesCount(selectedResource.id) > 0) {
+            <section class="warning-box">
+              <div class="warning-title">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                Atencion
+              </div>
+              <p>Este recurso esta asignado a {{ resourceRolesCount(selectedResource.id) }} rol(es).</p>
+            </section>
+          }
         </div>
-        <button class="icon-btn" (click)="showDrawer=false"><i class="fa-solid fa-xmark"></i></button>
-      </div>
 
-      <div class="drawer-body">
-        <label class="field">
-          <span>Key</span>
-          <input class="input" [(ngModel)]="form.key" [disabled]="isEditing" placeholder="ej: reservas.read" />
-        </label>
-
-        <label class="field">
-          <span>Nombre</span>
-          <input class="input" [(ngModel)]="form.name" placeholder="ej: Listado Reservas" />
-        </label>
-
-        <label class="field">
-          <span>Descripción</span>
-          <textarea class="input" rows="3" [(ngModel)]="form.description"></textarea>
-        </label>
-
-        <div class="grid2">
-          <label class="field">
-            <span>Link frontend</span>
-            <input class="input" [(ngModel)]="form.link" placeholder="/reservas" />
-          </label>
-
-          <label class="field">
-            <span>Link backend</span>
-            <input class="input" [(ngModel)]="form.link_backend" placeholder="/api/reservas/" />
-          </label>
-        </div>
-
-        <div class="grid2">
-          <label class="field">
-            <span>Icon (FontAwesome class)</span>
-            <input class="input" [(ngModel)]="form.icon" placeholder="fa-solid fa-calendar" />
-          </label>
-
-          <label class="field">
-            <span>Order</span>
-            <input class="input" type="number" [(ngModel)]="form.order" />
-          </label>
-        </div>
-
-        <div class="grid2">
-          <label class="field">
-            <span>Padre (menú)</span>
-            <select class="input" [(ngModel)]="form.parent">
-              <option [ngValue]="null">Sin padre</option>
-              @for (p of parentOptions(); track p.id) {
-                <option [ngValue]="p.id">{{ p.name }} ({{ p.key }})</option>
-              }
-            </select>
-          </label>
-
-          <label class="field switch">
-            <span>Mostrar en menú</span>
-            <input type="checkbox" [(ngModel)]="form.is_menu" />
-          </label>
-        </div>
-      </div>
-
-      <div class="drawer-foot">
-        <button class="btn ghost" (click)="showDrawer=false">Cancelar</button>
-        <button class="btn primary" (click)="save()">{{ isEditing ? 'Guardar' : 'Crear' }}</button>
-      </div>
-    </div>
+        <footer class="panel-footer">
+          <button class="btn ghost" (click)="closeDrawer()">Cancelar</button>
+          <button class="btn primary" (click)="saveResource()">
+            {{ drawerMode === 'edit' ? 'Guardar cambios' : 'Crear recurso' }}
+          </button>
+        </footer>
+      }
+    </aside>
   }
 
-  <!-- Confirm delete -->
   @if (showDeleteConfirm) {
     <div class="overlay" (click)="showDeleteConfirm=false"></div>
-    <div class="confirm" (click)="$event.stopPropagation()">
-      <div class="c-title">Eliminar recurso</div>
-      <div class="c-sub">Se eliminará <b>{{ deleteTarget?.key }}</b>. Esta acción no se puede deshacer.</div>
-      <div class="c-actions">
+    <div class="confirm-modal" (click)="$event.stopPropagation()">
+      <h3>Eliminar recurso</h3>
+      <p>
+        Se eliminara el recurso <b>{{ deleteTarget?.name }}</b>. Esta accion no se puede deshacer.
+      </p>
+      <div class="confirm-actions">
         <button class="btn ghost" (click)="showDeleteConfirm=false">Cancelar</button>
         <button class="btn danger" (click)="confirmDelete()">Eliminar</button>
       </div>
     </div>
   }
 
-  <!-- Toast -->
   <div class="toast" [class.show]="toastVisible" [class.ok]="toastKind==='success'" [class.bad]="toastKind==='danger'">
     {{ toastText }}
   </div>

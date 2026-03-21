@@ -1,303 +1,376 @@
-<div class="wrap">
-  <!-- Header -->
-  <div class="topbar">
-    <div class="title">
-      <div class="h1">Roles</div>
-      <div class="sub">Selecciona un rol arriba y asigna/retira usuarios en el panel inferior.</div>
+<div class="roles-page">
+  <header class="page-header">
+    <div class="header-copy">
+      <h1>Roles & Permisos</h1>
+      <p>Gestiona los roles del sistema y sus permisos de acceso.</p>
     </div>
 
-    <div class="actions">
-      <button class="btn ghost" (click)="loadRoles()">
+    <div class="header-actions">
+      <button class="btn ghost" (click)="refreshRoles()">
         <i class="fa-solid fa-rotate-right"></i>
         Actualizar
+      </button>
+      <button class="btn ghost" (click)="exportRolesCsv()">
+        <i class="fa-solid fa-file-export"></i>
+        Exportar
       </button>
       <button class="btn primary" (click)="openCreateRole()">
         <i class="fa-solid fa-plus"></i>
         Nuevo rol
       </button>
     </div>
-  </div>
+  </header>
 
-  <!-- Roles bar (top) -->
-  <div class="rolesbar card">
-    <div class="rb-left">
-      <div class="search">
+  <section class="stats-grid">
+    <article class="stat-card">
+      <div class="stat-top">
+        <span>Total roles</span>
+        <i class="fa-solid fa-shield-halved"></i>
+      </div>
+      <div class="stat-value">{{ totalRoles() }}</div>
+      <div class="stat-note">Configurados</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-top">
+        <span>Roles activos</span>
+        <i class="fa-solid fa-check"></i>
+      </div>
+      <div class="stat-value is-ok">{{ activeRoles() }}</div>
+      <div class="stat-note">Con permisos asignados</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-top">
+        <span>Usuarios asignados</span>
+        <i class="fa-solid fa-users"></i>
+      </div>
+      <div class="stat-value is-blue">
+        @if (loadingUsersMeta) {
+          ...
+        } @else {
+          {{ totalAssignedUsers() }}
+        }
+      </div>
+      <div class="stat-note">Sumados entre roles</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-top">
+        <span>Permisos totales</span>
+        <i class="fa-solid fa-key"></i>
+      </div>
+      <div class="stat-value is-amber">{{ totalPermissionsAvailable() }}</div>
+      <div class="stat-note">Disponibles en catalogo</div>
+    </article>
+  </section>
+
+  <section class="table-card">
+    <div class="table-toolbar">
+      <div class="search-field">
         <i class="fa-solid fa-magnifying-glass"></i>
         <input [(ngModel)]="rolesQuery" placeholder="Buscar rol..." />
         @if (rolesQuery) {
-        <button class="icon-btn" (click)="rolesQuery=''">
+          <button class="icon-btn" (click)="rolesQuery=''">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        }
+      </div>
+
+      <div class="toolbar-right">
+        <select class="status-select" [(ngModel)]="statusFilter">
+          <option value="all">Todos</option>
+          <option value="with_permissions">Con permisos</option>
+          <option value="without_permissions">Sin permisos</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ROL</th>
+            <th>DESCRIPCION</th>
+            <th>USUARIOS</th>
+            <th>PERMISOS</th>
+            <th>ESTADO</th>
+            <th>CREADO</th>
+            <th>ACCIONES</th>
+          </tr>
+        </thead>
+        <tbody>
+          @if (loadingRoles) {
+            @for (item of [1, 2, 3, 4, 5]; track item) {
+              <tr>
+                <td colspan="7">
+                  <div class="loading-row">
+                    <span class="loading-dot"></span>
+                    Cargando roles...
+                  </div>
+                </td>
+              </tr>
+            }
+          } @else if (filteredRoles().length === 0) {
+            <tr>
+              <td colspan="7">
+                <div class="empty-table">
+                  No se encontraron roles con los filtros seleccionados.
+                </div>
+              </td>
+            </tr>
+          } @else {
+            @for (role of filteredRoles(); track role.id) {
+              <tr>
+                <td>
+                  <div class="role-cell">
+                    <span class="role-icon" [style.background]="roleColor(role.id)">
+                      <i class="fa-solid fa-shield-halved"></i>
+                    </span>
+
+                    <div class="role-meta">
+                      <div class="role-name">{{ role.name }}</div>
+                      <div class="role-id">ID {{ roleCode(role.id) }} · {{ role.slug }}</div>
+                    </div>
+                  </div>
+                </td>
+
+                <td>
+                  <span class="description">
+                    {{ truncate(role.description || 'Sin descripcion') }}
+                  </span>
+                </td>
+
+                <td>
+                  <span class="users-pill">
+                    <i class="fa-regular fa-user"></i>
+                    {{ roleUsersCount(role.id) }} usuarios
+                  </span>
+                </td>
+
+                <td>
+                  <span class="count-pill">{{ permissionCount(role) }} permisos</span>
+                </td>
+
+                <td>
+                  <span class="status-pill" [class.off]="!isRoleActive(role)">
+                    {{ isRoleActive(role) ? 'Activo' : 'Inactivo' }}
+                  </span>
+                </td>
+
+                <td>
+                  <span class="created-muted">N/D</span>
+                </td>
+
+                <td>
+                  <div class="row-actions">
+                    <button class="row-btn" title="Ver" (click)="openViewRole(role)">
+                      <i class="fa-regular fa-eye"></i>
+                    </button>
+                    <button class="row-btn" title="Editar" (click)="openEditRole(role)">
+                      <i class="fa-regular fa-pen-to-square"></i>
+                    </button>
+                    <button class="row-btn danger" title="Eliminar" (click)="askDeleteRole(role)">
+                      <i class="fa-regular fa-trash-can"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <footer class="table-footer">
+      Mostrando {{ filteredRoles().length }} de {{ totalRoles() }} roles
+    </footer>
+  </section>
+
+  @if (showSidePanel) {
+    <div class="overlay" (click)="closeSidePanel()"></div>
+    <aside class="side-panel" (click)="$event.stopPropagation()">
+      <header class="panel-header">
+        <div class="panel-avatar" [style.background]="panelHeaderColor()">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+
+        <div class="panel-title-wrap">
+          @if (panelMode === 'form') {
+            <h2>{{ isEditing ? 'Editar Rol' : 'Nuevo Rol' }}</h2>
+            <p>
+              {{ isEditing ? 'Modificar informacion y permisos del rol' : 'Crear un nuevo rol con permisos personalizados' }}
+            </p>
+          } @else if (viewRole) {
+            <div class="panel-role-top">
+              <h2>{{ viewRole.name }}</h2>
+              <span class="status-pill" [class.off]="!isRoleActive(viewRole)">
+                {{ isRoleActive(viewRole) ? 'Activo' : 'Inactivo' }}
+              </span>
+            </div>
+            <p>{{ viewRole.description || 'Sin descripcion' }}</p>
+          }
+        </div>
+
+        <button class="icon-btn close-btn" (click)="closeSidePanel()">
           <i class="fa-solid fa-xmark"></i>
         </button>
-        }
-      </div>
-    </div>
+      </header>
 
-    <div class="rb-right">
-      @if (loadingRoles) {
-      <div class="rb-skeleton">
-        <div class="chip sk"></div>
-        <div class="chip sk"></div>
-        <div class="chip sk"></div>
-        <div class="chip sk"></div>
-      </div>
-      } @else {
-      <div class="chips">
-        @for (r of filteredRoles(); track r.id) {
-        <button class="chip" [class.active]="selectedRole?.id === r.id" (click)="selectRole(r)">
-          <span class="c-name">{{ r.name }}</span>
-          <span class="c-slug">{{ r.slug }}</span>
-        </button>
-        }
-      </div>
+      @if (panelMode === 'form') {
+        <div class="panel-body">
+          <section class="panel-block">
+            <h3>INFORMACION BASICA</h3>
 
-      @if (filteredRoles().length === 0) {
-      <div class="empty-inline">
-        No hay roles que coincidan.
-      </div>
-      }
-      }
-    </div>
-  </div>
+            <label class="field">
+              <span>Nombre del rol</span>
+              <input class="input" [(ngModel)]="roleForm.name" placeholder="Ej: Supervisor" />
+            </label>
 
-  <!-- Main card -->
-  <div class="main card">
-    <div class="main-head">
-      @if (selectedRole) {
-      <div class="mh-title">
-        <div class="mh-name">{{ selectedRole.name }}</div>
-        <div class="mh-meta">
-          <span class="badge">{{ selectedRole.slug }}</span>
-          <span class="dot">•</span>
-          <span class="muted">{{ selectedRole.description || 'Sin descripción' }}</span>
-        </div>
-      </div>
+            <label class="field">
+              <span>Slug</span>
+              <input class="input" [(ngModel)]="roleForm.slug" placeholder="ej: supervisor" />
+            </label>
 
-      <div class="mh-actions">
-        <button class="btn ghost" (click)="openEditRole()">
-          <i class="fa-solid fa-pen"></i>
-          Editar rol
-        </button>
-        <button class="btn danger" (click)="askDeleteRole()">
-          <i class="fa-solid fa-trash"></i>
-          Eliminar
-        </button>
-      </div>
-      } @else {
-      <div class="mh-title">
-        <div class="mh-name">Selecciona un rol</div>
-        <div class="muted">Elige uno en la barra superior para ver y administrar usuarios.</div>
-      </div>
-      }
-    </div>
+            <label class="field">
+              <span>Descripcion</span>
+              <textarea class="input" rows="3" [(ngModel)]="roleForm.description" placeholder="Describe las responsabilidades de este rol"></textarea>
+            </label>
 
-    <div class="main-body">
-      @if (!selectedRole) {
-      <div class="hero">
-        <div class="hero-icon"><i class="fa-solid fa-shield-halved"></i></div>
-        <div class="hero-title">Administración rápida</div>
-        <div class="hero-sub">Selecciona un rol arriba para asignar o remover usuarios.</div>
-      </div>
-      } @else {
-
-      <div class="transfer">
-        <!-- Disponibles -->
-        <div class="panel">
-          <div class="panel-head">
-            <div class="ph">
-              <div class="p-title">Disponibles</div>
-              <div class="p-meta">
-                <span class="pill soft">{{ availableUsers().length }}</span>
-                <span class="pill">{{ selectedAvailableIds.size }} sel.</span>
+            <div class="field">
+              <span>Color del rol</span>
+              <div class="color-palette">
+                @for (color of colorPalette; track color) {
+                  <button
+                    type="button"
+                    class="color-dot"
+                    [style.background]="color"
+                    [class.active]="selectedColor === color"
+                    (click)="setRoleColor(color)">
+                  </button>
+                }
               </div>
             </div>
-            <div class="panel-actions">
-              <button class="btn xs ghost" (click)="selectAllAvailable()">Todo</button>
-              <button class="btn xs ghost" (click)="clearAvailableSelection()">Limpiar</button>
-            </div>
-          </div>
+          </section>
 
-          <div class="search mini">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input [(ngModel)]="qAvailable" (input)="onCatalogSearchInput()" placeholder="Buscar usuarios..." />
-            @if (loadingCatalog) {
-            <span class="spinner"></span>
-            } @else if (qAvailable) {
-            <button class="icon-btn" (click)="qAvailable=''; searchCatalogUsers('')">
-              <i class="fa-solid fa-xmark"></i>
-            </button>
-            }
-          </div>
+          <section class="panel-block">
+            <h3>PERMISOS</h3>
 
-          <div class="list">
-            @for (u of availableUsers(); track u.id) {
-            <div class="row" [class.selected]="selectedAvailableIds.has(u.id)" (click)="toggleAvailable(u.id)">
-              <input class="row-check" type="checkbox" [checked]="selectedAvailableIds.has(u.id)"
-                (click)="$event.stopPropagation()" (change)="toggleAvailable(u.id)" />
-              <div class="row-main">
-                <div class="row-top">
-                  <span class="mono">{{ u.username }}</span>
-                  <span class="status" [class.ok]="u.is_active" [class.off]="!u.is_active">
-                    {{ u.is_active ? 'Activo' : 'Inactivo' }}
-                  </span>
-                </div>
-                <div class="row-sub">
-                  <span>{{ fullName(u) }}</span>
-                  <span class="dot">•</span>
-                  <span class="muted">{{ u.email }}</span>
-                </div>
-              </div>
-              <i class="fa-solid fa-check row-tick" aria-hidden="true"></i>
-            </div>
-            }
-
-            @if (availableUsers().length === 0) {
-            <div class="empty">
-              <div class="e-title">Sin usuarios disponibles</div>
-              <div class="e-sub">Ajusta la búsqueda o revisa asignaciones.</div>
-            </div>
-            }
-          </div>
-        </div>
-
-        <!-- Controles -->
-        <div class="ctrl">
-          <button class="ctrl-btn" [disabled]="selectedAvailableIds.size===0" (click)="assignSelected()">
-            <i class="fa-solid fa-arrow-right"></i>
-            <span>Asignar</span>
-          </button>
-
-          <button class="ctrl-btn" [disabled]="selectedAssignedIds.size===0" (click)="removeSelected()">
-            <i class="fa-solid fa-arrow-left"></i>
-            <span>Quitar</span>
-          </button>
-
-          <div class="hint">Selecciona y mueve usuarios.</div>
-        </div>
-
-        <!-- Asignados -->
-        <div class="panel">
-          <div class="panel-head">
-            <div class="ph">
-              <div class="p-title">Asignados</div>
-              <div class="p-meta">
-                <span class="pill soft">{{ assignedUsers.length }}</span>
-                <span class="pill">{{ selectedAssignedIds.size }} sel.</span>
-              </div>
-            </div>
-            <div class="panel-actions">
-              <button class="btn xs ghost" (click)="selectAllAssigned()">Todo</button>
-              <button class="btn xs ghost" (click)="clearAssignedSelection()">Limpiar</button>
-            </div>
-          </div>
-
-          <div class="search mini">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input [(ngModel)]="qAssigned" placeholder="Filtrar asignados..." />
-            @if (qAssigned) {
-            <button class="icon-btn" (click)="qAssigned=''">
-              <i class="fa-solid fa-xmark"></i>
-            </button>
-            }
-          </div>
-
-          <div class="list">
-            @if (loadingAssigned) {
-            <div class="skeletons">
-              <div class="skrow"></div>
-              <div class="skrow"></div>
-              <div class="skrow"></div>
-            </div>
+            @if (loadingPermissionsCatalog) {
+              <div class="muted">Cargando catalogo de permisos...</div>
+            } @else if (catalogPermissionGroups().length === 0) {
+              <div class="muted">No hay permisos disponibles para asignar.</div>
             } @else {
-            @for (u of assignedUsersFiltered(); track u.id) {
-            <div class="row" [class.selected]="selectedAssignedIds.has(u.id)" (click)="toggleAssigned(u.id)">
-              <input class="row-check" type="checkbox" [checked]="selectedAvailableIds.has(u.id)"
-                (click)="$event.stopPropagation()" (change)="toggleAvailable(u.id)" />
-              <div class="row-main">
-                <div class="row-top">
-                  <span class="mono">{{ u.username }}</span>
-                  <span class="status" [class.ok]="u.is_active" [class.off]="!u.is_active">
-                    {{ u.is_active ? 'Activo' : 'Inactivo' }}
-                  </span>
-                </div>
-                <div class="row-sub">
-                  <span>{{ fullName(u) }}</span>
-                  <span class="dot">•</span>
-                  <span class="muted">{{ u.email }}</span>
-                </div>
+              <div class="permission-list">
+                @for (group of catalogPermissionGroups(); track group.key) {
+                  <article class="permission-group">
+                    <header class="permission-group-head">
+                      <label class="group-check">
+                        <input
+                          type="checkbox"
+                          [checked]="isGroupChecked(group)"
+                          [indeterminate]="isGroupIndeterminate(group)"
+                          (change)="toggleGroupSelection(group)"
+                        />
+                        <span>{{ group.title }}</span>
+                      </label>
+                      <span class="group-count">{{ selectedCountInGroup(group) }}/{{ group.items.length }}</span>
+                    </header>
+
+                    <div class="permission-items">
+                      @for (permission of group.items; track permission.id) {
+                        <label class="permission-item">
+                          <input
+                            type="checkbox"
+                            [checked]="isPermissionSelected(permission.id)"
+                            (change)="togglePermission(permission.id)"
+                          />
+                          <span>{{ permission.name }}</span>
+                        </label>
+                      }
+                    </div>
+                  </article>
+                }
               </div>
-              <i class="fa-solid fa-check row-tick" aria-hidden="true"></i>
-            </div>
             }
-
-            @if (assignedUsers.length === 0) {
-            <div class="empty">
-              <div class="e-title">Sin asignaciones</div>
-              <div class="e-sub">Este rol aún no tiene usuarios.</div>
-            </div>
-            }
-            }
-          </div>
+          </section>
         </div>
-      </div>
 
+        <footer class="panel-footer">
+          <button class="btn ghost" (click)="closeSidePanel()">Cancelar</button>
+          <button class="btn primary" (click)="saveRole()">
+            {{ isEditing ? 'Guardar cambios' : 'Crear rol' }}
+          </button>
+        </footer>
       }
-    </div>
-  </div>
 
-  <!-- Drawer create/edit -->
-  @if (showRoleDrawer) {
-  <div class="overlay" (click)="showRoleDrawer=false"></div>
-  <div class="drawer" (click)="$event.stopPropagation()">
-    <div class="drawer-head">
-      <div>
-        <div class="drawer-title">{{ isEditing ? 'Editar rol' : 'Nuevo rol' }}</div>
-        <div class="muted">Define nombre, slug y una descripción breve.</div>
-      </div>
-      <button class="icon-btn" (click)="showRoleDrawer=false">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-    </div>
+      @if (panelMode === 'view' && viewRole) {
+        <div class="panel-body">
+          <section class="quick-stats">
+            <article class="quick-item">
+              <span>Usuarios</span>
+              <strong>{{ roleUsersCount(viewRole.id) }}</strong>
+            </article>
+            <article class="quick-item">
+              <span>Permisos</span>
+              <strong>{{ permissionCount(viewRole) }}</strong>
+            </article>
+            <article class="quick-item">
+              <span>Creado</span>
+              <strong>N/D</strong>
+            </article>
+          </section>
 
-    <div class="drawer-body">
-      <label class="field">
-        <span>Nombre</span>
-        <input class="input" [(ngModel)]="roleForm.name" placeholder="Ej: Recepción" />
-      </label>
+          <section class="panel-block">
+            <h3>PERMISOS ASIGNADOS</h3>
 
-      <label class="field">
-        <span>Slug</span>
-        <input class="input" [(ngModel)]="roleForm.slug" placeholder="ej: recepcion" />
-      </label>
+            @if (viewPermissionGroups().length === 0) {
+              <div class="muted">Este rol no tiene permisos asignados.</div>
+            } @else {
+              <div class="permission-list">
+                @for (group of viewPermissionGroups(); track group.key) {
+                  <article class="permission-group view-mode">
+                    <header class="permission-group-head">
+                      <span class="group-title">{{ group.title }}</span>
+                      <span class="group-count">{{ group.items.length }} activos</span>
+                    </header>
+                    <div class="chips-wrap">
+                      @for (permission of group.items; track permission.id) {
+                        <span class="chip">
+                          <i class="fa-solid fa-check"></i>
+                          {{ permission.name }}
+                        </span>
+                      }
+                    </div>
+                  </article>
+                }
+              </div>
+            }
+          </section>
+        </div>
 
-      <label class="field">
-        <span>Descripción</span>
-        <textarea class="input" rows="3" [(ngModel)]="roleForm.description"></textarea>
-      </label>
-    </div>
-
-    <div class="drawer-foot">
-      <button class="btn ghost" (click)="showRoleDrawer=false">Cancelar</button>
-      <button class="btn primary" (click)="saveRole()">{{ isEditing ? 'Guardar' : 'Crear' }}</button>
-    </div>
-  </div>
+        <footer class="panel-footer">
+          <button class="btn ghost" (click)="closeSidePanel()">Cerrar</button>
+          <button class="btn primary" (click)="openEditRole(viewRole)">Editar rol</button>
+        </footer>
+      }
+    </aside>
   }
 
-  <!-- Confirm delete -->
   @if (showDeleteConfirm) {
-  <div class="overlay" (click)="showDeleteConfirm=false"></div>
-  <div class="confirm" (click)="$event.stopPropagation()">
-    <div class="c-title">Eliminar rol</div>
-    <div class="c-sub">
-      Se eliminará el rol <b>{{ selectedRole?.name }}</b>. Esta acción no se puede deshacer.
+    <div class="overlay" (click)="showDeleteConfirm=false"></div>
+    <div class="confirm-modal" (click)="$event.stopPropagation()">
+      <h3>Eliminar rol</h3>
+      <p>
+        Se eliminara el rol <b>{{ roleToDelete?.name }}</b>. Esta accion no se puede deshacer.
+      </p>
+      <div class="confirm-actions">
+        <button class="btn ghost" (click)="showDeleteConfirm=false">Cancelar</button>
+        <button class="btn danger" (click)="deleteRoleConfirmed()">Eliminar</button>
+      </div>
     </div>
-    <div class="c-actions">
-      <button class="btn ghost" (click)="showDeleteConfirm=false">Cancelar</button>
-      <button class="btn danger" (click)="deleteRoleConfirmed()">Eliminar</button>
-    </div>
-  </div>
   }
 
-  <!-- Toast -->
   <div class="toast" [class.show]="toastVisible" [class.ok]="toastKind==='success'" [class.bad]="toastKind==='danger'">
     {{ toastText }}
   </div>
