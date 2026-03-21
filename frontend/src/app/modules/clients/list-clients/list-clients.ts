@@ -41,7 +41,7 @@ export class ListClients implements OnInit {
       label: 'Total clientes',
       value: '0',
       sub: 'Registrados',
-      icon: 'users',
+      icon: 'fa-solid fa-users',
       color: '#3b82f6',
       bg: '#e8f1ff'
     },
@@ -49,7 +49,7 @@ export class ListClients implements OnInit {
       label: 'Clientes VIP',
       value: '0',
       sub: 'Alto valor',
-      icon: 'star',
+      icon: 'fa-solid fa-star',
       color: '#d97706',
       bg: '#fff6df'
     },
@@ -57,7 +57,7 @@ export class ListClients implements OnInit {
       label: 'Huespedes actuales',
       value: '0',
       sub: 'En estancia',
-      icon: 'user-check',
+      icon: 'fa-solid fa-user-check',
       color: '#059669',
       bg: '#e8faf2'
     },
@@ -65,7 +65,7 @@ export class ListClients implements OnInit {
       label: 'Clientes nuevos',
       value: '0',
       sub: 'Este mes',
-      icon: 'user-plus',
+      icon: 'fa-solid fa-user-plus',
       color: '#7c3aed',
       bg: '#f3edff'
     }

@@ -1,0 +1,97 @@
+<div class="detail-overlay" (click)="closeDrawer()">
+  <aside class="detail-drawer" (click)="$event.stopPropagation()">
+    <header class="drawer-head">
+      <button type="button" class="drawer-close" (click)="closeDrawer()" title="Cerrar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </svg>
+      </button>
+
+      <div class="room-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+          <path d="M3 11h18v9H3z" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          <path d="M7 20v2M17 20v2" />
+        </svg>
+      </div>
+
+      <div class="head-main">
+        <p class="head-label">Habitación</p>
+        <h2>{{ roomNumber }}</h2>
+        <p class="head-sub">{{ roomTypeLabel }} · {{ bedLabel }} · {{ floorLabel }}</p>
+
+        <div class="head-metrics">
+          <span class="chip-status" [ngStyle]="{ 'background-color': statusTone.bg, color: statusTone.color }">
+            <span class="status-dot" [ngStyle]="{ 'background-color': statusTone.dot }"></span>
+            {{ statusLabel }}
+          </span>
+          <strong class="rate">{{ priceLabel }}/noche</strong>
+        </div>
+      </div>
+    </header>
+
+    <div class="drawer-body">
+      <div class="loading-box" *ngIf="loading">Cargando detalle...</div>
+      <div class="feedback error" *ngIf="!loading && errorMessage">{{ errorMessage }}</div>
+
+      <ng-container *ngIf="!loading && !errorMessage">
+        <section>
+          <h3>Amenidades</h3>
+          <div class="chips-wrap" *ngIf="amenities.length; else noAmenities">
+            <span *ngFor="let amenity of amenities">
+              <i [class]="amenity.icon || 'fa-solid fa-circle-check'"></i>
+              {{ amenity.name }}
+            </span>
+          </div>
+          <ng-template #noAmenities>
+            <p class="empty-text">Sin amenidades asignadas.</p>
+          </ng-template>
+        </section>
+
+        <section *ngIf="hasMaintenance && panel?.active_maintenance as maintenance">
+          <h3>Mantenimiento</h3>
+          <article class="maintenance-box">
+            <strong>{{ maintenance.title }}</strong>
+            <p>{{ maintenance.description || 'Sin descripción disponible.' }}</p>
+            <span>{{ maintenance.status_label || maintenance.status }}</span>
+          </article>
+        </section>
+
+        <section *ngIf="panel?.notes">
+          <h3>Notas</h3>
+          <p class="notes">{{ panel?.notes }}</p>
+        </section>
+
+        <section>
+          <h3>Estado operativo</h3>
+          <div class="info-list">
+            <div>
+              <span>Estado</span>
+              <strong>{{ statusLabel }}</strong>
+            </div>
+            <div>
+              <span>Piso</span>
+              <strong>{{ floorLabel }}</strong>
+            </div>
+            <div>
+              <span>Tarifa</span>
+              <strong>{{ priceLabel }}/noche</strong>
+            </div>
+          </div>
+        </section>
+      </ng-container>
+    </div>
+
+    <footer class="drawer-footer">
+      <button type="button" class="btn btn-dark" (click)="requestEdit()">Editar habitación</button>
+
+      <button type="button" class="btn btn-light" *ngIf="panel?.status === 'DISPONIBLE'">Check-In</button>
+      <button type="button" class="btn btn-light" *ngIf="panel?.status === 'OCUPADA'">Ver reserva completa</button>
+
+      <button type="button" class="btn btn-danger" *ngIf="canMarkAsAvailable" (click)="markAsAvailable()" [disabled]="actionLoading">
+        {{ actionLoading ? 'Procesando...' : 'Marcar como disponible' }}
+      </button>
+    </footer>
+  </aside>
+</div>

@@ -6,6 +6,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from accounts.permissions import HasResourcePermission
+from apps.master_data.models import MasterData
 from apps.rooms.models import Room
 
 from .models import HotelFloor, HotelSettings
@@ -139,7 +140,24 @@ class HotelFloorViewSet(viewsets.ModelViewSet):
 
         missing_numbers = [number for number in target_numbers if number not in existing_by_number]
         if missing_numbers:
-            Room.objects.bulk_create([Room(number=number, floor=floor) for number in missing_numbers])
+            default_status = MasterData.objects.filter(
+                group=MasterData.Group.ROOM_STATUS,
+                code="DISPONIBLE",
+            ).first()
+
+            if not default_status:
+                raise ValidationError(
+                    {
+                        "room_count": (
+                            "No se pudo autogenerar habitaciones porque falta el catalogo "
+                            "ROOM_STATUS:DISPONIBLE."
+                        )
+                    }
+                )
+
+            Room.objects.bulk_create(
+                [Room(number=number, floor=floor, status=default_status) for number in missing_numbers]
+            )
 
         return missing_numbers
 

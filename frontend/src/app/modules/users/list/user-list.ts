@@ -57,7 +57,7 @@ export class UserList implements OnInit {
       label: 'Total usuarios',
       value: '0',
       sub: 'Cuentas registradas',
-      icon: 'users',
+      icon: 'fa-solid fa-users',
       color: '#3b82f6',
       bg: '#e8f1ff'
     },
@@ -65,7 +65,7 @@ export class UserList implements OnInit {
       label: 'Usuarios activos',
       value: '0',
       sub: 'Acceso habilitado',
-      icon: 'user-check',
+      icon: 'fa-solid fa-user-check',
       color: '#059669',
       bg: '#e8faf2'
     },
@@ -73,7 +73,7 @@ export class UserList implements OnInit {
       label: 'Con roles',
       value: '0',
       sub: 'Permisos asignados',
-      icon: 'shield',
+      icon: 'fa-solid fa-shield-halved',
       color: '#d97706',
       bg: '#fff6df'
     },
@@ -81,7 +81,7 @@ export class UserList implements OnInit {
       label: 'Nuevos este mes',
       value: '0',
       sub: 'Altas recientes',
-      icon: 'user-plus',
+      icon: 'fa-solid fa-user-plus',
       color: '#7c3aed',
       bg: '#f3edff'
     }

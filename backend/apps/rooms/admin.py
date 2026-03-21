@@ -11,7 +11,7 @@ class RoomTypeAdmin(admin.ModelAdmin):
 class RateAdmin(admin.ModelAdmin):
     list_display = ("id","name", "room_type", "price", "start_date", "end_date", "is_active")
     list_filter = ("is_active", "room_type")
-    search_fields = ("name", "room_type__name")
+    search_fields = ("name", "room_type__name", "room_type__code")
 
 @admin.register(Amenity)
 class AmenityAdmin(admin.ModelAdmin):
@@ -23,17 +23,17 @@ class AmenityAdmin(admin.ModelAdmin):
 class RoomAdmin(admin.ModelAdmin):
     list_display = ("id", "number", "room_type", "floor", "status")
     list_filter = ("status", "room_type", "floor")
-    search_fields = ("number", "room_type__name")
+    search_fields = ("number", "room_type__name", "status__code", "status__name")
 
 @admin.register(MaintenanceOrder)
 class MaintenanceOrderAdmin(admin.ModelAdmin):
     list_display = ("id", "room", "title", "priority", "status", "reported_at", "completed_at")
     list_filter = ("status", "priority", "room__floor")
-    search_fields = ("title", "description", "room__number")
+    search_fields = ("title", "description", "room__number", "priority__code", "status__code")
 
 @admin.register(CleaningTask)
 class CleaningTaskAdmin(admin.ModelAdmin):
     list_display = ("id", "room", "task_type", "status", "scheduled_for")
     list_filter = ("status", "task_type", "room__floor")
-    search_fields = ("room__number", "notes")
+    search_fields = ("room__number", "notes", "task_type__code", "status__code")
 

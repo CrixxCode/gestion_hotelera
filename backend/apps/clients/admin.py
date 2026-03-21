@@ -25,10 +25,13 @@ class ClientAdmin(admin.ModelAdmin):
     )
     search_fields = (
         "document_number",
+        "document_type__code",
         "first_name",
         "last_name",
         "email",
         "phone",
         "country",
+        "client_type__code",
+        "status__code",
     )
     ordering = ("-id",)

@@ -1,0 +1,245 @@
+<div class="rooms-page">
+  <header class="page-header">
+    <h1>Check-In / Check-Out</h1>
+    <p>Gestiona el estado de las habitaciones y los movimientos de huespedes.</p>
+  </header>
+
+  <section class="stats-grid">
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Disponibles</span>
+        <span class="stat-icon green"><i class="fa-solid fa-check"></i></span>
+      </div>
+      <div class="stat-value">{{ availableCount }}</div>
+      <div class="stat-note">de {{ totalRooms }} hab.</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Ocupadas</span>
+        <span class="stat-icon blue"><i class="fa-solid fa-user-group"></i></span>
+      </div>
+      <div class="stat-value">{{ occupiedCount }}</div>
+      <div class="stat-note">de {{ totalRooms }} hab.</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Por salir hoy</span>
+        <span class="stat-icon yellow"><i class="fa-solid fa-right-from-bracket"></i></span>
+      </div>
+      <div class="stat-value">{{ leavingTodayCount }}</div>
+      <div class="stat-note">de {{ totalRooms }} hab.</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Mantenimiento</span>
+        <span class="stat-icon red"><i class="fa-solid fa-screwdriver-wrench"></i></span>
+      </div>
+      <div class="stat-value">{{ maintenanceCount }}</div>
+      <div class="stat-note">de {{ totalRooms }} hab.</div>
+    </article>
+  </section>
+
+  <section class="filters-card">
+    <div class="filters-grid">
+      <label>
+        <span>Estado</span>
+        <select [(ngModel)]="statusFilter" (change)="applyFilters()">
+          <option *ngFor="let statusOption of statusOptions" [ngValue]="statusOption.value">{{ statusOption.label }}</option>
+        </select>
+      </label>
+
+      <label>
+        <span>Piso</span>
+        <select [(ngModel)]="floorFilter" (change)="applyFilters()">
+          <option [ngValue]="'ALL'">Todos los pisos</option>
+          <option *ngFor="let floorItem of floors; trackBy: trackById" [ngValue]="floorItem.id">
+            {{ floorItem.name }} ({{ floorItem.prefix }})
+          </option>
+        </select>
+      </label>
+
+      <label class="search-wrap">
+        <span>Buscar</span>
+        <div class="search-control">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="7"></circle>
+            <path d="m20 20-3.5-3.5"></path>
+          </svg>
+          <input type="text" [(ngModel)]="search" (input)="applyFilters()" placeholder="Numero o descripcion..." />
+        </div>
+      </label>
+    </div>
+
+    <div class="filters-actions">
+      <div class="actions-left">
+        <button type="button" class="btn btn-light" (click)="loadModuleData()">Actualizar</button>
+      </div>
+
+      <div class="view-toggle">
+        <button type="button" [class.active]="viewMode === 'cards'" (click)="setViewMode('cards')" title="Vista tarjetas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="3" y="3" width="8" height="8" rx="1.2"></rect>
+            <rect x="13" y="3" width="8" height="8" rx="1.2"></rect>
+            <rect x="3" y="13" width="8" height="8" rx="1.2"></rect>
+            <rect x="13" y="13" width="8" height="8" rx="1.2"></rect>
+          </svg>
+        </button>
+        <button type="button" [class.active]="viewMode === 'table'" (click)="setViewMode('table')" title="Vista tabla">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M4 7h16"></path>
+            <path d="M4 12h16"></path>
+            <path d="M4 17h16"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <div class="status-tabs">
+    <button
+      type="button"
+      *ngFor="let tab of statusTabs"
+      [class.active]="statusFilter === tab.key"
+      (click)="selectStatus(tab.key)">
+      {{ tab.label }}
+      <span>{{ getStatusCount(tab.key) }}</span>
+    </button>
+  </div>
+
+  <section class="state-message" *ngIf="loading || errorMessage || filteredRooms.length === 0">
+    <p *ngIf="loading">Cargando habitaciones...</p>
+    <p *ngIf="!loading && errorMessage">{{ errorMessage }}</p>
+    <p *ngIf="!loading && !errorMessage && filteredRooms.length === 0">No hay habitaciones para los filtros seleccionados.</p>
+  </section>
+
+  <section class="rooms-grid" *ngIf="!loading && !errorMessage && filteredRooms.length > 0 && viewMode === 'cards'">
+    <article
+      class="room-card"
+      *ngFor="let room of filteredRooms; trackBy: trackByRoom"
+      [style.border-top-color]="getStatusStyle(room).border">
+      <header class="room-head">
+        <h2>{{ room.number }}</h2>
+        <span class="status-chip" [ngStyle]="{ 'background-color': getStatusStyle(room).bg, color: getStatusStyle(room).color }">
+          <span class="status-dot" [ngStyle]="{ 'background-color': getStatusStyle(room).dot }"></span>
+          {{ getStatusLabel(room) }}
+        </span>
+      </header>
+
+      <p class="room-type">{{ getRoomTypeName(room) }} - {{ getRoomTypeBeds(room) }}</p>
+      <p class="room-price">{{ getPriceLabel(room) }}<small>/noche</small></p>
+
+      <p class="maintenance" *ngIf="room.status === 'MANTENIMIENTO'">{{ getMaintenanceText(room) }}</p>
+
+      <div class="room-actions">
+        <button
+          type="button"
+          class="action-btn"
+          [disabled]="!canPrimaryAction(room)"
+          [ngStyle]="{
+            'background-color': canPrimaryAction(room) ? getStatusStyle(room).buttonBg : '#f2f4f8',
+            color: canPrimaryAction(room) ? getStatusStyle(room).buttonColor : '#9aa4b2'
+          }"
+          (click)="onPrimaryAction(room)">
+          {{ getPrimaryActionLabel(room) }}
+        </button>
+        <button type="button" class="icon-btn" title="Detalle" (click)="openDetail(room)">Ver detalle</button>
+        <button type="button" class="icon-btn" title="Editar" (click)="openUpdateDrawer(room)">Editar</button>
+      </div>
+    </article>
+  </section>
+
+  <section class="table-card" *ngIf="!loading && !errorMessage && filteredRooms.length > 0 && viewMode === 'table'">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Habitacion</th>
+            <th>Tipo</th>
+            <th>Estado</th>
+            <th>Piso</th>
+            <th>Notas</th>
+            <th>Precio</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let room of filteredRooms; trackBy: trackByRoom">
+            <td>
+              <p class="table-main">Hab. {{ room.number }}</p>
+              <small>{{ room.floor_name || 'Piso no definido' }}</small>
+            </td>
+            <td>
+              <p class="table-main">{{ getRoomTypeName(room) }}</p>
+              <small>{{ getRoomTypeBeds(room) }}</small>
+            </td>
+            <td>
+              <span class="status-chip" [ngStyle]="{ 'background-color': getStatusStyle(room).bg, color: getStatusStyle(room).color }">
+                <span class="status-dot" [ngStyle]="{ 'background-color': getStatusStyle(room).dot }"></span>
+                {{ getStatusLabel(room) }}
+              </span>
+            </td>
+            <td>{{ room.floor_name || '--' }}</td>
+            <td class="notes-cell">{{ room.notes || '--' }}</td>
+            <td>{{ getPriceLabel(room) }}/noche</td>
+            <td>
+              <div class="row-actions">
+                <button
+                  type="button"
+                  class="action-btn"
+                  [disabled]="!canPrimaryAction(room)"
+                  [ngStyle]="{
+                    'background-color': canPrimaryAction(room) ? getStatusStyle(room).buttonBg : '#f2f4f8',
+                    color: canPrimaryAction(room) ? getStatusStyle(room).buttonColor : '#9aa4b2'
+                  }"
+                  (click)="onPrimaryAction(room)">
+                  {{ getPrimaryActionLabel(room) }}
+                </button>
+                <button type="button" class="row-btn" title="Ver detalle" (click)="openDetail(room)">
+                  <i class="fa-regular fa-eye"></i>
+                </button>
+                <button type="button" class="row-btn" title="Editar" (click)="openUpdateDrawer(room)">
+                  <i class="fa-regular fa-pen-to-square"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <footer class="table-footer">
+      Mostrando {{ filteredRooms.length }} habitaciones
+    </footer>
+  </section>
+
+  <app-create-room
+    *ngIf="showCreateDrawer"
+    [floors]="floors"
+    [roomTypes]="roomTypes"
+    [amenities]="amenities"
+    (closed)="closeCreateDrawer()"
+    (created)="onRoomCreated()">
+  </app-create-room>
+
+  <app-update-room
+    *ngIf="showUpdateDrawer && roomToEdit"
+    [room]="roomToEdit"
+    [floors]="floors"
+    [roomTypes]="roomTypes"
+    [amenities]="amenities"
+    (closed)="closeUpdateDrawer()"
+    (updated)="onRoomUpdated()">
+  </app-update-room>
+
+  <app-room-detail
+    *ngIf="selectedRoom"
+    [room]="selectedRoom"
+    (closed)="closeDetail()"
+    (editRequested)="openUpdateFromDetail($event)"
+    (refreshed)="refreshRooms()">
+  </app-room-detail>
+</div>
+

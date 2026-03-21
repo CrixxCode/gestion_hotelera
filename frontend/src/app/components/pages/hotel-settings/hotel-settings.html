@@ -1,55 +1,47 @@
-<div class="w-full min-h-screen bg-gray-100 px-2 sm:px-4 py-4 pb-24">
-  <div class="mx-auto max-w-[1700px] space-y-4">
-    <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <article class="rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
-        <div class="flex items-center gap-3">
-          <span class="grid h-10 w-10 place-items-center rounded-full bg-blue-50 text-blue-600">
-            <i class="fa-solid fa-bed"></i>
-          </span>
-          <div>
-            <p class="text-xs text-gray-500">Total Habitaciones</p>
-            <p class="text-3xl font-semibold text-slate-900">{{ totalRooms }}</p>
-          </div>
+<div class="hotel-settings-page">
+  <div class="hotel-settings-content mx-auto max-w-[1700px] space-y-4">
+    <header class="page-header">
+      <div class="header-copy">
+        <h1>Configuracion del Hotel</h1>
+        <p>Gestiona la informacion general, estructura y operacion del hotel.</p>
+      </div>
+    </header>
+
+    <section class="stats-grid">
+      <article class="stat-card">
+        <div class="stat-head">
+          <span>Total Habitaciones</span>
+          <span class="stat-icon blue"><i class="fa-solid fa-bed"></i></span>
         </div>
+        <div class="stat-value">{{ totalRooms }}</div>
+        <div class="stat-note">Configuradas en la estructura</div>
       </article>
 
-      <article class="rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
-        <div class="flex items-center gap-3">
-          <span class="grid h-10 w-10 place-items-center rounded-full bg-violet-50 text-violet-600">
-            <i class="fa-solid fa-layer-group"></i>
-          </span>
-          <div>
-            <p class="text-xs text-gray-500">Pisos</p>
-            <p class="text-3xl font-semibold text-slate-900">{{ totalFloors }}</p>
-          </div>
+      <article class="stat-card">
+        <div class="stat-head">
+          <span>Pisos</span>
+          <span class="stat-icon violet"><i class="fa-solid fa-layer-group"></i></span>
         </div>
+        <div class="stat-value">{{ totalFloors }}</div>
+        <div class="stat-note">Niveles registrados</div>
       </article>
 
-      <article class="rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
-        <div class="flex items-center gap-3">
-          <span class="grid h-10 w-10 place-items-center rounded-full bg-amber-50 text-amber-600">
-            <i class="fa-regular fa-star"></i>
-          </span>
-          <div>
-            <p class="text-xs text-gray-500">Estrellas</p>
-            <p class="text-3xl font-semibold text-slate-900">
-              {{ form.stars || 1 }}
-              <i class="fa-solid fa-star text-base text-slate-700"></i>
-            </p>
-          </div>
+      <article class="stat-card">
+        <div class="stat-head">
+          <span>Estrellas</span>
+          <span class="stat-icon slate"><i class="fa-solid fa-star"></i></span>
         </div>
+        <div class="stat-value">{{ form.stars || 1 }}</div>
+        <div class="stat-note">Categoria actual</div>
       </article>
 
-      <article class="rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
-        <div class="flex items-center gap-3">
-          <span class="grid h-10 w-10 place-items-center rounded-full bg-emerald-50 text-emerald-600">
-            <i class="fa-solid fa-dollar-sign"></i>
-          </span>
-          <div>
-            <p class="text-xs text-gray-500">Impuesto</p>
-            <p class="text-3xl font-semibold text-slate-900">{{ taxRateDisplay }}</p>
-          </div>
+      <article class="stat-card">
+        <div class="stat-head">
+          <span>Impuesto</span>
+          <span class="stat-icon green"><i class="fa-solid fa-dollar-sign"></i></span>
         </div>
+        <div class="stat-value">{{ taxRateDisplay }}</div>
+        <div class="stat-note">Tasa base aplicada</div>
       </article>
     </section>
 
@@ -522,7 +514,7 @@
     }
   </div>
 
-  <div class="sticky bottom-0 z-20 mt-4 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur">
+  <div class="settings-footer sticky bottom-0 z-20 mt-4 border-t border-gray-200 bg-white/95 py-3 backdrop-blur">
     <div class="mx-auto flex max-w-[1700px] flex-wrap items-center justify-between gap-3">
       <p class="text-sm text-gray-500">Última actualización: {{ lastUpdatedLabel }}</p>
 

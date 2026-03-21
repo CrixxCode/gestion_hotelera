@@ -9,6 +9,20 @@ export interface Role {
   name: string;
   slug: string;
   description?: string;
+  resources?: ResourcePermission[];
+}
+
+export interface ResourcePermission {
+  id: string;
+  key: string;
+  name: string;
+  description?: string;
+  link?: string;
+  link_backend?: string;
+  icon?: string;
+  order?: number;
+  is_menu?: boolean;
+  parent?: string | null;
 }
 
 export interface UserMini {
@@ -32,6 +46,7 @@ type DRFPaginated<T> = {
 export class RolesService {
   private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
   private readonly rolesUrl = `${this.apiBase}/api/roles/`;
+  private readonly resourcesUrl = `${this.apiBase}/api/resources/`;
 
   constructor(private http: HttpClient, private auth: AuthService) {}
 
@@ -85,6 +100,35 @@ export class RolesService {
     return this.http.post(
       `${this.rolesUrl}${roleId}/remove-users/`,
       { user_ids: userIds },
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
+  listResources(q: string = ''): Observable<ResourcePermission[]> {
+    const qs = q ? `?q=${encodeURIComponent(q)}` : '';
+    return this.http.get<any>(`${this.resourcesUrl}${qs}`, { withCredentials: true }).pipe(
+      map((res) => this.unwrapArray<ResourcePermission>(res))
+    );
+  }
+
+  roleResources(roleId: string): Observable<ResourcePermission[]> {
+    return this.http.get<any>(`${this.rolesUrl}${roleId}/resources/`, { withCredentials: true }).pipe(
+      map((res) => this.unwrapArray<ResourcePermission>(res))
+    );
+  }
+
+  assignResources(roleId: string, resourceIds: string[]): Observable<any> {
+    return this.http.post(
+      `${this.rolesUrl}${roleId}/assign-resources/`,
+      { resource_ids: resourceIds },
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
+  removeResources(roleId: string, resourceIds: string[]): Observable<any> {
+    return this.http.post(
+      `${this.rolesUrl}${roleId}/remove-resources/`,
+      { resource_ids: resourceIds },
       this.auth.buildCsrfRequestOptions()
     );
   }

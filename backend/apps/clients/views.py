@@ -4,6 +4,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from apps.master_data.models import MasterData
 from .models import Client
 from .serializers import (
     ClientSerializer,
@@ -16,7 +17,7 @@ from accounts.permissions import HasResourcePermission
 
 
 class ClientViewSet(viewsets.ModelViewSet):
-    queryset = Client.objects.all().order_by("-id")
+    queryset = Client.objects.select_related("document_type", "client_type", "status").all().order_by("-id")
     serializer_class = ClientSerializer
     permission_classes = [HasResourcePermission]
 
@@ -36,15 +37,18 @@ class ClientViewSet(viewsets.ModelViewSet):
     # Búsqueda y orden (útil para p-table en Angular)
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [
-        "document_type",
+        "document_type__code",
+        "document_type__name",
         "document_number",
         "first_name",
         "last_name",
         "email",
         "phone",
         "country",
-        "client_type",
-        "status",
+        "client_type__code",
+        "client_type__name",
+        "status__code",
+        "status__name",
     ]
     ordering_fields = ["id", "created_at", "first_name", "last_name", "email"]
     ordering = ["-id"]
@@ -104,7 +108,25 @@ class ClientViewSet(viewsets.ModelViewSet):
         except ValidationError as exc:
             return Response({"status": exc.detail}, status=status.HTTP_400_BAD_REQUEST)
 
-        client.status = new_status
+        status_obj = None
+        if isinstance(new_status, int) or (isinstance(new_status, str) and str(new_status).isdigit()):
+            status_obj = MasterData.objects.filter(
+                group=MasterData.Group.CLIENT_STATUS,
+                id=int(new_status)
+            ).first()
+        else:
+            status_obj = MasterData.objects.filter(
+                group=MasterData.Group.CLIENT_STATUS,
+                code=str(new_status).upper()
+            ).first()
+
+        if not status_obj:
+            return Response(
+                {"status": "No existe el estado solicitado en el catalogo maestro."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        client.status = status_obj
         client.save(update_fields=["status"])
 
         return Response(ClientSerializer(client, context=self.get_serializer_context()).data)
@@ -121,7 +143,25 @@ class ClientViewSet(viewsets.ModelViewSet):
         except ValidationError as exc:
             return Response({"client_type": exc.detail}, status=status.HTTP_400_BAD_REQUEST)
 
-        client.client_type = new_type
+        type_obj = None
+        if isinstance(new_type, int) or (isinstance(new_type, str) and str(new_type).isdigit()):
+            type_obj = MasterData.objects.filter(
+                group=MasterData.Group.CLIENT_TYPE,
+                id=int(new_type)
+            ).first()
+        else:
+            type_obj = MasterData.objects.filter(
+                group=MasterData.Group.CLIENT_TYPE,
+                code=str(new_type).upper()
+            ).first()
+
+        if not type_obj:
+            return Response(
+                {"client_type": "No existe el tipo solicitado en el catalogo maestro."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        client.client_type = type_obj
         client.save(update_fields=["client_type"])
 
         return Response(ClientSerializer(client, context=self.get_serializer_context()).data)
