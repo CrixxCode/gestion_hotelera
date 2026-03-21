@@ -5,12 +5,40 @@ from apps.master_data.models import MasterData
 from apps.master_data.serializers import MasterDataCodeField
 from .models import Rate, Amenity, Room, MaintenanceOrder, CleaningTask
 
+AMENITY_ICON_CATALOG = {
+    "fa-solid fa-bed",
+    "fa-solid fa-wifi",
+    "fa-solid fa-tv",
+    "fa-solid fa-bath",
+    "fa-solid fa-snowflake",
+    "fa-solid fa-mug-hot",
+    "fa-solid fa-square-parking",
+    "fa-solid fa-water-ladder",
+    "fa-solid fa-bell-concierge",
+    "fa-solid fa-dumbbell",
+}
+
 
 class AmenitySerializer(serializers.ModelSerializer):
     class Meta:
         model = Amenity
         fields = "__all__"
         read_only_fields = ("id", "created_at")
+        extra_kwargs = {
+            "icon": {"required": True, "allow_blank": False, "allow_null": False},
+        }
+
+    def validate_name(self, value):
+        normalized = (value or "").strip()
+        if not normalized:
+            raise serializers.ValidationError("El nombre de la amenidad es obligatorio.")
+        return normalized
+
+    def validate_icon(self, value):
+        normalized = (value or "").strip()
+        if normalized not in AMENITY_ICON_CATALOG:
+            raise serializers.ValidationError("Icono no valido para amenidades.")
+        return normalized
 
 
 class RoomTypeSerializer(serializers.ModelSerializer):

@@ -5,39 +5,46 @@
 .rooms-page {
   min-height: 100%;
   background: #f2f4f8;
-  padding: 22px;
+  padding: 24px;
   color: #1f2937;
 }
 
 .page-header h1 {
   margin: 0;
-  font-size: 42px;
+  font-size: 40px;
   line-height: 1.1;
-  color: #0f172a;
+  font-weight: 700;
   letter-spacing: -0.02em;
 }
 
 .page-header p {
   margin: 8px 0 0;
-  color: #93a1b5;
+  color: #8a94a6;
   font-size: 15px;
 }
 
 .stats-grid {
-  margin-top: 20px;
+  margin-top: 14px;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 10px;
 }
 
 .stat-card {
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-radius: 16px;
+  border-radius: 14px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
   padding: 14px 16px;
+}
+
+.stat-head {
   display: flex;
-  gap: 12px;
+  justify-content: space-between;
   align-items: center;
+  color: #4f5f79;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .stat-icon {
@@ -46,8 +53,7 @@
   border-radius: 12px;
   display: grid;
   place-items: center;
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 17px;
 }
 
 .stat-icon.green {
@@ -70,20 +76,17 @@
   color: #e23b33;
 }
 
-.stat-card strong {
-  font-size: 34px;
+.stat-value {
+  margin-top: 8px;
+  font-size: 30px;
   line-height: 1;
+  font-weight: 700;
 }
 
-.stat-card p {
-  margin: 4px 0 0;
-  color: #677489;
+.stat-note {
+  margin-top: 8px;
+  color: #7b8ea8;
   font-size: 14px;
-}
-
-.stat-card small {
-  color: #b3bcc9;
-  font-size: 12px;
 }
 
 .filters-card {
@@ -168,6 +171,13 @@ input:focus {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.actions-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .btn {
@@ -390,12 +400,25 @@ input:focus {
   cursor: pointer;
 }
 
-.table-wrap {
+.table-card {
   margin-top: 14px;
   background: #fff;
-  border: 1px solid #dfe6f0;
-  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.table-wrap {
   overflow: auto;
+}
+
+.table-footer {
+  border-top: 1px solid #e2e8f0;
+  padding: 12px;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 table {
@@ -404,28 +427,27 @@ table {
   min-width: 980px;
 }
 
-th,
-td {
-  padding: 14px 18px;
-  text-align: left;
-}
-
 th {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #95a2b5;
-  border-bottom: 1px solid #edf1f6;
+  text-align: left;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  color: #5f708c;
+  font-weight: 700;
+  padding: 12px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fbfcff;
 }
 
 td {
-  border-bottom: 1px solid #edf1f6;
+  padding: 10px;
+  border-bottom: 1px solid #edf1f7;
+  vertical-align: middle;
   color: #334155;
   font-size: 14px;
 }
 
 tbody tr:hover {
-  background: #f8fbff;
+  background: #fbfdff;
 }
 
 .table-main {
@@ -443,10 +465,26 @@ td small {
   max-width: 300px;
 }
 
-.table-actions {
+.row-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+.row-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #64748b;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.row-btn:hover {
+  background: #f8fbff;
 }
 
 @media (max-width: 1700px) {
@@ -456,10 +494,6 @@ td small {
 }
 
 @media (max-width: 1450px) {
-  .stats-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .rooms-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -473,13 +507,21 @@ td small {
   }
 }
 
+@media (max-width: 1100px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1280px) {
+  .page-header h1 {
+    font-size: 30px;
+  }
+}
+
 @media (max-width: 900px) {
   .rooms-page {
-    padding: 14px;
-  }
-
-  .page-header h1 {
-    font-size: 34px;
+    padding: 16px;
   }
 
   .stats-grid,
@@ -490,6 +532,14 @@ td small {
 
   .filters-actions {
     flex-wrap: wrap;
+  }
+
+  .actions-left {
+    width: 100%;
+  }
+
+  .actions-left .btn {
+    flex: 1;
   }
 
   .btn {

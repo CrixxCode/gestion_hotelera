@@ -68,7 +68,10 @@
               [checked]="isAmenitySelected(amenity.id)"
               (change)="toggleAmenity(amenity.id, $any($event.target).checked)"
             />
-            <span>{{ amenity.name }}</span>
+            <span class="amenity-label">
+              <i [class]="amenity.icon || 'fa-solid fa-circle-check'"></i>
+              <span>{{ amenity.name }}</span>
+            </span>
           </label>
         </div>
       </section>

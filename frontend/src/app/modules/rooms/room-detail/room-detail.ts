@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
-import { RoomI, RoomPanelI, RoomStatus } from '../room-model';
+import { AmenityI, RoomI, RoomPanelI, RoomStatus } from '../room-model';
 import { RoomService } from '../../../services/room';
 
 type StatusTone = {
@@ -82,13 +82,19 @@ export class RoomDetail implements OnChanges {
     return `${bedCount} ${bedType}`;
   }
 
-  get amenities(): string[] {
+  get amenities(): Array<Pick<AmenityI, 'name' | 'icon'>> {
     if (this.panel?.amenities?.length) {
-      return this.panel.amenities.map((amenity) => amenity.name);
+      return this.panel.amenities.map((amenity) => ({
+        name: amenity.name,
+        icon: amenity.icon
+      }));
     }
 
     if (this.room?.amenities?.length) {
-      return this.room.amenities.map((amenity) => amenity.name);
+      return this.room.amenities.map((amenity) => ({
+        name: amenity.name,
+        icon: amenity.icon
+      }));
     }
 
     return [];

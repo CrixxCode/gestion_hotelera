@@ -162,9 +162,18 @@ textarea:focus {
   margin: 0;
 }
 
-.amenity-option span {
+.amenity-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   color: inherit;
+}
+
+.amenity-label i {
+  width: 16px;
+  text-align: center;
+  color: #1d4ed8;
 }
 
 small {

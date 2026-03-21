@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { catchError, forkJoin, of } from 'rxjs';
 import { RoomService } from '../../../services/room';
 import {
@@ -78,7 +79,10 @@ export class ListRooms implements OnInit {
     { value: 'FUERA_DE_SERVICIO', label: 'Fuera de servicio' }
   ];
 
-  constructor(private roomService: RoomService) {}
+  constructor(
+    private roomService: RoomService,
+    private router: Router
+  ) {}
 
   ngOnInit(): void {
     this.loadModuleData();
@@ -176,6 +180,10 @@ export class ListRooms implements OnInit {
 
   setViewMode(mode: ViewMode): void {
     this.viewMode = mode;
+  }
+
+  goToAmenities(): void {
+    void this.router.navigate(['/amenidades']);
   }
 
   openCreateDrawer(): void {

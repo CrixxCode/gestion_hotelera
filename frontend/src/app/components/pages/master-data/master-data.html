@@ -1,8 +1,8 @@
 <div class="wrap">
-  <div class="topbar">
-    <div>
-      <div class="h1">Master Data</div>
-      <div class="sub">Administra catalogos maestros de tipo y estado en un solo lugar.</div>
+  <header class="page-header">
+    <div class="header-copy">
+      <h1>Master Data</h1>
+      <p>Administra catalogos maestros de tipo y estado en un solo lugar.</p>
     </div>
 
     <div class="actions">
@@ -15,41 +15,45 @@
         Nuevo valor
       </button>
     </div>
-  </div>
+  </header>
 
-  <div class="stats">
-    <div class="stat-card">
-      <div class="stat-chip"><i class="fa-solid fa-database"></i></div>
-      <div class="stat-content">
-        <div class="stat-value">{{ totalItems }}</div>
-        <div class="stat-label">Registros totales</div>
+  <section class="stats-grid">
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Registros totales</span>
+        <span class="stat-icon blue"><i class="fa-solid fa-database"></i></span>
       </div>
-    </div>
+      <div class="stat-value">{{ totalItems }}</div>
+      <div class="stat-note">Catalogo maestro</div>
+    </article>
 
-    <div class="stat-card">
-      <div class="stat-chip ok"><i class="fa-solid fa-check"></i></div>
-      <div class="stat-content">
-        <div class="stat-value">{{ activeItems }}</div>
-        <div class="stat-label">Activos</div>
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Activos</span>
+        <span class="stat-icon green"><i class="fa-solid fa-check"></i></span>
       </div>
-    </div>
+      <div class="stat-value">{{ activeItems }}</div>
+      <div class="stat-note">Disponibles para uso</div>
+    </article>
 
-    <div class="stat-card">
-      <div class="stat-chip off"><i class="fa-solid fa-pause"></i></div>
-      <div class="stat-content">
-        <div class="stat-value">{{ inactiveItems }}</div>
-        <div class="stat-label">Inactivos</div>
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Inactivos</span>
+        <span class="stat-icon slate"><i class="fa-solid fa-pause"></i></span>
       </div>
-    </div>
+      <div class="stat-value">{{ inactiveItems }}</div>
+      <div class="stat-note">No visibles en operacion</div>
+    </article>
 
-    <div class="stat-card">
-      <div class="stat-chip group"><i class="fa-solid fa-layer-group"></i></div>
-      <div class="stat-content">
-        <div class="stat-value">{{ totalGroups }}</div>
-        <div class="stat-label">Grupos</div>
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Grupos</span>
+        <span class="stat-icon violet"><i class="fa-solid fa-layer-group"></i></span>
       </div>
-    </div>
-  </div>
+      <div class="stat-value">{{ totalGroups }}</div>
+      <div class="stat-note">Estructuras registradas</div>
+    </article>
+  </section>
 
   <div class="card filters">
     <label class="field search-field">
@@ -86,7 +90,7 @@
   </div>
 
   <div class="card table-card">
-    <div class="table-head">
+    <div class="table-toolbar">
       <div class="table-title">Listado maestro</div>
       <div class="table-meta">{{ filteredItems.length }} resultados</div>
     </div>
@@ -132,8 +136,12 @@
                 </td>
                 <td>
                   <div class="row-actions">
-                    <button class="btn xs ghost" (click)="openEdit(item)">Editar</button>
-                    <button class="btn xs danger" (click)="askDelete(item)">Eliminar</button>
+                    <button class="row-btn" title="Editar" (click)="openEdit(item)">
+                      <i class="fa-regular fa-pen-to-square"></i>
+                    </button>
+                    <button class="row-btn danger" title="Eliminar" (click)="askDelete(item)">
+                      <i class="fa-regular fa-trash-can"></i>
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -141,6 +149,10 @@
           </tbody>
         </table>
       </div>
+
+      <footer class="table-footer">
+        Mostrando {{ filteredItems.length }} de {{ totalItems }} registros
+      </footer>
     }
   </div>
 

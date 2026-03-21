@@ -9,6 +9,7 @@ import { Router } from '@angular/router';
   standalone: true,
   imports: [CommonModule, ChartModule, FormsModule],
   templateUrl: './dashboard.html',
+  styleUrl: './dashboard.css',
 })
 export class Dashboard {
   constructor(private router: Router) {
@@ -48,31 +49,36 @@ export class Dashboard {
       label: 'Ocupación',
       value: '78%',
       help: 'vs. capacidad total',
-      icon: 'fa-bed text-blue-600',
+      icon: 'fa-bed',
+      tone: 'blue',
     },
     {
       label: 'Ingresos hoy',
       value: '$4,250',
       help: '↑ 12% respecto a ayer',
-      icon: 'fa-dollar-sign text-emerald-600',
+      icon: 'fa-dollar-sign',
+      tone: 'green',
     },
     {
       label: 'Check-ins hoy',
       value: '12',
       help: 'Próximo en 35 min',
-      icon: 'fa-right-to-bracket text-emerald-500',
+      icon: 'fa-right-to-bracket',
+      tone: 'violet',
     },
     {
       label: 'Check-outs hoy',
       value: '8',
       help: '2 con retraso',
-      icon: 'fa-right-from-bracket text-rose-500',
+      icon: 'fa-right-from-bracket',
+      tone: 'slate',
     },
     {
       label: 'RevPAR',
       value: '$245.700',
       help: 'Ingreso por hab. disponible',
-      icon: 'fa-chart-line text-indigo-600',
+      icon: 'fa-chart-line',
+      tone: 'blue',
     },
   ];
 
@@ -251,3 +257,4 @@ export class Dashboard {
     { client: 'Oscar Fuentes', amount: '$155.000' },
   ];
 }
+

@@ -99,6 +99,26 @@ export class RoomService {
       .pipe(map((res) => this.unwrapArray<AmenityI>(res)));
   }
 
+  createAmenity(payload: Partial<AmenityI>): Observable<AmenityI> {
+    return this.http.post<AmenityI>(
+      this.amenitiesUrl,
+      this.normalizeAmenityPayload(payload),
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
+  updateAmenity(id: number, payload: Partial<AmenityI>): Observable<AmenityI> {
+    return this.http.patch<AmenityI>(
+      `${this.amenitiesUrl}${id}/`,
+      this.normalizeAmenityPayload(payload),
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
+  deleteAmenity(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.amenitiesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
   listRates(): Observable<RateI[]> {
     return this.http
       .get<RateI[] | { results?: RateI[] }>(this.ratesUrl, { withCredentials: true })
@@ -133,6 +153,31 @@ export class RoomService {
       normalized.room_type = Number(payload.room_type);
     } else {
       normalized.room_type = null;
+    }
+
+    return normalized;
+  }
+
+  private normalizeAmenityPayload(payload: Partial<AmenityI>): Partial<AmenityI> {
+    const normalized: Partial<AmenityI> = {};
+
+    if (typeof payload.name === 'string') {
+      normalized.name = payload.name.trim();
+    }
+    if (typeof payload.description === 'string') {
+      normalized.description = payload.description.trim();
+    }
+    if (payload.description === null) {
+      normalized.description = null;
+    }
+    if (typeof payload.icon === 'string') {
+      normalized.icon = payload.icon.trim();
+    }
+    if (payload.icon === null) {
+      normalized.icon = null;
+    }
+    if (typeof payload.is_active === 'boolean') {
+      normalized.is_active = payload.is_active;
     }
 
     return normalized;

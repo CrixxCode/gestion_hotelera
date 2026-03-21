@@ -39,7 +39,10 @@
         <section>
           <h3>Amenidades</h3>
           <div class="chips-wrap" *ngIf="amenities.length; else noAmenities">
-            <span *ngFor="let amenity of amenities">{{ amenity }}</span>
+            <span *ngFor="let amenity of amenities">
+              <i [class]="amenity.icon || 'fa-solid fa-circle-check'"></i>
+              {{ amenity.name }}
+            </span>
           </div>
           <ng-template #noAmenities>
             <p class="empty-text">Sin amenidades asignadas.</p>

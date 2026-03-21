@@ -12,6 +12,7 @@ import { ListClients } from './modules/clients/list-clients/list-clients';
 import { HotelSettings } from './components/pages/hotel-settings/hotel-settings';
 import { MasterDataComponent } from './components/pages/master-data/master-data';
 import { ListRooms } from './modules/rooms/list-rooms/list-rooms';
+import { AmenitiesPage } from './modules/rooms/amenities/amenities';
 
 export const routes: Routes = [
     {
@@ -42,7 +43,7 @@ export const routes: Routes = [
             { path: 'recursos', component: RecursosComponent },
             { path: 'clientes', component: ListClients },
             { path: 'habitaciones', component: ListRooms },
-            { path: 'rooms', component: ListRooms },
+            { path: 'amenidades', component: AmenitiesPage },
             { path: 'hotel-config', component: HotelSettings },
             { path: 'master-data', component: MasterDataComponent },
         ]

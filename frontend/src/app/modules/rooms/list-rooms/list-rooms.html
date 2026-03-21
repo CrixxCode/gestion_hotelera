@@ -1,44 +1,44 @@
 <div class="rooms-page">
   <header class="page-header">
     <h1>Check-In / Check-Out</h1>
-    <p>Gestiona el estado de las habitaciones y los movimientos de huéspedes.</p>
+    <p>Gestiona el estado de las habitaciones y los movimientos de huespedes.</p>
   </header>
 
   <section class="stats-grid">
     <article class="stat-card">
-      <span class="stat-icon green">{{ availableCount }}</span>
-      <div>
-        <strong>{{ availableCount }}</strong>
-        <p>Disponibles</p>
-        <small>de {{ totalRooms }} hab.</small>
+      <div class="stat-head">
+        <span>Disponibles</span>
+        <span class="stat-icon green"><i class="fa-solid fa-check"></i></span>
       </div>
+      <div class="stat-value">{{ availableCount }}</div>
+      <div class="stat-note">de {{ totalRooms }} hab.</div>
     </article>
 
     <article class="stat-card">
-      <span class="stat-icon blue">{{ occupiedCount }}</span>
-      <div>
-        <strong>{{ occupiedCount }}</strong>
-        <p>Ocupadas</p>
-        <small>de {{ totalRooms }} hab.</small>
+      <div class="stat-head">
+        <span>Ocupadas</span>
+        <span class="stat-icon blue"><i class="fa-solid fa-user-group"></i></span>
       </div>
+      <div class="stat-value">{{ occupiedCount }}</div>
+      <div class="stat-note">de {{ totalRooms }} hab.</div>
     </article>
 
     <article class="stat-card">
-      <span class="stat-icon yellow">{{ leavingTodayCount }}</span>
-      <div>
-        <strong>{{ leavingTodayCount }}</strong>
-        <p>Por salir hoy</p>
-        <small>de {{ totalRooms }} hab.</small>
+      <div class="stat-head">
+        <span>Por salir hoy</span>
+        <span class="stat-icon yellow"><i class="fa-solid fa-right-from-bracket"></i></span>
       </div>
+      <div class="stat-value">{{ leavingTodayCount }}</div>
+      <div class="stat-note">de {{ totalRooms }} hab.</div>
     </article>
 
     <article class="stat-card">
-      <span class="stat-icon red">{{ maintenanceCount }}</span>
-      <div>
-        <strong>{{ maintenanceCount }}</strong>
-        <p>Mantenimiento</p>
-        <small>de {{ totalRooms }} hab.</small>
+      <div class="stat-head">
+        <span>Mantenimiento</span>
+        <span class="stat-icon red"><i class="fa-solid fa-screwdriver-wrench"></i></span>
       </div>
+      <div class="stat-value">{{ maintenanceCount }}</div>
+      <div class="stat-note">de {{ totalRooms }} hab.</div>
     </article>
   </section>
 
@@ -68,14 +68,16 @@
             <circle cx="11" cy="11" r="7"></circle>
             <path d="m20 20-3.5-3.5"></path>
           </svg>
-          <input type="text" [(ngModel)]="search" (input)="applyFilters()" placeholder="Número o descripción..." />
+          <input type="text" [(ngModel)]="search" (input)="applyFilters()" placeholder="Numero o descripcion..." />
         </div>
       </label>
     </div>
 
     <div class="filters-actions">
-      <button type="button" class="btn btn-light" (click)="loadModuleData()">Actualizar</button>
-      <button type="button" class="btn btn-dark" (click)="openCreateDrawer()">+ Nueva habitación</button>
+      <div class="actions-left">
+        <button type="button" class="btn btn-light" (click)="loadModuleData()">Actualizar</button>
+      </div>
+
       <div class="view-toggle">
         <button type="button" [class.active]="viewMode === 'cards'" (click)="setViewMode('cards')" title="Vista tarjetas">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -126,7 +128,7 @@
         </span>
       </header>
 
-      <p class="room-type">{{ getRoomTypeName(room) }} · {{ getRoomTypeBeds(room) }}</p>
+      <p class="room-type">{{ getRoomTypeName(room) }} - {{ getRoomTypeBeds(room) }}</p>
       <p class="room-price">{{ getPriceLabel(room) }}<small>/noche</small></p>
 
       <p class="maintenance" *ngIf="room.status === 'MANTENIMIENTO'">{{ getMaintenanceText(room) }}</p>
@@ -149,57 +151,68 @@
     </article>
   </section>
 
-  <section class="table-wrap" *ngIf="!loading && !errorMessage && filteredRooms.length > 0 && viewMode === 'table'">
-    <table>
-      <thead>
-        <tr>
-          <th>Habitación</th>
-          <th>Tipo</th>
-          <th>Estado</th>
-          <th>Piso</th>
-          <th>Notas</th>
-          <th>Precio</th>
-          <th>Acción</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr *ngFor="let room of filteredRooms; trackBy: trackByRoom">
-          <td>
-            <p class="table-main">Hab. {{ room.number }}</p>
-            <small>{{ room.floor_name || 'Piso no definido' }}</small>
-          </td>
-          <td>
-            <p class="table-main">{{ getRoomTypeName(room) }}</p>
-            <small>{{ getRoomTypeBeds(room) }}</small>
-          </td>
-          <td>
-            <span class="status-chip" [ngStyle]="{ 'background-color': getStatusStyle(room).bg, color: getStatusStyle(room).color }">
-              <span class="status-dot" [ngStyle]="{ 'background-color': getStatusStyle(room).dot }"></span>
-              {{ getStatusLabel(room) }}
-            </span>
-          </td>
-          <td>{{ room.floor_name || '--' }}</td>
-          <td class="notes-cell">{{ room.notes || '—' }}</td>
-          <td>{{ getPriceLabel(room) }}/noche</td>
-          <td>
-            <div class="table-actions">
-              <button
-                type="button"
-                class="action-btn"
-                [disabled]="!canPrimaryAction(room)"
-                [ngStyle]="{
-                  'background-color': canPrimaryAction(room) ? getStatusStyle(room).buttonBg : '#f2f4f8',
-                  color: canPrimaryAction(room) ? getStatusStyle(room).buttonColor : '#9aa4b2'
-                }"
-                (click)="onPrimaryAction(room)">
-                {{ getPrimaryActionLabel(room) }}
-              </button>
-              <button type="button" class="icon-btn" (click)="openUpdateDrawer(room)">Editar</button>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+  <section class="table-card" *ngIf="!loading && !errorMessage && filteredRooms.length > 0 && viewMode === 'table'">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Habitacion</th>
+            <th>Tipo</th>
+            <th>Estado</th>
+            <th>Piso</th>
+            <th>Notas</th>
+            <th>Precio</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let room of filteredRooms; trackBy: trackByRoom">
+            <td>
+              <p class="table-main">Hab. {{ room.number }}</p>
+              <small>{{ room.floor_name || 'Piso no definido' }}</small>
+            </td>
+            <td>
+              <p class="table-main">{{ getRoomTypeName(room) }}</p>
+              <small>{{ getRoomTypeBeds(room) }}</small>
+            </td>
+            <td>
+              <span class="status-chip" [ngStyle]="{ 'background-color': getStatusStyle(room).bg, color: getStatusStyle(room).color }">
+                <span class="status-dot" [ngStyle]="{ 'background-color': getStatusStyle(room).dot }"></span>
+                {{ getStatusLabel(room) }}
+              </span>
+            </td>
+            <td>{{ room.floor_name || '--' }}</td>
+            <td class="notes-cell">{{ room.notes || '--' }}</td>
+            <td>{{ getPriceLabel(room) }}/noche</td>
+            <td>
+              <div class="row-actions">
+                <button
+                  type="button"
+                  class="action-btn"
+                  [disabled]="!canPrimaryAction(room)"
+                  [ngStyle]="{
+                    'background-color': canPrimaryAction(room) ? getStatusStyle(room).buttonBg : '#f2f4f8',
+                    color: canPrimaryAction(room) ? getStatusStyle(room).buttonColor : '#9aa4b2'
+                  }"
+                  (click)="onPrimaryAction(room)">
+                  {{ getPrimaryActionLabel(room) }}
+                </button>
+                <button type="button" class="row-btn" title="Ver detalle" (click)="openDetail(room)">
+                  <i class="fa-regular fa-eye"></i>
+                </button>
+                <button type="button" class="row-btn" title="Editar" (click)="openUpdateDrawer(room)">
+                  <i class="fa-regular fa-pen-to-square"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <footer class="table-footer">
+      Mostrando {{ filteredRooms.length }} habitaciones
+    </footer>
   </section>
 
   <app-create-room
@@ -229,3 +242,4 @@
     (refreshed)="refreshRooms()">
   </app-room-detail>
 </div>
+

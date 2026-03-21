@@ -20,11 +20,11 @@
 
 .wrap {
   min-height: 100%;
-  padding: 22px;
+  padding: 24px;
   background: var(--bg);
 }
 
-.topbar {
+.page-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -32,17 +32,18 @@
   margin-bottom: 14px;
 }
 
-.h1 {
-  font-size: 36px;
-  line-height: 1.05;
-  font-weight: 800;
+.page-header h1 {
+  margin: 0;
+  font-size: 40px;
+  line-height: 1.1;
+  font-weight: 700;
   letter-spacing: -0.02em;
 }
 
-.sub {
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 14px;
+.page-header p {
+  margin: 8px 0 0;
+  color: #8a94a6;
+  font-size: 15px;
 }
 
 .actions {
@@ -114,68 +115,70 @@
 }
 
 
-.stats {
+.stats-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 14px;
 }
 
 .stat-card {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 14px;
   box-shadow: var(--shadow-soft);
-  padding: 14px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  padding: 14px 16px;
 }
 
-.stat-chip {
+.stat-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #4f5f79;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.stat-icon {
   width: 42px;
   height: 42px;
   border-radius: 12px;
   display: grid;
   place-items: center;
-  color: #1d4ed8;
-  border: 1px solid #bfdbfe;
-  background: #eff6ff;
+  font-size: 17px;
 }
 
-.stat-chip.ok {
-  color: #047857;
-  border-color: #9fdbc6;
-  background: var(--ok-soft);
+.stat-icon.blue {
+  background: #e8f0ff;
+  color: #2563eb;
 }
 
-.stat-chip.off {
-  color: #9a6400;
-  border-color: #f7d79b;
-  background: var(--warn-soft);
+.stat-icon.green {
+  background: #e6f8ef;
+  color: #059669;
 }
 
-.stat-chip.group {
-  color: #334155;
-  border-color: #dbe3ef;
-  background: #f8fbff;
+.stat-icon.slate {
+  background: #eef2f7;
+  color: #64748b;
 }
 
-.stat-content {
-  min-width: 0;
+.stat-icon.violet {
+  background: #f3ecff;
+  color: #9333ea;
 }
 
 .stat-value {
-  font-size: 26px;
+  margin-top: 8px;
+  font-size: 30px;
+  font-weight: 700;
   line-height: 1;
-  font-weight: 800;
-  letter-spacing: -0.02em;
 }
 
-.stat-label {
-  margin-top: 6px;
-  font-size: 13px;
-  color: var(--muted);
+.stat-note {
+  margin-top: 8px;
+  color: #7b8ea8;
+  font-size: 14px;
 }
 
 .filters {
@@ -266,11 +269,13 @@
 }
 
 .table-card {
+  margin-top: 12px;
   min-height: 300px;
+  border-radius: 14px;
 }
 
-.table-head {
-  padding: 14px;
+.table-toolbar {
+  padding: 12px;
   border-bottom: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
@@ -302,11 +307,12 @@ table {
 thead th {
   text-align: left;
   font-size: 12px;
-  color: #64748b;
-  letter-spacing: 0.04em;
+  color: #5f708c;
+  letter-spacing: 0.05em;
+  font-weight: 700;
   text-transform: uppercase;
-  padding: 12px 14px;
-  background: #f8fbff;
+  padding: 12px 10px;
+  background: #fbfcff;
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
@@ -314,15 +320,15 @@ thead th {
 }
 
 tbody td {
-  padding: 12px 14px;
+  padding: 10px;
   border-bottom: 1px solid #edf1f7;
-  vertical-align: top;
+  vertical-align: middle;
   font-size: 14px;
   color: #334155;
 }
 
 tbody tr:hover {
-  background: #fbfdff;
+  background: #f8fbff;
 }
 
 .cell-main {
@@ -373,8 +379,38 @@ tbody tr:hover {
 
 .row-actions {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.row-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #64748b;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.row-btn:hover {
+  background: #f8fbff;
+}
+
+.row-btn.danger {
+  border-color: #fecaca;
+  background: #fff5f5;
+  color: #dc2626;
+}
+
+.table-footer {
+  border-top: 1px solid var(--line);
+  padding: 12px;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .state {
@@ -598,8 +634,14 @@ tbody tr:hover {
   background: var(--danger-soft);
 }
 
+@media (max-width: 1280px) {
+  .page-header h1 {
+    font-size: 30px;
+  }
+}
+
 @media (max-width: 1200px) {
-  .stats {
+  .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -610,10 +652,10 @@ tbody tr:hover {
 
 @media (max-width: 900px) {
   .wrap {
-    padding: 14px;
+    padding: 16px;
   }
 
-  .topbar {
+  .page-header {
     flex-direction: column;
   }
 
@@ -625,11 +667,7 @@ tbody tr:hover {
     flex: 1;
   }
 
-  .h1 {
-    font-size: 30px;
-  }
-
-  .stats {
+  .stats-grid {
     grid-template-columns: 1fr;
   }
 

@@ -23,27 +23,27 @@
 
   <section class="stats-grid">
     <article class="stat-card">
-      <div class="stat-top">
+      <div class="stat-head">
         <span>Total roles</span>
-        <i class="fa-solid fa-shield-halved"></i>
+        <span class="stat-icon blue"><i class="fa-solid fa-shield-halved"></i></span>
       </div>
       <div class="stat-value">{{ totalRoles() }}</div>
       <div class="stat-note">Configurados</div>
     </article>
 
     <article class="stat-card">
-      <div class="stat-top">
+      <div class="stat-head">
         <span>Roles activos</span>
-        <i class="fa-solid fa-check"></i>
+        <span class="stat-icon green"><i class="fa-solid fa-check"></i></span>
       </div>
       <div class="stat-value is-ok">{{ activeRoles() }}</div>
       <div class="stat-note">Con permisos asignados</div>
     </article>
 
     <article class="stat-card">
-      <div class="stat-top">
+      <div class="stat-head">
         <span>Usuarios asignados</span>
-        <i class="fa-solid fa-users"></i>
+        <span class="stat-icon slate"><i class="fa-solid fa-users"></i></span>
       </div>
       <div class="stat-value is-blue">
         @if (loadingUsersMeta) {
@@ -56,9 +56,9 @@
     </article>
 
     <article class="stat-card">
-      <div class="stat-top">
+      <div class="stat-head">
         <span>Permisos totales</span>
-        <i class="fa-solid fa-key"></i>
+        <span class="stat-icon violet"><i class="fa-solid fa-key"></i></span>
       </div>
       <div class="stat-value is-amber">{{ totalPermissionsAvailable() }}</div>
       <div class="stat-note">Disponibles en catalogo</div>
@@ -77,13 +77,11 @@
         }
       </div>
 
-      <div class="toolbar-right">
-        <select class="status-select" [(ngModel)]="statusFilter">
-          <option value="all">Todos</option>
-          <option value="with_permissions">Con permisos</option>
-          <option value="without_permissions">Sin permisos</option>
-        </select>
-      </div>
+      <select class="tool-select" [(ngModel)]="statusFilter">
+        <option value="all">Todos</option>
+        <option value="with_permissions">Con permisos</option>
+        <option value="without_permissions">Sin permisos</option>
+      </select>
     </div>
 
     <div class="table-wrap">

@@ -71,7 +71,7 @@ export class Aside implements OnInit, OnDestroy {
     const securityLabel = 'seguridad';
     const securityRoutes = new Set(['/usuarios', '/roles', '/recursos']);
 
-    const normalized = [...menu];
+    const normalized = this.normalizeMenuRoutes(menu);
     const hasSecurityGroup = normalized.some(
       (item) => (item.label || '').trim().toLowerCase() === securityLabel
     );
@@ -131,6 +131,20 @@ export class Aside implements OnInit, OnDestroy {
       securityGroup,
       ...filteredTopLevel.slice(insertAt)
     ];
+  }
+
+  private normalizeMenuRoutes(items: MenuItem[]): MenuItem[] {
+    return items.map((item) => ({
+      ...item,
+      route: this.normalizeRoute(item.route),
+      children: Array.isArray(item.children) ? this.normalizeMenuRoutes(item.children) : item.children
+    }));
+  }
+
+  private normalizeRoute(route?: string): string {
+    const safe = (route || '').trim();
+    if (!safe) return '';
+    return safe.startsWith('/') ? safe : `/${safe}`;
   }
 
   private startClock(): void {
