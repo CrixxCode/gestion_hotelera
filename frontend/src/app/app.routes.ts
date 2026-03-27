@@ -44,6 +44,7 @@ export const routes: Routes = [
             { path: 'clientes', component: ListClients },
             { path: 'habitaciones', component: ListRooms },
             { path: 'amenidades', component: AmenitiesPage },
+            { path: 'amenities', component: AmenitiesPage },
             { path: 'hotel-config', component: HotelSettings },
             { path: 'master-data', component: MasterDataComponent },
         ]

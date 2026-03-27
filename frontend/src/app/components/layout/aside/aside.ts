@@ -144,7 +144,9 @@ export class Aside implements OnInit, OnDestroy {
   private normalizeRoute(route?: string): string {
     const safe = (route || '').trim();
     if (!safe) return '';
-    return safe.startsWith('/') ? safe : `/${safe}`;
+    const withPrefix = safe.startsWith('/') ? safe : `/${safe}`;
+    const withoutTrailing = withPrefix.replace(/\/+$/, '');
+    return withoutTrailing || '/';
   }
 
   private startClock(): void {

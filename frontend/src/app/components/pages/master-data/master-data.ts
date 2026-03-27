@@ -29,6 +29,8 @@ export class MasterDataComponent implements OnInit {
   showDrawer = false;
   isEditing = false;
   editingId: number | null = null;
+  showGroupQuickCreate = false;
+  newGroupCode = '';
 
   form: {
     group: string;
@@ -129,10 +131,37 @@ export class MasterDataComponent implements OnInit {
     this.form = this.emptyForm();
     if (this.selectedGroup !== 'ALL') {
       this.form.group = this.selectedGroup;
-    } else if (this.groups.length) {
-      this.form.group = this.groups[0].code;
     }
     this.showDrawer = true;
+  }
+
+  openCreateGroup(): void {
+    this.showDrawer = false;
+    this.newGroupCode = '';
+    this.showGroupQuickCreate = true;
+  }
+
+  closeCreateGroup(): void {
+    this.showGroupQuickCreate = false;
+    this.newGroupCode = '';
+  }
+
+  startCreateWithNewGroup(): void {
+    const normalizedGroup = this.normalizeGroupCode(this.newGroupCode);
+    if (!normalizedGroup) {
+      this.toast('El codigo de grupo es obligatorio.', 'danger');
+      return;
+    }
+
+    if (!/^[A-Z0-9_]+$/.test(normalizedGroup)) {
+      this.toast('Usa solo letras, numeros y guion bajo para el grupo.', 'danger');
+      return;
+    }
+
+    this.closeCreateGroup();
+    this.openCreate();
+    this.form.group = normalizedGroup;
+    this.toast(`Grupo ${normalizedGroup} listo. Crea su primer valor.`, 'info');
   }
 
   openEdit(item: MasterDataI): void {
@@ -193,7 +222,7 @@ export class MasterDataComponent implements OnInit {
           this.saving = false;
           this.showDrawer = false;
           this.toast('Valor de catalogo actualizado.', 'success');
-          this.loadMasterData();
+          this.loadInitialData();
         },
         error: (error) => {
           this.saving = false;
@@ -208,7 +237,7 @@ export class MasterDataComponent implements OnInit {
         this.saving = false;
         this.showDrawer = false;
         this.toast('Valor de catalogo creado.', 'success');
-        this.loadMasterData();
+        this.loadInitialData();
       },
       error: (error) => {
         this.saving = false;
@@ -231,7 +260,7 @@ export class MasterDataComponent implements OnInit {
         this.showDeleteConfirm = false;
         this.deleteTarget = null;
         this.toast('Valor eliminado.', 'success');
-        this.loadMasterData();
+        this.loadInitialData();
       },
       error: (error) => {
         this.showDeleteConfirm = false;
@@ -275,6 +304,13 @@ export class MasterDataComponent implements OnInit {
       throw new Error('Metadata invalida');
     }
     return parsed as Record<string, unknown>;
+  }
+
+  private normalizeGroupCode(value: string): string {
+    return String(value || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, '_');
   }
 
   private toast(message: string, kind: ToastKind = 'info'): void {

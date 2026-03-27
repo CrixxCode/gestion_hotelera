@@ -18,6 +18,44 @@
     </div>
   </div>
 
+  <section class="stats-grid">
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Total roles</span>
+        <span class="stat-icon blue"><i class="fa-solid fa-shield-halved"></i></span>
+      </div>
+      <div class="stat-value">{{ totalRoles }}</div>
+      <div class="stat-note">Roles registrados</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Con usuarios</span>
+        <span class="stat-icon green"><i class="fa-regular fa-circle-check"></i></span>
+      </div>
+      <div class="stat-value">{{ rolesWithUsersCount }}</div>
+      <div class="stat-note">Roles con al menos una asignacion</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Asignados</span>
+        <span class="stat-icon amber"><i class="fa-solid fa-users"></i></span>
+      </div>
+      <div class="stat-value">{{ selectedRoleAssignedCount }}</div>
+      <div class="stat-note">Al rol {{ selectedRole?.name || '-' }}</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Disponibles</span>
+        <span class="stat-icon violet"><i class="fa-regular fa-circle-user"></i></span>
+      </div>
+      <div class="stat-value">{{ selectedRoleAvailableCount }}</div>
+      <div class="stat-note">Sin asignar al rol</div>
+    </article>
+  </section>
+
   <div class="layout">
     <!-- Roles list -->
     <aside class="card left">

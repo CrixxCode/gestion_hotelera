@@ -1,12 +1,12 @@
-﻿<div class="wrap">
-  <div class="topbar">
-    <div>
-      <div class="h1">Recursos</div>
-      <div class="sub">Gestiona recursos y asígnalos a roles.</div>
+<div class="wrap">
+  <header class="page-header">
+    <div class="header-copy">
+      <h1>Recursos</h1>
+      <p>Gestiona recursos y asignalos a roles.</p>
     </div>
 
     <div class="actions">
-      <button class="btn ghost" (click)="loadResources(qResources)">
+      <button class="btn ghost" (click)="refreshView()">
         <i class="fa-solid fa-rotate-right"></i>
         Actualizar
       </button>
@@ -15,10 +15,47 @@
         Nuevo recurso
       </button>
     </div>
-  </div>
+  </header>
 
-  <!-- Roles arriba -->
-  <div class="rolesbar card">
+  <section class="stats-grid">
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Total recursos</span>
+        <span class="stat-icon blue"><i class="fa-solid fa-cube"></i></span>
+      </div>
+      <div class="stat-value">{{ totalResources }}</div>
+      <div class="stat-note">Recursos registrados</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Asignados</span>
+        <span class="stat-icon green"><i class="fa-regular fa-circle-check"></i></span>
+      </div>
+      <div class="stat-value">{{ totalAssigned }}</div>
+      <div class="stat-note">Al rol {{ selectedRole?.name || '-' }}</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Disponibles</span>
+        <span class="stat-icon amber"><i class="fa-regular fa-circle-xmark"></i></span>
+      </div>
+      <div class="stat-value">{{ totalAvailable }}</div>
+      <div class="stat-note">Sin asignar al rol</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Roles</span>
+        <span class="stat-icon violet"><i class="fa-solid fa-layer-group"></i></span>
+      </div>
+      <div class="stat-value">{{ totalRoles }}</div>
+      <div class="stat-note">Roles configurados</div>
+    </article>
+  </section>
+
+  <section class="rolesbar card">
     <div class="search">
       <i class="fa-solid fa-magnifying-glass"></i>
       <input [(ngModel)]="rolesQuery" placeholder="Buscar rol..." />
@@ -29,31 +66,28 @@
 
     <div class="chips">
       @for (r of filteredRoles(); track r.id) {
-        <button class="chip" [class.active]="selectedRole?.id===r.id" (click)="selectRole(r)">
+        <button class="chip" [class.active]="selectedRole?.id === r.id" (click)="selectRole(r)">
           <span class="c-name">{{ r.name }}</span>
           <span class="c-slug">{{ r.slug }}</span>
         </button>
       }
-      @if (!loadingRoles && filteredRoles().length===0) {
+      @if (!loadingRoles && filteredRoles().length === 0) {
         <div class="muted">No hay roles para mostrar.</div>
       }
     </div>
-  </div>
+  </section>
 
-  <!-- Recursos: transferencia -->
-  <div class="main card">
+  <section class="main card">
     <div class="main-head">
       <div class="mh">
-        <div class="mh-title">Asignación de recursos</div>
-        <div class="mh-sub muted">
-          Rol seleccionado: <b>{{ selectedRole?.name || '—' }}</b>
-        </div>
+        <div class="mh-title">Asignacion de recursos</div>
+        <div class="mh-sub muted">Rol seleccionado: <b>{{ selectedRole?.name || '-' }}</b></div>
       </div>
 
       <div class="mh-search">
         <div class="search mini">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <input [(ngModel)]="qResources" (input)="onResourcesSearchInput()" placeholder="Buscar recursos (key/name)..." />
+          <input [(ngModel)]="qResources" (input)="onResourcesSearchInput()" placeholder="Buscar recursos (key/nombre)" />
           @if (qResources) {
             <button class="icon-btn" (click)="qResources=''; loadResources('')"><i class="fa-solid fa-xmark"></i></button>
           }
@@ -68,14 +102,12 @@
           <div class="e-sub">Debes seleccionar un rol para asignar recursos.</div>
         </div>
       } @else {
-
         <div class="transfer">
-          <!-- Disponibles -->
           <div class="panel">
             <div class="panel-head">
               <div>
                 <div class="p-title">Disponibles</div>
-                <div class="muted">Total: {{ availableResources().length }} | Seleccionados: {{ selectedAvailableIds.size }}</div>
+                <div class="muted">Total: {{ totalAvailable }} | Seleccionados: {{ selectedAvailableIds.size }}</div>
               </div>
               <button class="btn xs ghost" (click)="openCreate()">Crear recurso</button>
             </div>
@@ -83,6 +115,9 @@
             <div class="list">
               @for (res of availableResources(); track res.id) {
                 <div class="row" [class.selected]="selectedAvailableIds.has(res.id)" (click)="toggleAvailable(res.id)">
+                  <div class="resource-icon">
+                    <i [class]="resolveResourceIcon(res)"></i>
+                  </div>
                   <div class="row-main">
                     <div class="row-top">
                       <span class="mono">{{ res.key }}</span>
@@ -90,7 +125,8 @@
                     </div>
                     <div class="row-sub">
                       <span>{{ res.name }}</span>
-                      @if (res.link) { <span class="dot">•</span><span class="muted">{{ res.link }}</span> }
+                      @if (getParentName(res)) { <span class="dot">|</span><span class="muted">Padre: {{ getParentName(res) }}</span> }
+                      @if (res.link) { <span class="dot">|</span><span class="muted">{{ res.link }}</span> }
                     </div>
                   </div>
                   <i class="fa-solid fa-check row-tick" aria-hidden="true"></i>
@@ -106,18 +142,18 @@
             </div>
           </div>
 
-          <!-- Controles -->
           <div class="ctrl">
-            <button class="ctrl-btn" [disabled]="selectedAvailableIds.size===0" (click)="assignSelected()">
-              <i class="fa-solid fa-arrow-right"></i><span>Asignar</span>
+            <button class="ctrl-btn" [disabled]="selectedAvailableIds.size === 0" (click)="assignSelected()">
+              <i class="fa-solid fa-arrow-right"></i>
+              <span>Asignar</span>
             </button>
-            <button class="ctrl-btn" [disabled]="selectedAssignedIds.size===0" (click)="removeSelected()">
-              <i class="fa-solid fa-arrow-left"></i><span>Quitar</span>
+            <button class="ctrl-btn" [disabled]="selectedAssignedIds.size === 0" (click)="removeSelected()">
+              <i class="fa-solid fa-arrow-left"></i>
+              <span>Quitar</span>
             </button>
-            <div class="hint muted">Selecciona recursos y muévelos.</div>
+            <div class="hint muted">Selecciona recursos y muevelos.</div>
           </div>
 
-          <!-- Asignados -->
           <div class="panel">
             <div class="panel-head">
               <div>
@@ -132,6 +168,9 @@
               } @else {
                 @for (res of assigned; track res.id) {
                   <div class="row" [class.selected]="selectedAssignedIds.has(res.id)" (click)="toggleAssigned(res.id)">
+                    <div class="resource-icon">
+                      <i [class]="resolveResourceIcon(res)"></i>
+                    </div>
                     <div class="row-main">
                       <div class="row-top">
                         <span class="mono">{{ res.key }}</span>
@@ -139,7 +178,8 @@
                       </div>
                       <div class="row-sub">
                         <span>{{ res.name }}</span>
-                        @if (res.link) { <span class="dot">•</span><span class="muted">{{ res.link }}</span> }
+                        @if (getParentName(res)) { <span class="dot">|</span><span class="muted">Padre: {{ getParentName(res) }}</span> }
+                        @if (res.link) { <span class="dot">|</span><span class="muted">{{ res.link }}</span> }
                       </div>
 
                       <div class="row-actions">
@@ -154,26 +194,24 @@
                 @if (assigned.length === 0) {
                   <div class="empty small">
                     <div class="e-title">Sin asignaciones</div>
-                    <div class="e-sub">Este rol aún no tiene recursos.</div>
+                    <div class="e-sub">Este rol aun no tiene recursos.</div>
                   </div>
                 }
               }
             </div>
           </div>
         </div>
-
       }
     </div>
-  </div>
+  </section>
 
-  <!-- Drawer CRUD -->
   @if (showDrawer) {
     <div class="overlay" (click)="showDrawer=false"></div>
     <div class="drawer" (click)="$event.stopPropagation()">
       <div class="drawer-head">
         <div>
           <div class="drawer-title">{{ isEditing ? 'Editar recurso' : 'Nuevo recurso' }}</div>
-          <div class="muted">Key (único) + datos del recurso y configuración de menú.</div>
+          <div class="muted">Key (unico) + datos del recurso y configuracion de menu.</div>
         </div>
         <button class="icon-btn" (click)="showDrawer=false"><i class="fa-solid fa-xmark"></i></button>
       </div>
@@ -190,7 +228,7 @@
         </label>
 
         <label class="field">
-          <span>Descripción</span>
+          <span>Descripcion</span>
           <textarea class="input" rows="3" [(ngModel)]="form.description"></textarea>
         </label>
 
@@ -220,7 +258,7 @@
 
         <div class="grid2">
           <label class="field">
-            <span>Padre (menú)</span>
+            <span>Padre (menu)</span>
             <select class="input" [(ngModel)]="form.parent">
               <option [ngValue]="null">Sin padre</option>
               @for (p of parentOptions(); track p.id) {
@@ -230,7 +268,7 @@
           </label>
 
           <label class="field switch">
-            <span>Mostrar en menú</span>
+            <span>Mostrar en menu</span>
             <input type="checkbox" [(ngModel)]="form.is_menu" />
           </label>
         </div>
@@ -243,12 +281,11 @@
     </div>
   }
 
-  <!-- Confirm delete -->
   @if (showDeleteConfirm) {
     <div class="overlay" (click)="showDeleteConfirm=false"></div>
     <div class="confirm" (click)="$event.stopPropagation()">
       <div class="c-title">Eliminar recurso</div>
-      <div class="c-sub">Se eliminará <b>{{ deleteTarget?.key }}</b>. Esta acción no se puede deshacer.</div>
+      <div class="c-sub">Se eliminara <b>{{ deleteTarget?.key }}</b>. Esta accion no se puede deshacer.</div>
       <div class="c-actions">
         <button class="btn ghost" (click)="showDeleteConfirm=false">Cancelar</button>
         <button class="btn danger" (click)="confirmDelete()">Eliminar</button>
@@ -256,7 +293,6 @@
     </div>
   }
 
-  <!-- Toast -->
   <div class="toast" [class.show]="toastVisible" [class.ok]="toastKind==='success'" [class.bad]="toastKind==='danger'">
     {{ toastText }}
   </div>

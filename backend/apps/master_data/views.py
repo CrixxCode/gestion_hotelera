@@ -46,7 +46,20 @@ class MasterDataViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="groups")
     def groups(self, request):
-        groups = [{"code": code, "label": label} for code, label in MasterData.Group.choices]
+        labels_by_code = {code: label for code, label in MasterData.Group.choices}
+        existing_codes = set(
+            MasterData.objects.values_list("group", flat=True)
+            .order_by("group")
+            .distinct()
+        )
+        all_codes = sorted(set(labels_by_code.keys()) | existing_codes)
+        groups = [
+            {
+                "code": code,
+                "label": labels_by_code.get(code) or self._humanize_group(code),
+            }
+            for code in all_codes
+        ]
         return Response(groups, status=status.HTTP_200_OK)
 
     def destroy(self, request, *args, **kwargs):
@@ -62,3 +75,7 @@ class MasterDataViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+    @staticmethod
+    def _humanize_group(code: str) -> str:
+        return str(code or "").replace("_", " ").strip().title()

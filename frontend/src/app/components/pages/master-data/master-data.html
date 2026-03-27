@@ -10,6 +10,10 @@
         <i class="fa-solid fa-rotate-right"></i>
         Actualizar
       </button>
+      <button class="btn ghost" (click)="openCreateGroup()">
+        <i class="fa-solid fa-layer-group"></i>
+        Nuevo grupo
+      </button>
       <button class="btn primary" (click)="openCreate()">
         <i class="fa-solid fa-plus"></i>
         Nuevo valor
@@ -156,6 +160,28 @@
     }
   </div>
 
+  @if (showGroupQuickCreate) {
+    <div class="overlay" (click)="closeCreateGroup()"></div>
+    <div class="confirm group-create" (click)="$event.stopPropagation()">
+      <div class="c-title">Nuevo grupo</div>
+      <div class="c-sub">
+        Define el codigo del grupo. Luego se abrira el formulario de <b>Nuevo valor</b> con ese grupo preseleccionado.
+      </div>
+
+      <div class="c-body">
+        <label class="field">
+          <span>Codigo de grupo</span>
+          <input class="input mono" [(ngModel)]="newGroupCode" placeholder="Ej: PAYMENT_METHOD" />
+        </label>
+      </div>
+
+      <div class="c-actions">
+        <button class="btn ghost" (click)="closeCreateGroup()">Cancelar</button>
+        <button class="btn primary" (click)="startCreateWithNewGroup()">Continuar</button>
+      </div>
+    </div>
+  }
+
   @if (showDrawer) {
     <div class="overlay" (click)="closeDrawer()"></div>
     <div class="drawer" (click)="$event.stopPropagation()">
@@ -173,12 +199,18 @@
       <div class="drawer-body">
         <label class="field">
           <span>Grupo</span>
-          <select class="input" [(ngModel)]="form.group">
-            <option value="" disabled>Selecciona grupo</option>
+          <input
+            class="input"
+            [(ngModel)]="form.group"
+            list="master-data-group-options"
+            placeholder="Ej: ROOM_STATUS"
+          />
+          <datalist id="master-data-group-options">
             @for (group of groups; track group.code) {
-              <option [value]="group.code">{{ group.label }} ({{ group.code }})</option>
+              <option [value]="group.code">{{ group.label }}</option>
             }
-          </select>
+          </datalist>
+          <small class="muted">Selecciona un grupo existente o escribe uno nuevo.</small>
         </label>
 
         <div class="grid2">

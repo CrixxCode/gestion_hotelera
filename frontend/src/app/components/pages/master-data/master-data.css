@@ -595,6 +595,10 @@ tbody tr:hover {
   font-size: 14px;
 }
 
+.c-body {
+  margin-top: 12px;
+}
+
 .c-actions {
   margin-top: 16px;
   display: flex;

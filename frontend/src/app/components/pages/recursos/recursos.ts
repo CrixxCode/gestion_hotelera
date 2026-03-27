@@ -24,6 +24,7 @@ export class RecursosComponent implements OnInit {
   qResources = '';
   resources: Resource[] = [];
   loadingResources = false;
+  private resourceCatalog = new Map<string, Resource>();
 
   // Rol ↔ Recursos
   assigned: Resource[] = [];
@@ -56,6 +57,22 @@ export class RecursosComponent implements OnInit {
   ngOnInit(): void {
     this.loadRoles();
     this.loadResources('');
+  }
+
+  get totalResources(): number {
+    return this.resourceCatalog.size;
+  }
+
+  get totalAssigned(): number {
+    return this.assigned.length;
+  }
+
+  get totalAvailable(): number {
+    return this.availableResources().length;
+  }
+
+  get totalRoles(): number {
+    return this.roles.length;
   }
 
   private toast(msg: string, kind: ToastKind = 'info') {
@@ -119,6 +136,7 @@ export class RecursosComponent implements OnInit {
     this.svc.listResources(q || '').subscribe({
       next: (data) => {
         this.resources = Array.isArray(data) ? data : [];
+        this.upsertResourceCatalog(this.resources);
         this.loadingResources = false;
 
         // limpia selección disponible inválida
@@ -142,6 +160,7 @@ export class RecursosComponent implements OnInit {
     this.svc.roleResources(this.selectedRole.id).subscribe({
       next: (data) => {
         this.assigned = Array.isArray(data) ? data : [];
+        this.upsertResourceCatalog(this.assigned);
         this.loadingAssigned = false;
 
         // limpia selección asignados inválida
@@ -165,6 +184,29 @@ export class RecursosComponent implements OnInit {
   availableResources(): Resource[] {
     const assigned = this.assignedIds;
     return (this.resources || []).filter(r => !assigned.has(r.id));
+  }
+
+  resolveResourceIcon(resource: Resource): string {
+    const visited = new Set<string>();
+    let current: Resource | undefined = resource;
+
+    while (current) {
+      const ownIcon = (current.icon || '').trim();
+      if (ownIcon) return ownIcon;
+
+      const parentId = current.parent || null;
+      if (!parentId || visited.has(parentId)) break;
+      visited.add(parentId);
+      current = this.resourceCatalog.get(parentId);
+    }
+
+    return 'fa-solid fa-cube';
+  }
+
+  getParentName(resource: Resource): string {
+    if (!resource.parent) return '';
+    const parent = this.resourceCatalog.get(resource.parent);
+    return parent?.name || '';
   }
 
   toggleAvailable(id: string): void {
@@ -297,6 +339,7 @@ export class RecursosComponent implements OnInit {
 
     this.svc.deleteResource(id).subscribe({
       next: () => {
+        this.resourceCatalog.delete(id);
         this.toast('Recurso eliminado.', 'success');
         this.showDeleteConfirm = false;
         this.deleteTarget = null;
@@ -311,5 +354,18 @@ export class RecursosComponent implements OnInit {
   parentOptions(): Resource[] {
     if (!this.isEditing || !this.editingId) return this.resources;
     return this.resources.filter(r => r.id !== this.editingId);
+  }
+
+  refreshView(): void {
+    this.loadRoles();
+    this.loadResources(this.qResources || '');
+    if (this.selectedRole) this.loadAssignedForRole();
+  }
+
+  private upsertResourceCatalog(items: Resource[]): void {
+    for (const item of items) {
+      if (!item?.id) continue;
+      this.resourceCatalog.set(item.id, item);
+    }
   }
 }

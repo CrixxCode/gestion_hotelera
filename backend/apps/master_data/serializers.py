@@ -4,7 +4,8 @@ from .models import MasterData
 
 
 class MasterDataSerializer(serializers.ModelSerializer):
-    group_label = serializers.CharField(source="get_group_display", read_only=True)
+    group = serializers.CharField(max_length=60)
+    group_label = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = MasterData
@@ -23,8 +24,17 @@ class MasterDataSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id", "created_at", "updated_at", "group_label")
 
+    def get_group_label(self, obj: MasterData) -> str:
+        label = obj.get_group_display()
+        if label and label != obj.group:
+            return label
+        return self._humanize_group(obj.group)
+
     def validate_group(self, value):
-        return str(value).strip().upper()
+        group = str(value or "").strip().upper()
+        if not group:
+            raise serializers.ValidationError("El grupo es obligatorio.")
+        return group
 
     def validate_code(self, value):
         value = str(value or "").strip().upper()
@@ -48,6 +58,10 @@ class MasterDataSerializer(serializers.ModelSerializer):
                 )
 
         return attrs
+
+    @staticmethod
+    def _humanize_group(code: str) -> str:
+        return str(code or "").replace("_", " ").strip().title()
 
 
 class MasterDataCodeField(serializers.RelatedField):

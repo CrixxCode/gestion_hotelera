@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RolesService, Role, UserMini } from '../../../services/roles.service';
+import { catchError, forkJoin, map, of } from 'rxjs';
 
 type ToastKind = 'success' | 'danger' | 'info';
 
@@ -49,6 +50,8 @@ export class RolesComponent implements OnInit {
 
   // debounce timers
   private catalogDebounce?: any;
+  private roleUserCounts = new Map<string, number>();
+  private roleCountsRequestId = 0;
 
   constructor(private rolesSvc: RolesService) {}
 
@@ -110,6 +113,27 @@ export class RolesComponent implements OnInit {
     return list;
   }
 
+  get totalRoles(): number {
+    return this.roles.length;
+  }
+
+  get rolesWithUsersCount(): number {
+    let count = 0;
+    for (const role of this.roles) {
+      if ((this.roleUserCounts.get(role.id) || 0) > 0) count += 1;
+    }
+    return count;
+  }
+
+  get selectedRoleAssignedCount(): number {
+    return this.assignedUsers.length;
+  }
+
+  get selectedRoleAvailableCount(): number {
+    const assigned = this.assignedIds;
+    return (this.catalogUsers || []).filter((u) => !assigned.has(u.id)).length;
+  }
+
   // ---------- Toast ----------
   private toast(msg: string, kind: ToastKind = 'info') {
     this.toastText = msg;
@@ -127,6 +151,7 @@ export class RolesComponent implements OnInit {
       next: (data) => {
         this.roles = Array.isArray(data) ? data : [];
         this.loadingRoles = false;
+        this.refreshRoleUserCounts();
       },
       error: () => {
         this.roles = [];
@@ -231,6 +256,9 @@ export class RolesComponent implements OnInit {
       next: (users) => {
         this.assignedUsers = Array.isArray(users) ? users : [];
         this.loadingAssigned = false;
+        if (this.selectedRole) {
+          this.roleUserCounts.set(this.selectedRole.id, this.assignedUsers.length);
+        }
 
         // limpiar selecciones que ya no existan
         const ids = new Set(this.assignedUsers.map(u => u.id));
@@ -333,6 +361,33 @@ export class RolesComponent implements OnInit {
         this.searchCatalogUsers(this.qAvailable);
       },
       error: () => this.toast('No se pudo remover usuarios.', 'danger'),
+    });
+  }
+
+  private refreshRoleUserCounts(): void {
+    const requestId = ++this.roleCountsRequestId;
+
+    if (!this.roles.length) {
+      this.roleUserCounts.clear();
+      return;
+    }
+
+    const requests = this.roles.map((role) =>
+      this.rolesSvc.roleUsers(role.id).pipe(
+        map((users) => ({ roleId: role.id, count: Array.isArray(users) ? users.length : 0 })),
+        catchError(() => of({ roleId: role.id, count: 0 }))
+      )
+    );
+
+    forkJoin(requests).subscribe({
+      next: (rows) => {
+        if (requestId !== this.roleCountsRequestId) return;
+        this.roleUserCounts = new Map(rows.map((row) => [row.roleId, row.count]));
+      },
+      error: () => {
+        if (requestId !== this.roleCountsRequestId) return;
+        this.roleUserCounts.clear();
+      },
     });
   }
 }
