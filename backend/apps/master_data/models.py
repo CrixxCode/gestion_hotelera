@@ -15,6 +15,12 @@ class MasterData(models.Model):
 
         CLEANING_TASK_TYPE = "CLEANING_TASK_TYPE", "Cleaning task type"
         CLEANING_STATUS = "CLEANING_STATUS", "Cleaning status"
+        
+        RESERVATION_STATUS = "RESERVATION_STATUS", "Reservation status"
+        RESERVATION_ORIGIN = "RESERVATION_ORIGIN", "Reservation origin"
+        MEAL_PLAN = "MEAL_PLAN", "Meal plan"
+        PAYMENT_METHOD = "PAYMENT_METHOD", "Payment method"
+        RESERVATION_DEPOSIT_STATUS = "RESERVATION_DEPOSIT_STATUS", "Reservation deposit status"
 
     group = models.CharField(max_length=60, choices=Group.choices, db_index=True)
     code = models.CharField(max_length=80)

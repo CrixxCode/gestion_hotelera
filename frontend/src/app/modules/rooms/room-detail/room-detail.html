@@ -1,4 +1,4 @@
-<div class="detail-overlay" (click)="closeDrawer()">
+﻿<div class="detail-overlay" (click)="closeDrawer()">
   <aside class="detail-drawer" (click)="$event.stopPropagation()">
     <header class="drawer-head">
       <button type="button" class="drawer-close" (click)="closeDrawer()" title="Cerrar">
@@ -17,7 +17,7 @@
       </div>
 
       <div class="head-main">
-        <p class="head-label">Habitación</p>
+        <p class="head-label">Habitacion</p>
         <h2>{{ roomNumber }}</h2>
         <p class="head-sub">{{ roomTypeLabel }} · {{ bedLabel }} · {{ floorLabel }}</p>
 
@@ -36,6 +36,78 @@
       <div class="feedback error" *ngIf="!loading && errorMessage">{{ errorMessage }}</div>
 
       <ng-container *ngIf="!loading && !errorMessage">
+        <section class="current-guest-section" *ngIf="showCurrentGuestCard">
+          <h3>Huesped actual</h3>
+
+          <article class="current-guest-card" *ngIf="reservationCardReady; else currentGuestState">
+            <div class="guest-identity">
+              <div class="guest-avatar-mini">
+                <i class="fa-regular fa-user"></i>
+              </div>
+
+              <div class="guest-main">
+                <strong>{{ currentGuestName }}</strong>
+                <span>{{ currentGuestAdultsLabel }}</span>
+              </div>
+            </div>
+
+            <div class="guest-info-list">
+              <div class="guest-info-row">
+                <div class="guest-info-label">
+                  <i class="fa-solid fa-phone"></i>
+                  <span>Telefono</span>
+                </div>
+                <strong>{{ currentGuestPhone }}</strong>
+              </div>
+
+              <div class="guest-info-row">
+                <div class="guest-info-label">
+                  <i class="fa-regular fa-envelope"></i>
+                  <span>Email</span>
+                </div>
+                <strong>{{ currentGuestEmail }}</strong>
+              </div>
+
+              <div class="guest-info-row">
+                <div class="guest-info-label">
+                  <i class="fa-regular fa-calendar-check"></i>
+                  <span>Check-In</span>
+                </div>
+                <strong>{{ currentGuestCheckIn }}</strong>
+              </div>
+
+              <div class="guest-info-row">
+                <div class="guest-info-label">
+                  <i class="fa-regular fa-calendar"></i>
+                  <span>Check-Out</span>
+                </div>
+                <strong>{{ currentGuestCheckOut }}</strong>
+              </div>
+
+              <div class="guest-info-row">
+                <div class="guest-info-label">
+                  <i class="fa-regular fa-clock"></i>
+                  <span>Noches</span>
+                </div>
+                <strong>{{ currentGuestNightsLabel }}</strong>
+              </div>
+
+              <div class="guest-info-row">
+                <div class="guest-info-label">
+                  <i class="fa-solid fa-dollar-sign"></i>
+                  <span>Total</span>
+                </div>
+                <strong>{{ currentGuestTotalLabel }}</strong>
+              </div>
+            </div>
+          </article>
+
+          <ng-template #currentGuestState>
+            <div class="feedback" *ngIf="reservationDetailLoading">Cargando informacion de la reserva activa...</div>
+            <div class="feedback error" *ngIf="!reservationDetailLoading && reservationDetailError">{{ reservationDetailError }}</div>
+          </ng-template>
+        </section>
+
         <section>
           <h3>Amenidades</h3>
           <div class="chips-wrap" *ngIf="amenities.length; else noAmenities">
@@ -53,7 +125,7 @@
           <h3>Mantenimiento</h3>
           <article class="maintenance-box">
             <strong>{{ maintenance.title }}</strong>
-            <p>{{ maintenance.description || 'Sin descripción disponible.' }}</p>
+            <p>{{ maintenance.description || 'Sin descripcion disponible.' }}</p>
             <span>{{ maintenance.status_label || maintenance.status }}</span>
           </article>
         </section>
@@ -84,10 +156,42 @@
     </div>
 
     <footer class="drawer-footer">
-      <button type="button" class="btn btn-dark" (click)="requestEdit()">Editar habitación</button>
+      <div class="current-guest-actions" *ngIf="reservationCardReady">
+        <button type="button" class="btn btn-dark btn-full" (click)="openFullReservation()">
+          <i class="fa-regular fa-eye"></i>
+          Ver reserva completa
+        </button>
 
-      <button type="button" class="btn btn-light" *ngIf="panel?.status === 'DISPONIBLE'">Check-In</button>
-      <button type="button" class="btn btn-light" *ngIf="panel?.status === 'OCUPADA'">Ver reserva completa</button>
+        <button type="button" class="btn btn-light btn-room-change" *ngIf="!isLeavingToday" (click)="requestRoomChange()">
+          <i class="fa-solid fa-right-left"></i>
+          Cambio de habitacion
+        </button>
+      </div>
+
+      <div class="available-room-actions" *ngIf="showAvailableActions">
+        <button type="button" class="btn btn-dark" (click)="requestEdit()">
+          <i class="fa-regular fa-pen-to-square"></i>
+          Editar habitacion
+        </button>
+        <button type="button" class="btn btn-light" (click)="openCheckInFromRoom()">
+          <i class="fa-solid fa-right-to-bracket"></i>
+          Check-In
+        </button>
+        <button type="button" class="btn btn-light" (click)="openNewReservationFromRoom()">
+          <i class="fa-solid fa-plus"></i>
+          Nueva reserva
+        </button>
+      </div>
+
+      <button type="button" class="btn btn-light" *ngIf="canConfirmReservation" (click)="confirmReservation()" [disabled]="actionLoading">
+        {{ actionLoading ? 'Procesando...' : 'Confirmar reserva' }}
+      </button>
+      <button type="button" class="btn btn-light" *ngIf="canCheckInReservation" (click)="checkInReservation()" [disabled]="actionLoading">
+        {{ actionLoading ? 'Procesando...' : 'Registrar check-in' }}
+      </button>
+      <button type="button" class="btn btn-light" *ngIf="canCheckOutReservation" (click)="checkOutReservation()" [disabled]="actionLoading">
+        {{ actionLoading ? 'Procesando...' : 'Registrar check-out' }}
+      </button>
 
       <button type="button" class="btn btn-danger" *ngIf="canMarkAsAvailable" (click)="markAsAvailable()" [disabled]="actionLoading">
         {{ actionLoading ? 'Procesando...' : 'Marcar como disponible' }}

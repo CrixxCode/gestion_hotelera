@@ -1,5 +1,6 @@
 export type RoomStatus =
   | 'DISPONIBLE'
+  | 'RESERVADA'
   | 'OCUPADA'
   | 'MANTENIMIENTO'
   | 'LIMPIEZA'
@@ -61,6 +62,7 @@ export interface RoomI {
   room_type_name?: string;
   floor_name?: string;
   florr_number?: number;
+  active_reservation?: RoomActiveReservationI | null;
 }
 
 export interface RoomRateMiniI {
@@ -89,6 +91,23 @@ export interface RoomPanelMaintenanceI {
   completed_at?: string | null;
 }
 
+export interface RoomActiveReservationI {
+  id: number;
+  reservation_room_id?: number;
+  status?: string;
+  status_label?: string;
+  expected_check_in?: string;
+  expected_check_out?: string;
+  real_check_in?: string | null;
+  real_check_out?: string | null;
+  client_name?: string | null;
+  client?: {
+    id?: number | null;
+    full_name?: string | null;
+    document_number?: string | null;
+  } | null;
+}
+
 export interface RoomPanelI {
   id: number;
   number: string;
@@ -101,7 +120,7 @@ export interface RoomPanelI {
   rate: RoomRateMiniI | null;
   amenities: Array<Pick<AmenityI, 'id' | 'name' | 'icon'>>;
   current_guest: unknown | null;
-  active_reservation: unknown | null;
+  active_reservation: RoomActiveReservationI | null;
   active_maintenance: RoomPanelMaintenanceI | null;
 }
 

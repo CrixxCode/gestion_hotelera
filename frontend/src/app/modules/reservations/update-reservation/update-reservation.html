@@ -1,0 +1,126 @@
+﻿<div class="reservation-overlay" (click)="closeDrawer()">
+  <article class="reservation-drawer" (click)="$event.stopPropagation()">
+    <header class="drawer-head">
+      <div class="head-main">
+        <span class="drawer-kicker">Reservas</span>
+        <h1>Editar reserva</h1>
+        <p>Actualiza fechas, origen y habitaciones asignadas.</p>
+      </div>
+      <button type="button" class="drawer-close" (click)="closeDrawer()" title="Cerrar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </svg>
+      </button>
+    </header>
+
+    <form [formGroup]="reservationForm" (ngSubmit)="submit()" class="drawer-body">
+      <section>
+        <h2>Informacion base</h2>
+
+        <div class="grid two">
+          <label>
+            <span>Cliente *</span>
+            <select formControlName="client">
+              <option [ngValue]="null">Selecciona cliente</option>
+              <option *ngFor="let client of clients; trackBy: trackById" [ngValue]="client.id">
+                {{ client.full_name || (client.first_name + ' ' + client.last_name) }}
+              </option>
+            </select>
+          </label>
+
+          <label>
+            <span>Origen *</span>
+            <select formControlName="origin">
+              <option [ngValue]="null">Selecciona origen</option>
+              <option *ngFor="let origin of origins; trackBy: trackById" [ngValue]="origin.id">
+                {{ origin.name }}
+              </option>
+            </select>
+          </label>
+
+          <label>
+            <span>Codigo promo</span>
+            <input type="text" formControlName="promo_code" placeholder="Ej: SUMMER2026" />
+          </label>
+
+          <label>
+            <span>Check-in esperado *</span>
+            <input type="date" formControlName="expected_check_in" />
+          </label>
+
+          <label>
+            <span>Check-out esperado *</span>
+            <input type="date" formControlName="expected_check_out" />
+          </label>
+
+          <label>
+            <span>Descuento total</span>
+            <input type="number" formControlName="total_discount" min="0" step="0.01" placeholder="0" />
+          </label>
+
+          <label class="full">
+            <span>Notas internas</span>
+            <textarea rows="4" formControlName="notes" placeholder="Observaciones para recepcion y operaciones..."></textarea>
+          </label>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>Habitaciones de la reserva</h2>
+          <button type="button" class="btn btn-ghost" (click)="addRoomLine()">
+            <i class="fa-solid fa-plus"></i>
+            Agregar habitacion
+          </button>
+        </div>
+
+        <div formArrayName="room_lines" class="room-lines">
+          <article class="room-line" *ngFor="let roomControl of roomLines.controls; let idx = index; trackBy: trackByRoomLine" [formGroupName]="idx">
+            <div class="line-grid">
+              <label>
+                <span>Habitacion</span>
+                <select formControlName="room">
+                  <option [ngValue]="null">Sin asignar</option>
+                  <option *ngFor="let room of availableRooms; trackBy: trackById" [ngValue]="room.id">
+                    Hab. {{ room.number }}
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>Tarifa noche</span>
+                <input type="number" formControlName="night_rate" min="0" step="0.01" placeholder="0" />
+              </label>
+
+              <label>
+                <span>Adultos</span>
+                <input type="number" formControlName="adults" min="1" step="1" />
+              </label>
+
+              <label>
+                <span>Ninos</span>
+                <input type="number" formControlName="children" min="0" step="1" />
+              </label>
+            </div>
+
+            <div class="line-actions">
+              <button type="button" class="row-btn danger" (click)="removeRoomLine(idx)" title="Eliminar fila">
+                <i class="fa-regular fa-trash-can"></i>
+              </button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <p class="feedback error" *ngIf="errorMessage">{{ errorMessage }}</p>
+
+      <footer class="drawer-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeDrawer()" [disabled]="saving">Cancelar</button>
+        <button type="submit" class="btn btn-primary" [disabled]="saving">
+          {{ saving ? 'Guardando...' : 'Guardar cambios' }}
+        </button>
+      </footer>
+    </form>
+  </article>
+</div>

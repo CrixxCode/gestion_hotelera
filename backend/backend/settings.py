@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     "apps.clients",
     "apps.hotel_settings",
     "apps.rooms",
+    "apps.reservations",
 ]
 
 MIDDLEWARE = [

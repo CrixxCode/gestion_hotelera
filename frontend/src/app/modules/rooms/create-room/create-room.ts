@@ -33,6 +33,7 @@ export class CreateRoom {
 
   readonly statusOptions: Array<{ value: RoomStatus; label: string }> = [
     { value: 'DISPONIBLE', label: 'Disponible' },
+    { value: 'RESERVADA', label: 'Reservada' },
     { value: 'OCUPADA', label: 'Ocupada' },
     { value: 'MANTENIMIENTO', label: 'Mantenimiento' },
     { value: 'LIMPIEZA', label: 'Limpieza' },

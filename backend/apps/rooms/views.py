@@ -94,7 +94,12 @@ class AmenityViewSet(viewsets.ModelViewSet):
 class RoomViewSet(viewsets.ModelViewSet):
     queryset = (
         Room.objects.select_related("room_type", "floor", "status")
-        .prefetch_related("amenities", "maintenance_orders")
+        .prefetch_related(
+            "amenities",
+            "maintenance_orders",
+            "reservation_details__reservation__status",
+            "reservation_details__reservation__client",
+        )
         .all()
         .order_by("number")
     )

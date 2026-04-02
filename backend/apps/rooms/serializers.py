@@ -3,6 +3,10 @@ from rest_framework import serializers
 
 from apps.master_data.models import MasterData
 from apps.master_data.serializers import MasterDataCodeField
+from apps.reservations.services import (
+    INACTIVE_RESERVATION_STATUS_CODES,
+    is_reservation_in_house,
+)
 from .models import Rate, Amenity, Room, MaintenanceOrder, CleaningTask
 
 AMENITY_ICON_CATALOG = {
@@ -133,6 +137,7 @@ class RoomSerializer(serializers.ModelSerializer):
 
     status = MasterDataCodeField(group=MasterData.Group.ROOM_STATUS)
     status_label = serializers.CharField(source="status.name", read_only=True)
+    active_reservation = serializers.SerializerMethodField()
 
     amenities = AmenitySerializer(many=True, read_only=True)
     amenity_ids = serializers.PrimaryKeyRelatedField(
@@ -155,12 +160,45 @@ class RoomSerializer(serializers.ModelSerializer):
             "florr_number",
             "status",
             "status_label",
+            "active_reservation",
             "notes",
             "amenities",
             "amenity_ids",
             "created_at",
         )
         read_only_fields = ("id", "created_at")
+
+    def get_active_reservation(self, obj):
+        reservation_details = list(
+            obj.reservation_details.select_related(
+                "reservation",
+                "reservation__status",
+                "reservation__client",
+            )
+            .filter(reservation__real_check_out__isnull=True)
+            .exclude(reservation__status__code__in=INACTIVE_RESERVATION_STATUS_CODES)
+            .order_by("reservation__expected_check_in", "reservation__id")
+        )
+
+        if not reservation_details:
+            return None
+
+        detail = next(
+            (item for item in reservation_details if is_reservation_in_house(item.reservation)),
+            reservation_details[0],
+        )
+        reservation = detail.reservation
+
+        return {
+            "id": reservation.id,
+            "status": reservation.status_code,
+            "status_label": reservation.status.name if reservation.status else None,
+            "expected_check_in": reservation.expected_check_in,
+            "expected_check_out": reservation.expected_check_out,
+            "real_check_in": reservation.real_check_in,
+            "real_check_out": reservation.real_check_out,
+            "client_name": reservation.client.full_name if reservation.client_id else None,
+        }
 
 
 class MaintenanceOrderSerializer(serializers.ModelSerializer):
@@ -311,4 +349,40 @@ class RoomPanelSerializer(serializers.ModelSerializer):
         return None
 
     def get_active_reservation(self, obj):
-        return None
+        reservation_details = list(
+            obj.reservation_details.select_related(
+                "reservation",
+                "reservation__status",
+                "reservation__client",
+            )
+            .filter(reservation__real_check_out__isnull=True)
+            .exclude(reservation__status__code__in=INACTIVE_RESERVATION_STATUS_CODES)
+            .order_by("reservation__expected_check_in", "reservation__id")
+        )
+
+        if not reservation_details:
+            return None
+
+        detail = next(
+            (item for item in reservation_details if is_reservation_in_house(item.reservation)),
+            reservation_details[0],
+        )
+        reservation = detail.reservation
+
+        return {
+            "id": reservation.id,
+            "reservation_room_id": detail.id,
+            "status": reservation.status_code,
+            "status_label": reservation.status.name if reservation.status else None,
+            "expected_check_in": reservation.expected_check_in,
+            "expected_check_out": reservation.expected_check_out,
+            "real_check_in": reservation.real_check_in,
+            "real_check_out": reservation.real_check_out,
+            "client": {
+                "id": reservation.client_id,
+                "full_name": reservation.client.full_name if reservation.client_id else None,
+                "document_number": (
+                    reservation.client.document_number if reservation.client_id else None
+                ),
+            },
+        }

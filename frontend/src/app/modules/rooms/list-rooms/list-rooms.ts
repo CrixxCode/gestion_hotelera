@@ -1,4 +1,4 @@
-import { CommonModule } from '@angular/common';
+﻿import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -64,6 +64,7 @@ export class ListRooms implements OnInit {
   readonly statusTabs: Array<{ key: RoomVisualStatus | 'ALL'; label: string }> = [
     { key: 'ALL', label: 'Todas' },
     { key: 'DISPONIBLE', label: 'Disponible' },
+    { key: 'RESERVADA', label: 'Reservada' },
     { key: 'OCUPADA', label: 'Ocupada' },
     { key: 'POR_SALIR_HOY', label: 'Por salir hoy' },
     { key: 'MANTENIMIENTO', label: 'Mantenimiento' }
@@ -72,6 +73,7 @@ export class ListRooms implements OnInit {
   readonly statusOptions: Array<{ value: RoomVisualStatus | 'ALL'; label: string }> = [
     { value: 'ALL', label: 'Todos los estados' },
     { value: 'DISPONIBLE', label: 'Disponible' },
+    { value: 'RESERVADA', label: 'Reservada' },
     { value: 'OCUPADA', label: 'Ocupada' },
     { value: 'POR_SALIR_HOY', label: 'Por salir hoy' },
     { value: 'MANTENIMIENTO', label: 'Mantenimiento' },
@@ -131,7 +133,7 @@ export class ListRooms implements OnInit {
       },
       error: () => {
         this.loading = false;
-        this.errorMessage = 'No se pudo cargar el módulo de habitaciones.';
+        this.errorMessage = 'No se pudo cargar el mÃ³dulo de habitaciones.';
       }
     });
   }
@@ -247,12 +249,21 @@ export class ListRooms implements OnInit {
 
   getRoomTypeBeds(room: RoomI): string {
     const roomType = this.getRoomType(room);
-    if (!roomType) return 'Sin configuración';
+    if (!roomType) return 'Sin configuracion';
 
     const bedCount = roomType.bed_count || 0;
     const bedType = roomType.bed_type || 'cama';
     const capacity = roomType.capacity || 1;
-    return `${bedCount} ${bedType} · ${capacity} huésped(es)`;
+    return `${bedCount} ${bedType} · ${capacity} huesped(es)`;
+  }
+
+  getCardTypeSummary(room: RoomI): string {
+    const roomTypeName = this.getRoomTypeName(room);
+    const roomType = this.getRoomType(room);
+    if (!roomType?.bed_count) return roomTypeName;
+
+    const bedWord = roomType.bed_count === 1 ? 'Cama' : 'Camas';
+    return `${roomTypeName} · ${roomType.bed_count} ${bedWord}`;
   }
 
   getPriceLabel(room: RoomI): string {
@@ -276,6 +287,8 @@ export class ListRooms implements OnInit {
         return 'Disponible';
       case 'OCUPADA':
         return 'Ocupada';
+      case 'RESERVADA':
+        return 'Reservada';
       case 'POR_SALIR_HOY':
         return 'Por salir hoy';
       case 'MANTENIMIENTO':
@@ -310,6 +323,15 @@ export class ListRooms implements OnInit {
           border: '#3f7fff',
           buttonBg: '#e6eaf0',
           buttonColor: '#334155'
+        };
+      case 'RESERVADA':
+        return {
+          bg: '#eff6ff',
+          color: '#1d4ed8',
+          dot: '#2563eb',
+          border: '#2563eb',
+          buttonBg: '#0f172a',
+          buttonColor: '#ffffff'
         };
       case 'POR_SALIR_HOY':
         return {
@@ -355,9 +377,48 @@ export class ListRooms implements OnInit {
     return visualStatus !== 'MANTENIMIENTO' && visualStatus !== 'LIMPIEZA' && visualStatus !== 'FUERA_DE_SERVICIO';
   }
 
+  getCardStatusClass(room: RoomI): string {
+    const visualStatus = this.getVisualStatus(room);
+    switch (visualStatus) {
+      case 'DISPONIBLE':
+        return 'is-available';
+      case 'OCUPADA':
+        return 'is-occupied';
+      case 'POR_SALIR_HOY':
+        return 'is-leaving-today';
+      case 'MANTENIMIENTO':
+        return 'is-maintenance';
+      case 'RESERVADA':
+        return 'is-reserved';
+      case 'LIMPIEZA':
+        return 'is-cleaning';
+      default:
+        return 'is-out-of-service';
+    }
+  }
+
+  getPrimaryActionClass(room: RoomI): string {
+    if (!this.canPrimaryAction(room)) return 'is-disabled';
+
+    const visualStatus = this.getVisualStatus(room);
+    if (visualStatus === 'POR_SALIR_HOY') return 'is-checkout';
+    if (visualStatus === 'OCUPADA') return 'is-detail';
+    return 'is-checkin';
+  }
+
+  getPrimaryActionIcon(room: RoomI): string {
+    if (!this.canPrimaryAction(room)) return 'fa-solid fa-ban';
+
+    const visualStatus = this.getVisualStatus(room);
+    if (visualStatus === 'POR_SALIR_HOY') return 'fa-solid fa-right-from-bracket';
+    if (visualStatus === 'OCUPADA') return 'fa-regular fa-eye';
+    return 'fa-solid fa-right-to-bracket';
+  }
+
   getPrimaryActionLabel(room: RoomI): string {
     const visualStatus = this.getVisualStatus(room);
     if (visualStatus === 'DISPONIBLE') return 'Check-In';
+    if (visualStatus === 'RESERVADA') return 'Check-In';
     if (visualStatus === 'POR_SALIR_HOY') return 'Check-Out';
     if (visualStatus === 'OCUPADA') return 'Ver detalles';
     return 'No disponible';
@@ -371,6 +432,33 @@ export class ListRooms implements OnInit {
   getMaintenanceText(room: RoomI): string {
     if (room.status !== 'MANTENIMIENTO') return '';
     return room.notes?.trim() || 'Mantenimiento preventivo en proceso';
+  }
+
+  hasReservationInfo(room: RoomI): boolean {
+    const visualStatus = this.getVisualStatus(room);
+    if (!['RESERVADA', 'OCUPADA', 'POR_SALIR_HOY'].includes(visualStatus)) return false;
+    return !!room.active_reservation;
+  }
+
+  getGuestLabel(room: RoomI): string {
+    const name = room.active_reservation?.client_name?.trim();
+    return name || 'Huesped no asignado';
+  }
+
+  getCheckoutLabel(room: RoomI): string {
+    const checkOut = room.active_reservation?.expected_check_out;
+    if (!checkOut) return '--';
+    if (this.isToday(checkOut)) return 'Hoy';
+
+    const parsed = this.parseDate(checkOut);
+    if (!parsed) return '--';
+
+    return new Intl.DateTimeFormat('es-CO', {
+      day: 'numeric',
+      month: 'short'
+    })
+      .format(parsed)
+      .replace('.', '');
   }
 
   trackByRoom(_: number, room: RoomI): number {
@@ -414,8 +502,47 @@ export class ListRooms implements OnInit {
   }
 
   private isPorSalirHoy(room: RoomI): boolean {
-    if (room.status !== 'OCUPADA') return false;
-    const notes = (room.notes || '').toUpperCase();
-    return notes.includes('[POR_SALIR_HOY]');
+    if (room.status !== 'OCUPADA' && room.status !== 'RESERVADA') return false;
+
+    const reservation = room.active_reservation;
+    if (!reservation?.expected_check_out) return false;
+
+    const statusCode = this.normalizeCode(reservation.status);
+    if (!['PENDIENTE', 'CONFIRMADA', 'EN_CURSO'].includes(statusCode)) return false;
+
+    return this.isToday(reservation.expected_check_out);
+  }
+
+  private isToday(value: string | null | undefined): boolean {
+    const date = this.parseDate(value);
+    if (!date) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    date.setHours(0, 0, 0, 0);
+
+    return date.getTime() === today.getTime();
+  }
+
+  private parseDate(value: string | null | undefined): Date | null {
+    if (!value) return null;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [year, month, day] = value.split('-').map((part) => Number(part));
+      if ([year, month, day].some((part) => Number.isNaN(part))) return null;
+      const date = new Date(year, month - 1, day);
+      date.setHours(0, 0, 0, 0);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    const asDate = new Date(value);
+    if (Number.isNaN(asDate.getTime())) return null;
+    return asDate;
+  }
+
+  private normalizeCode(value: string | undefined): string {
+    return String(value || '').trim().toUpperCase();
   }
 }
+
+

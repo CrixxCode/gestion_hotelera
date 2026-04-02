@@ -138,6 +138,108 @@ h3 {
   color: #334155;
 }
 
+.current-guest-section {
+  padding-top: 2px;
+}
+
+.current-guest-card {
+  border: 1px solid #d7deea;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #f8fafc;
+}
+
+.guest-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+}
+
+.guest-avatar-mini {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  flex: 0 0 auto;
+}
+
+.guest-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.guest-main strong {
+  color: #0f172a;
+  font-size: 19px;
+  line-height: 1.2;
+}
+
+.guest-main span {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.guest-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.guest-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.guest-info-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #7c889d;
+  font-size: 15px;
+}
+
+.guest-info-label i {
+  width: 14px;
+  text-align: center;
+}
+
+.guest-info-row strong {
+  color: #0f172a;
+  font-size: 16px;
+  text-align: right;
+}
+
+.current-guest-actions {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.available-room-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-full,
+.btn-room-change {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
 .chips-wrap {
   display: flex;
   flex-wrap: wrap;

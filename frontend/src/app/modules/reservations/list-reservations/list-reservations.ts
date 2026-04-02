@@ -1,0 +1,1243 @@
+﻿import { CommonModule } from '@angular/common';
+import { Component, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
+import { catchError, forkJoin, of } from 'rxjs';
+import { ConfirmationService } from 'primeng/api';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
+import { ClientI } from '../../clients/client-model';
+import { RoomI } from '../../rooms/room-model';
+import { MasterDataService } from '../../../services/master-data.service';
+import { ClientsService } from '../../../services/client';
+import { RoomService } from '../../../services/room';
+import { ReservationService } from '../../../services/reservation';
+import {
+  ReservationDetailI,
+  ReservationI,
+  ReservationStatusFilter,
+  ReservationStatusStyleI,
+  ReservationViewMode,
+  ReservationVisualStatus
+} from '../reservation-model';
+import { CreateReservation } from '../create-reservation/create-reservation';
+import { UpdateReservation } from '../update-reservation/update-reservation';
+import { DetailReservation } from '../detail-reservation/detail-reservation';
+
+interface CalendarDayI {
+  date: Date;
+  dayLabel: string;
+  weekLabel: string;
+  iso: string;
+  isToday: boolean;
+}
+
+interface CalendarBarI {
+  reservationId: number;
+  reservationCode: string;
+  guestName: string;
+  status: ReservationVisualStatus;
+  startIndex: number;
+  span: number;
+  leftPercent: number;
+  widthPercent: number;
+}
+
+interface CalendarRoomRowI {
+  key: string;
+  roomNumber: string;
+  roomType: string;
+  bars: CalendarBarI[];
+}
+
+
+type RouteReservationAction = 'detail' | 'edit' | 'create' | 'checkin';
+
+@Component({
+  selector: 'app-list-reservations',
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    ConfirmDialogModule,
+    CreateReservation,
+    UpdateReservation,
+    DetailReservation
+  ],
+  templateUrl: './list-reservations.html',
+  styleUrls: ['./list-reservations.css'],
+  providers: [ConfirmationService]
+})
+export class ListReservations implements OnInit {
+  loading = false;
+  detailsLoading = false;
+  errorMessage = '';
+
+  reservations: ReservationI[] = [];
+  filteredReservations: ReservationI[] = [];
+
+  statuses: MasterDataI[] = [];
+  origins: MasterDataI[] = [];
+  documentTypes: MasterDataI[] = [];
+  clients: ClientI[] = [];
+  rooms: RoomI[] = [];
+
+  search = '';
+  statusFilter: ReservationStatusFilter = 'ALL';
+  originFilter = 'ALL';
+  viewMode: ReservationViewMode = 'grid';
+
+  showCreateOverlay = false;
+  showUpdateOverlay = false;
+  createPrefillRoomId: number | null = null;
+  createPrefillCheckInMode = false;
+
+  selectedReservationId: number | null = null;
+  selectedReservationDetail: ReservationDetailI | null = null;
+  reservationToEdit: ReservationDetailI | null = null;
+
+  calendarStartDate = this.startOfDay(new Date());
+  calendarDays: CalendarDayI[] = [];
+  calendarRows: CalendarRoomRowI[] = [];
+  private detailsCache = new Map<number, ReservationDetailI>();
+  private roomMap = new Map<number, RoomI>();
+  private pendingRouteReservationId: number | null = null;
+  private pendingRouteRoomId: number | null = null;
+  private pendingRouteAction: RouteReservationAction = 'detail';
+
+  readonly statusTabs: Array<{ key: ReservationStatusFilter; label: string }> = [
+    { key: 'ALL', label: 'Todas' },
+    { key: 'CONFIRMADA', label: 'Confirmada' },
+    { key: 'PENDIENTE', label: 'Pendiente' },
+    { key: 'EN_CURSO', label: 'En curso' },
+    { key: 'POR_SALIR_HOY', label: 'Por salir hoy' },
+    { key: 'CANCELADA', label: 'Cancelada' }
+  ];
+
+  constructor(
+    private reservationService: ReservationService,
+    private masterDataService: MasterDataService,
+    private clientsService: ClientsService,
+    private roomService: RoomService,
+    private confirmationService: ConfirmationService,
+    private router: Router,
+    private route: ActivatedRoute
+  ) {}
+
+  ngOnInit(): void {
+    this.syncRouteContext();
+    this.initializeCalendarDays();
+    this.loadModuleData();
+  }
+
+  get totalReservations(): number {
+    return this.reservations.length;
+  }
+
+  get inProgressCount(): number {
+    return this.reservations.filter((reservation) => this.getVisualStatus(reservation) === 'EN_CURSO').length;
+  }
+
+  get checkInsTodayCount(): number {
+    return this.reservations.filter((reservation) => {
+      if (!this.isToday(reservation.expected_check_in)) return false;
+      const status = this.getVisualStatus(reservation);
+      return status !== 'CANCELADA' && status !== 'FINALIZADA';
+    }).length;
+  }
+
+  get checkOutsTodayCount(): number {
+    return this.reservations.filter((reservation) => {
+      if (!this.isCheckoutToday(reservation)) return false;
+      const status = this.getVisualStatus(reservation);
+      return status !== 'CANCELADA' && status !== 'FINALIZADA';
+    }).length;
+  }
+
+  get pendingCount(): number {
+    return this.reservations.filter((reservation) => this.getVisualStatus(reservation) === 'PENDIENTE').length;
+  }
+
+  get monthlyRevenueLabel(): string {
+    const now = new Date();
+
+    const monthReservations = this.reservations.filter((reservation) => {
+      const checkIn = this.parseDate(reservation.expected_check_in);
+      return !!checkIn && checkIn.getMonth() === now.getMonth() && checkIn.getFullYear() === now.getFullYear();
+    });
+
+    if (monthReservations.length === 0) return this.formatCurrency(0);
+
+    const total = monthReservations.reduce((sum, reservation) => sum + this.calculateReservationAmount(reservation), 0);
+    return this.formatCurrency(total);
+  }
+
+  get hasCalendarData(): boolean {
+    return this.calendarRows.length > 0;
+  }
+
+  loadModuleData(): void {
+    this.loading = true;
+    this.errorMessage = '';
+    this.detailsCache.clear();
+
+    forkJoin({
+      reservations: this.reservationService
+        .listReservations({ ordering: '-id' })
+        .pipe(catchError(() => of([] as ReservationI[]))),
+      statuses: this.masterDataService
+        .listMasterData({ group: 'RESERVATION_STATUS', is_active: 'true', ordering: 'sort_order,name' })
+        .pipe(catchError(() => of([] as MasterDataI[]))),
+      origins: this.masterDataService
+        .listMasterData({ group: 'RESERVATION_ORIGIN', is_active: 'true', ordering: 'sort_order,name' })
+        .pipe(catchError(() => of([] as MasterDataI[]))),
+      documentTypes: this.masterDataService
+        .listMasterData({ group: 'DOCUMENT_TYPE', is_active: 'true', ordering: 'sort_order,name' })
+        .pipe(catchError(() => of([] as MasterDataI[]))),
+      clients: this.clientsService.listClients().pipe(catchError(() => of([] as ClientI[]))),
+      rooms: this.roomService.listRooms().pipe(catchError(() => of([] as RoomI[])))
+    }).subscribe({
+      next: ({ reservations, statuses, origins, documentTypes, clients, rooms }) => {
+        this.loading = false;
+
+        this.reservations = reservations;
+        this.statuses = this.dedupeMasterDataByCode(statuses);
+        this.origins = this.dedupeMasterDataByCode(origins);
+        this.documentTypes = this.dedupeMasterDataByCode(documentTypes);
+        this.clients = clients;
+        this.rooms = rooms;
+        this.roomMap = new Map(rooms.map((room) => [room.id, room]));
+
+        this.applyFilters();
+        this.preloadReservationDetails(this.reservations.map((reservation) => reservation.id));
+        this.consumePendingRouteReservationAction();
+      },
+      error: () => {
+        this.loading = false;
+        this.errorMessage = 'No se pudo cargar el modulo de reservas.';
+      }
+    });
+  }
+
+  refreshReservations(): void {
+    this.loading = true;
+    this.detailsCache.clear();
+    this.selectedReservationDetail = null;
+
+    this.reservationService.listReservations({ ordering: '-id' }).subscribe({
+      next: (reservations) => {
+        this.loading = false;
+        this.reservations = reservations;
+        this.applyFilters();
+        this.preloadReservationDetails(this.reservations.map((reservation) => reservation.id));
+        this.consumePendingRouteReservationAction();
+      },
+      error: () => {
+        this.loading = false;
+        this.errorMessage = 'No se pudieron actualizar las reservas.';
+      }
+    });
+  }
+
+  applyFilters(): void {
+    const query = this.search.toLowerCase().trim();
+
+    this.filteredReservations = this.reservations
+      .filter((reservation) => {
+        const statusMatch = this.matchesStatusFilter(reservation, this.statusFilter);
+        const originMatch =
+          this.originFilter === 'ALL' || this.normalizeCode(reservation.origin_code) === this.normalizeCode(this.originFilter);
+
+        const searchableFields = [
+          this.getReservationCode(reservation),
+          reservation.client_full_name || '',
+          reservation.client_document_number || '',
+          reservation.status_name || '',
+          reservation.origin_name || '',
+          reservation.expected_check_in || '',
+          reservation.expected_check_out || '',
+          reservation.promo_code || ''
+        ]
+          .join(' ')
+          .toLowerCase();
+
+        const searchMatch = !query || searchableFields.includes(query);
+
+        return statusMatch && originMatch && searchMatch;
+      })
+      .sort((a, b) => b.id - a.id);
+
+    if (this.viewMode === 'calendar') {
+      this.buildCalendarRows();
+    }
+  }
+
+  selectStatus(status: ReservationStatusFilter): void {
+    this.statusFilter = status;
+    this.applyFilters();
+  }
+
+  setViewMode(mode: ReservationViewMode): void {
+    this.viewMode = mode;
+
+    if (mode === 'calendar') {
+      this.buildCalendarRows();
+    }
+  }
+
+  openCreateOverlay(): void {
+    this.showUpdateOverlay = false;
+    this.createPrefillRoomId = null;
+    this.createPrefillCheckInMode = false;
+    this.showCreateOverlay = true;
+  }
+
+  closeCreateOverlay(): void {
+    this.showCreateOverlay = false;
+    this.createPrefillRoomId = null;
+    this.createPrefillCheckInMode = false;
+  }
+
+  onReservationCreated(): void {
+    this.showCreateOverlay = false;
+    this.createPrefillRoomId = null;
+    this.createPrefillCheckInMode = false;
+    this.refreshReservations();
+  }
+
+  openUpdateOverlay(reservation: ReservationI | ReservationDetailI | null | undefined): void {
+    const reservationId = reservation?.id;
+    if (!reservationId) return;
+
+    this.ensureReservationDetail(reservationId, (detail) => {
+      this.showCreateOverlay = false;
+      this.selectedReservationId = null;
+      this.selectedReservationDetail = null;
+      this.reservationToEdit = detail;
+      this.showUpdateOverlay = true;
+    });
+  }
+
+  closeUpdateOverlay(): void {
+    this.showUpdateOverlay = false;
+    this.reservationToEdit = null;
+  }
+
+  onReservationUpdated(): void {
+    this.showUpdateOverlay = false;
+    this.reservationToEdit = null;
+    this.refreshReservations();
+  }
+
+  onReservationFlowChanged(detail: ReservationDetailI): void {
+    this.detailsCache.set(detail.id, detail);
+    this.selectedReservationDetail = detail;
+    this.refreshReservations();
+  }
+
+  openDetail(reservation: ReservationI | ReservationDetailI): void {
+    this.selectedReservationId = reservation.id;
+    this.selectedReservationDetail = this.detailsCache.get(reservation.id) || null;
+  }
+
+  openDetailById(reservationId: number): void {
+    this.selectedReservationId = reservationId;
+    this.selectedReservationDetail = this.detailsCache.get(reservationId) || null;
+  }
+
+  closeDetail(): void {
+    this.selectedReservationId = null;
+    this.selectedReservationDetail = null;
+  }
+
+  openUpdateFromDetail(detail: ReservationDetailI): void {
+    this.closeDetail();
+    this.openUpdateOverlay(detail);
+  }
+
+  confirmDelete(reservation: ReservationI): void {
+    const reservationCode = this.getReservationCode(reservation);
+
+    this.confirmationService.confirm({
+      message: `Deseas eliminar la reserva ${reservationCode}?`,
+      header: 'Confirmar eliminacion',
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Si, eliminar',
+      rejectLabel: 'Cancelar',
+      key: 'reservationDelete',
+      acceptButtonStyleClass: 'p-button-danger',
+      rejectButtonStyleClass: 'p-button-secondary p-button-outlined',
+      defaultFocus: 'reject',
+      accept: () => {
+        this.reservationService.deleteReservation(reservation.id).subscribe({
+          next: () => {
+            this.detailsCache.delete(reservation.id);
+            if (this.selectedReservationId === reservation.id) {
+              this.closeDetail();
+            }
+            this.refreshReservations();
+          },
+          error: () => {
+            this.errorMessage = 'No se pudo eliminar la reserva seleccionada.';
+          }
+        });
+      }
+    });
+  }
+
+  exportCsv(): void {
+    if (this.filteredReservations.length === 0) return;
+
+    const headers = [
+      'codigo',
+      'huesped',
+      'documento',
+      'habitaciones',
+      'check_in',
+      'check_out',
+      'estado',
+      'origen',
+      'total',
+      'pago'
+    ];
+
+    const rows = this.filteredReservations.map((reservation) => {
+      const row = [
+        this.getReservationCode(reservation),
+        reservation.client_full_name || '',
+        reservation.client_document_number || '',
+        this.getRoomSummary(reservation),
+        reservation.expected_check_in || '',
+        reservation.expected_check_out || '',
+        this.getStatusStyle(reservation).label,
+        reservation.origin_name || '',
+        this.calculateReservationAmount(reservation),
+        this.getPaymentLabel(reservation)
+      ];
+
+      return row.map((cell) => this.escapeCsvCell(cell)).join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `reservas-${this.formatFileDate(new Date())}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  getStatusCount(status: ReservationStatusFilter): number {
+    return this.reservations.filter((reservation) => this.matchesStatusFilter(reservation, status)).length;
+  }
+
+  getStatusStyle(reservation: ReservationI): ReservationStatusStyleI {
+    return this.resolveStatusStyle(this.getVisualStatus(reservation));
+  }
+
+  getReservationCode(reservation: ReservationI): string {
+    const createdDate = reservation.created_at ? new Date(reservation.created_at) : null;
+    const year = createdDate && !Number.isNaN(createdDate.getTime()) ? createdDate.getFullYear() : new Date().getFullYear();
+    return `RES-${year}-${String(reservation.id).padStart(4, '0')}`;
+  }
+
+  getRoomSummary(reservation: ReservationI): string {
+    const detail = this.detailsCache.get(reservation.id);
+
+    if (detail?.rooms_detail?.length) {
+      if (detail.rooms_detail.length === 1) {
+        const room = detail.rooms_detail[0];
+        return room.room_number ? `Hab. ${room.room_number}` : `Hab. #${room.room}`;
+      }
+
+      return `${detail.rooms_detail.length} habitaciones`;
+    }
+
+    const roomCount = Number(reservation.total_rooms || 0);
+    if (roomCount > 0) {
+      return `${roomCount} habitaciones`;
+    }
+
+    return 'Sin asignar';
+  }
+
+  getRoomSubtitle(reservation: ReservationI): string {
+    const detail = this.detailsCache.get(reservation.id);
+
+    if (!detail?.rooms_detail?.length) {
+      return `${reservation.total_guests || 0} huesped(es)`;
+    }
+
+    const firstRoom = detail.rooms_detail[0];
+    if (!firstRoom) return `${reservation.total_guests || 0} huesped(es)`;
+
+    return `${firstRoom.adults || 1} adulto(s) - ${firstRoom.children || 0} nino(s)`;
+  }
+
+  getStayLabel(reservation: ReservationI): string {
+    return `${this.formatDate(reservation.expected_check_in)} -> ${this.formatDate(reservation.expected_check_out)}`;
+  }
+
+  getNightsLabel(reservation: ReservationI): string {
+    const nights = this.getNights(reservation);
+    return `${nights} noche(s)`;
+  }
+
+  getOriginLabel(reservation: ReservationI): string {
+    return reservation.origin_name || 'Sin origen';
+  }
+
+  getAmountLabel(reservation: ReservationI): string {
+    const amount = this.calculateReservationAmount(reservation);
+    return this.formatCurrency(amount);
+  }
+
+  getPaymentLabel(reservation: ReservationI): string {
+    const detail = this.detailsCache.get(reservation.id);
+
+    if (!detail) return 'Sin datos';
+
+    const total = this.calculateReservationAmount(reservation);
+    const deposits = this.calculateDepositsAmount(reservation);
+
+    if (total <= 0 && deposits <= 0) return 'Sin cargos';
+    if (deposits >= total && total > 0) return 'Pagado';
+    if (deposits > 0) return 'Parcial';
+
+    return 'Pendiente';
+  }
+
+  getPaymentTone(reservation: ReservationI): { bg: string; color: string } {
+    const label = this.getPaymentLabel(reservation);
+
+    if (label === 'Pagado') {
+      return { bg: '#dcfce7', color: '#15803d' };
+    }
+
+    if (label === 'Parcial') {
+      return { bg: '#dbeafe', color: '#1d4ed8' };
+    }
+
+    if (label === 'Pendiente') {
+      return { bg: '#fef3c7', color: '#b45309' };
+    }
+
+    return { bg: '#e2e8f0', color: '#475569' };
+  }
+
+  formatAmount(value: number): string {
+    return this.formatCurrency(value);
+  }
+
+  getCardDateLabel(reservation: ReservationI): string {
+    return this.formatDate(reservation.expected_check_in || reservation.created_at || null);
+  }
+
+  getCardStatusClass(reservation: ReservationI): string {
+    const visual = this.getVisualStatus(reservation);
+
+    switch (visual) {
+      case 'CONFIRMADA':
+        return 'status-confirmada';
+      case 'PENDIENTE':
+        return 'status-pendiente';
+      case 'EN_CURSO':
+        return 'status-en-curso';
+      case 'POR_SALIR_HOY':
+        return 'status-por-salir-hoy';
+      case 'CANCELADA':
+        return 'status-cancelada';
+      case 'FINALIZADA':
+        return 'status-finalizada';
+      default:
+        return 'status-otra';
+    }
+  }
+
+  getCardStatusLabel(reservation: ReservationI): string {
+    const visual = this.getVisualStatus(reservation);
+
+    if (visual === 'EN_CURSO') return 'Check-In';
+    if (visual === 'POR_SALIR_HOY') return 'Check-Out';
+    if (visual === 'FINALIZADA') return 'Completada';
+
+    return this.getStatusStyle(reservation).label;
+  }
+
+  getCardRoomLine(reservation: ReservationI): string {
+    const detail = this.detailsCache.get(reservation.id);
+
+    if (detail?.rooms_detail?.length === 1) {
+      const room = detail.rooms_detail[0];
+      const roomNumber = String(room.room_number || room.room || '').trim();
+      const roomMeta = room.room ? this.roomMap.get(room.room) : null;
+      const roomType = roomMeta?.room_type_name ? String(roomMeta.room_type_name).trim() : '';
+
+      const numberLabel = roomNumber ? `#${roomNumber.replace(/^#/, '')}` : 'Sin asignar';
+      return roomType ? `${numberLabel} - ${roomType}` : numberLabel;
+    }
+
+    if (detail?.rooms_detail?.length && detail.rooms_detail.length > 1) {
+      return `${detail.rooms_detail.length} habitaciones`;
+    }
+
+    const roomCount = Number(reservation.total_rooms || 0);
+    if (roomCount > 0) return `${roomCount} habitaciones`;
+
+    return 'Sin asignar';
+  }
+
+  getCardStayCompact(reservation: ReservationI): string {
+    const checkIn = this.parseDate(reservation.expected_check_in);
+    const checkOut = this.parseDate(reservation.expected_check_out);
+    const nights = this.getNights(reservation);
+
+    const start = checkIn ? this.formatDateShort(checkIn) : this.formatDate(reservation.expected_check_in);
+    const end = checkOut ? this.formatDateShort(checkOut) : this.formatDate(reservation.expected_check_out);
+
+    return `${start} -> ${end} (${nights} ${nights === 1 ? 'noche' : 'noches'})`;
+  }
+
+  getCardPendingAmount(reservation: ReservationI): number {
+    const total = this.calculateReservationAmount(reservation);
+    const deposits = this.calculateDepositsAmount(reservation);
+    const pending = total - deposits;
+    return pending > 0 ? pending : 0;
+  }
+
+  getCardActionLabel(reservation: ReservationI): string {
+    const visual = this.getVisualStatus(reservation);
+
+    if (visual === 'CONFIRMADA') return 'Check-In';
+    if (visual === 'EN_CURSO' || visual === 'POR_SALIR_HOY') return 'Check-Out';
+
+    return 'Ver detalles';
+  }
+
+  getCardActionClass(reservation: ReservationI): string {
+    const visual = this.getVisualStatus(reservation);
+
+    if (visual === 'CONFIRMADA') return 'action-checkin';
+    if (visual === 'EN_CURSO' || visual === 'POR_SALIR_HOY') return 'action-checkout';
+
+    return 'action-detail';
+  }
+
+  getCardActionIcon(reservation: ReservationI): string {
+    const visual = this.getVisualStatus(reservation);
+
+    if (visual === 'CONFIRMADA') return 'fa-solid fa-arrow-right-to-bracket';
+    if (visual === 'EN_CURSO' || visual === 'POR_SALIR_HOY') return 'fa-solid fa-arrow-right-from-bracket';
+
+    return 'fa-regular fa-eye';
+  }
+
+  trackByReservation(_: number, reservation: ReservationI): number {
+    return reservation.id;
+  }
+
+  trackById(_: number, item: { id: number }): number {
+    return item.id;
+  }
+
+  trackByCalendarDay(_: number, day: CalendarDayI): string {
+    return day.iso;
+  }
+
+  trackByCalendarRow(_: number, row: CalendarRoomRowI): string {
+    return row.key;
+  }
+
+  previousCalendarRange(): void {
+    this.calendarStartDate = this.addDays(this.calendarStartDate, -14);
+    this.initializeCalendarDays();
+    this.buildCalendarRows();
+  }
+
+  nextCalendarRange(): void {
+    this.calendarStartDate = this.addDays(this.calendarStartDate, 14);
+    this.initializeCalendarDays();
+    this.buildCalendarRows();
+  }
+
+  goCalendarToday(): void {
+    this.calendarStartDate = this.startOfDay(new Date());
+    this.initializeCalendarDays();
+    this.buildCalendarRows();
+  }
+
+  getCalendarPeriodLabel(): string {
+    if (this.calendarDays.length === 0) return '';
+
+    const first = this.calendarDays[0].date;
+    const last = this.calendarDays[this.calendarDays.length - 1].date;
+
+    return `${this.formatDateFromDate(first)} - ${this.formatDateFromDate(last)}`;
+  }
+
+  getCalendarBarStyle(bar: CalendarBarI): Record<string, string | number> {
+    const statusStyle = this.resolveStatusStyle(bar.status);
+
+    return {
+      'left.%': bar.leftPercent,
+      'width.%': bar.widthPercent,
+      'background-color': statusStyle.borderColor,
+      color: '#ffffff'
+    };
+  }
+
+  private syncRouteContext(): void {
+    const currentPath = this.router.url.split('?')[0].toLowerCase();
+
+    if (currentPath.endsWith('/calendario')) {
+      this.viewMode = 'calendar';
+    }
+
+    if (currentPath.endsWith('/nueva')) {
+      this.showCreateOverlay = true;
+    }
+
+    const actionRaw = this.normalizeCode(this.route.snapshot.queryParamMap.get('action') || '');
+    const reservationId = Number(this.route.snapshot.queryParamMap.get('reservationId'));
+    const roomId = Number(this.route.snapshot.queryParamMap.get('roomId'));
+
+    if (actionRaw === 'CREATE' || actionRaw === 'CHECKIN') {
+      this.pendingRouteAction = actionRaw === 'CHECKIN' ? 'checkin' : 'create';
+      this.pendingRouteRoomId = Number.isFinite(roomId) && roomId > 0 ? roomId : null;
+      return;
+    }
+
+    if ((actionRaw === 'DETAIL' || actionRaw === 'EDIT') && Number.isFinite(reservationId) && reservationId > 0) {
+      this.pendingRouteReservationId = reservationId;
+      this.pendingRouteAction = actionRaw === 'EDIT' ? 'edit' : 'detail';
+    }
+  }
+
+  private consumePendingRouteReservationAction(): void {
+    if (this.pendingRouteAction === 'create' || this.pendingRouteAction === 'checkin') {
+      this.showUpdateOverlay = false;
+      this.selectedReservationId = null;
+      this.selectedReservationDetail = null;
+      this.reservationToEdit = null;
+      this.createPrefillRoomId = this.pendingRouteRoomId;
+      this.createPrefillCheckInMode = this.pendingRouteAction === 'checkin';
+      this.showCreateOverlay = true;
+
+      this.pendingRouteReservationId = null;
+      this.pendingRouteRoomId = null;
+      this.pendingRouteAction = 'detail';
+      this.clearRouteReservationActionParams();
+      return;
+    }
+
+    if (!this.pendingRouteReservationId) return;
+
+    const reservationId = this.pendingRouteReservationId;
+    const action = this.pendingRouteAction;
+    this.pendingRouteReservationId = null;
+    this.pendingRouteRoomId = null;
+    this.pendingRouteAction = 'detail';
+
+    if (action === 'edit') {
+      this.openUpdateOverlay({ id: reservationId } as ReservationI);
+    } else {
+      this.openDetailById(reservationId);
+    }
+
+    this.clearRouteReservationActionParams();
+  }
+
+  private clearRouteReservationActionParams(): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { reservationId: null, roomId: null, action: null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true
+    });
+  }
+
+  private preloadReservationDetails(ids: number[]): void {
+    const uniqueIds = Array.from(new Set(ids.filter((id) => !!id)));
+    const missingIds = uniqueIds.filter((id) => !this.detailsCache.has(id));
+
+    if (missingIds.length === 0) {
+      this.buildCalendarRows();
+      return;
+    }
+
+    this.detailsLoading = true;
+
+    const requests = missingIds.map((id) =>
+      this.reservationService
+        .getReservationById(id)
+        .pipe(catchError(() => of(null)))
+    );
+
+    forkJoin(requests).subscribe({
+      next: (details) => {
+        for (const detail of details) {
+          if (!detail) continue;
+          this.detailsCache.set(detail.id, detail);
+        }
+
+        this.detailsLoading = false;
+        this.selectedReservationDetail = this.selectedReservationId
+          ? this.detailsCache.get(this.selectedReservationId) || null
+          : null;
+
+        if (this.reservationToEdit?.id) {
+          this.reservationToEdit = this.detailsCache.get(this.reservationToEdit.id) || this.reservationToEdit;
+        }
+
+        this.buildCalendarRows();
+      },
+      error: () => {
+        this.detailsLoading = false;
+        this.buildCalendarRows();
+      }
+    });
+  }
+
+  private ensureReservationDetail(
+    reservationId: number,
+    callback: (detail: ReservationDetailI) => void
+  ): void {
+    const cached = this.detailsCache.get(reservationId);
+    if (cached) {
+      callback(cached);
+      return;
+    }
+
+    this.reservationService.getReservationById(reservationId).subscribe({
+      next: (detail) => {
+        this.detailsCache.set(reservationId, detail);
+        callback(detail);
+      },
+      error: () => {
+        this.errorMessage = 'No fue posible cargar el detalle de la reserva seleccionada.';
+      }
+    });
+  }
+
+  private initializeCalendarDays(): void {
+    const today = this.startOfDay(new Date());
+
+    this.calendarDays = Array.from({ length: 14 }).map((_, index) => {
+      const date = this.addDays(this.calendarStartDate, index);
+
+      return {
+        date,
+        dayLabel: `${date.getDate()}`,
+        weekLabel: this.getWeekShort(date),
+        iso: this.toIsoDate(date),
+        isToday: date.getTime() === today.getTime()
+      };
+    });
+  }
+
+  private buildCalendarRows(): void {
+    if (this.calendarDays.length === 0) {
+      this.calendarRows = [];
+      return;
+    }
+
+    const rangeStart = this.calendarDays[0].date;
+    const rangeEndExclusive = this.addDays(this.calendarDays[this.calendarDays.length - 1].date, 1);
+    const rowMap = new Map<string, CalendarRoomRowI>();
+
+    const source = [...this.filteredReservations].sort((a, b) => {
+      const aDate = this.parseDate(a.expected_check_in)?.getTime() || 0;
+      const bDate = this.parseDate(b.expected_check_in)?.getTime() || 0;
+      return aDate - bDate;
+    });
+
+    for (const reservation of source) {
+      const detail = this.detailsCache.get(reservation.id);
+      if (!detail) continue;
+
+      const roomDetails = detail.rooms_detail?.length ? detail.rooms_detail : [];
+
+      if (roomDetails.length === 0) {
+        const bar = this.buildCalendarBar(reservation, rangeStart, rangeEndExclusive);
+        if (!bar) continue;
+
+        const rowKey = 'WITHOUT_ROOM';
+        const row = rowMap.get(rowKey) || {
+          key: rowKey,
+          roomNumber: 'Sin habitacion',
+          roomType: 'Asignacion pendiente',
+          bars: []
+        };
+
+        row.bars.push(bar);
+        rowMap.set(rowKey, row);
+        continue;
+      }
+
+      for (const roomDetail of roomDetails) {
+        const roomNumber = roomDetail.room_number || String(roomDetail.room);
+        const roomMeta = this.roomMap.get(roomDetail.room);
+
+        const bar = this.buildCalendarBar(reservation, rangeStart, rangeEndExclusive);
+        if (!bar) continue;
+
+        const rowKey = `ROOM_${roomDetail.room}`;
+        const row = rowMap.get(rowKey) || {
+          key: rowKey,
+          roomNumber: roomNumber,
+          roomType: roomMeta?.room_type_name || 'Sin tipo',
+          bars: []
+        };
+
+        row.bars.push(bar);
+        rowMap.set(rowKey, row);
+      }
+    }
+
+    const rows = Array.from(rowMap.values()).map((row) => ({
+      ...row,
+      bars: [...row.bars].sort((a, b) => a.startIndex - b.startIndex)
+    }));
+
+    rows.sort((a, b) => this.sortRoomNumber(a.roomNumber, b.roomNumber));
+
+    this.calendarRows = rows;
+  }
+
+  private buildCalendarBar(
+    reservation: ReservationI,
+    rangeStart: Date,
+    rangeEndExclusive: Date
+  ): CalendarBarI | null {
+    const reservationStart = this.parseDate(reservation.expected_check_in);
+    const reservationEnd = this.parseDate(reservation.expected_check_out);
+
+    if (!reservationStart || !reservationEnd) return null;
+
+    const normalizedReservationEnd = reservationEnd > reservationStart ? reservationEnd : this.addDays(reservationStart, 1);
+
+    const overlapStart = reservationStart > rangeStart ? reservationStart : rangeStart;
+    const overlapEnd = normalizedReservationEnd < rangeEndExclusive ? normalizedReservationEnd : rangeEndExclusive;
+
+    if (overlapEnd <= overlapStart) return null;
+
+    const startIndex = this.diffInDays(rangeStart, overlapStart);
+    const span = Math.max(1, this.diffInDays(overlapStart, overlapEnd));
+    const totalDays = this.calendarDays.length;
+
+    return {
+      reservationId: reservation.id,
+      reservationCode: this.getReservationCode(reservation),
+      guestName: reservation.client_full_name || 'Huesped sin nombre',
+      status: this.getVisualStatus(reservation),
+      startIndex,
+      span,
+      leftPercent: (startIndex / totalDays) * 100,
+      widthPercent: Math.max((span / totalDays) * 100, 6)
+    };
+  }
+
+  private getVisualStatus(reservation: ReservationI): ReservationVisualStatus {
+    const statusCode = this.normalizeCode(reservation.status_code);
+
+    if (statusCode === 'CANCELADA') return 'CANCELADA';
+    if (statusCode === 'FINALIZADA') return 'FINALIZADA';
+
+    if (this.isCheckoutToday(reservation) && ['CONFIRMADA', 'EN_CURSO', 'PENDIENTE'].includes(statusCode)) {
+      return 'POR_SALIR_HOY';
+    }
+
+    if (statusCode === 'EN_CURSO') return 'EN_CURSO';
+    if (statusCode === 'PENDIENTE') return 'PENDIENTE';
+    if (statusCode === 'CONFIRMADA') return 'CONFIRMADA';
+
+    return 'OTRA';
+  }
+
+  private matchesStatusFilter(reservation: ReservationI, statusFilter: ReservationStatusFilter): boolean {
+    if (statusFilter === 'ALL') return true;
+
+    const visualStatus = this.getVisualStatus(reservation);
+
+    if (statusFilter === 'POR_SALIR_HOY') {
+      return visualStatus === 'POR_SALIR_HOY';
+    }
+
+    return visualStatus === statusFilter;
+  }
+
+  private resolveStatusStyle(status: ReservationVisualStatus): ReservationStatusStyleI {
+    switch (status) {
+      case 'CONFIRMADA':
+        return {
+          label: 'Confirmada',
+          chipBg: '#dbeafe',
+          chipColor: '#1d4ed8',
+          dotColor: '#3b82f6',
+          borderColor: '#3b82f6',
+          actionBg: '#1d4ed8',
+          actionColor: '#ffffff'
+        };
+      case 'PENDIENTE':
+        return {
+          label: 'Pendiente',
+          chipBg: '#fef3c7',
+          chipColor: '#b45309',
+          dotColor: '#f59e0b',
+          borderColor: '#f59e0b',
+          actionBg: '#b45309',
+          actionColor: '#ffffff'
+        };
+      case 'EN_CURSO':
+        return {
+          label: 'En curso',
+          chipBg: '#dcfce7',
+          chipColor: '#15803d',
+          dotColor: '#22c55e',
+          borderColor: '#22c55e',
+          actionBg: '#166534',
+          actionColor: '#ffffff'
+        };
+      case 'POR_SALIR_HOY':
+        return {
+          label: 'Por salir hoy',
+          chipBg: '#ffedd5',
+          chipColor: '#c2410c',
+          dotColor: '#f97316',
+          borderColor: '#f97316',
+          actionBg: '#ea580c',
+          actionColor: '#ffffff'
+        };
+      case 'CANCELADA':
+        return {
+          label: 'Cancelada',
+          chipBg: '#e5e7eb',
+          chipColor: '#4b5563',
+          dotColor: '#9ca3af',
+          borderColor: '#9ca3af',
+          actionBg: '#64748b',
+          actionColor: '#ffffff'
+        };
+      case 'FINALIZADA':
+        return {
+          label: 'Finalizada',
+          chipBg: '#e2e8f0',
+          chipColor: '#334155',
+          dotColor: '#64748b',
+          borderColor: '#64748b',
+          actionBg: '#334155',
+          actionColor: '#ffffff'
+        };
+      default:
+        return {
+          label: 'Sin estado',
+          chipBg: '#e2e8f0',
+          chipColor: '#334155',
+          dotColor: '#94a3b8',
+          borderColor: '#94a3b8',
+          actionBg: '#334155',
+          actionColor: '#ffffff'
+        };
+    }
+  }
+
+  private calculateReservationAmount(reservation: ReservationI): number {
+    const detail = this.detailsCache.get(reservation.id);
+
+    if (!detail) {
+      const fallbackDiscount = Number(reservation.total_discount || 0);
+      return Math.max(0, 0 - (Number.isNaN(fallbackDiscount) ? 0 : fallbackDiscount));
+    }
+
+    const roomsTotal = (detail.rooms_detail || []).reduce((sum, room) => {
+      const subtotal = Number(room.subtotal || 0);
+      if (Number.isNaN(subtotal)) return sum;
+      return sum + subtotal;
+    }, 0);
+
+    const discount = Number(detail.total_discount || reservation.total_discount || 0);
+
+    return Math.max(0, roomsTotal - (Number.isNaN(discount) ? 0 : discount));
+  }
+
+  private calculateDepositsAmount(reservation: ReservationI): number {
+    const detail = this.detailsCache.get(reservation.id);
+    if (!detail) return 0;
+
+    return (detail.deposits || []).reduce((sum, deposit) => {
+      const amount = Number(deposit.amount || 0);
+      return sum + (Number.isNaN(amount) ? 0 : amount);
+    }, 0);
+  }
+
+  private normalizeCode(value: string | undefined): string {
+    return String(value || '').trim().toUpperCase();
+  }
+
+  private isCheckoutToday(reservation: ReservationI): boolean {
+    return this.isToday(reservation.expected_check_out);
+  }
+
+  private isToday(value: string | null | undefined): boolean {
+    const date = value ? this.parseDate(value) : null;
+    if (!date) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    date.setHours(0, 0, 0, 0);
+
+    return date.getTime() === today.getTime();
+  }
+
+  private parseDate(value: string): Date | null {
+    if (!value) return null;
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [year, month, day] = value.split('-').map((part) => Number(part));
+      if ([year, month, day].some((part) => Number.isNaN(part))) return null;
+
+      const date = new Date(year, month - 1, day);
+      date.setHours(0, 0, 0, 0);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    const datetime = new Date(value);
+    if (Number.isNaN(datetime.getTime())) return null;
+
+    return datetime;
+  }
+
+  private startOfDay(date: Date): Date {
+    const copy = new Date(date);
+    copy.setHours(0, 0, 0, 0);
+    return copy;
+  }
+
+  private addDays(date: Date, days: number): Date {
+    const copy = new Date(date);
+    copy.setDate(copy.getDate() + days);
+    copy.setHours(0, 0, 0, 0);
+    return copy;
+  }
+
+  private diffInDays(start: Date, end: Date): number {
+    const msPerDay = 1000 * 60 * 60 * 24;
+    return Math.max(0, Math.round((end.getTime() - start.getTime()) / msPerDay));
+  }
+
+  private getWeekShort(date: Date): string {
+    return date
+      .toLocaleDateString('es-CO', { weekday: 'short' })
+      .replace('.', '')
+      .slice(0, 1)
+      .toUpperCase();
+  }
+
+  private toIsoDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+  }
+
+  private sortRoomNumber(a: string, b: string): number {
+    const parse = (value: string): number => {
+      const match = value.match(/\d+/);
+      if (!match) return Number.MAX_SAFE_INTEGER;
+      return Number(match[0]);
+    };
+
+    const diff = parse(a) - parse(b);
+    if (diff !== 0) return diff;
+
+    return a.localeCompare(b, 'es-CO');
+  }
+
+  private formatDate(value: string | null | undefined): string {
+    if (!value) return 'Sin fecha';
+
+    const date = this.parseDate(value);
+    if (!date) return value;
+
+    return this.formatDateFromDate(date);
+  }
+
+  private formatDateFromDate(date: Date): string {
+    return date.toLocaleDateString('es-CO', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  }
+
+  private formatDateShort(date: Date): string {
+    return date.toLocaleDateString('es-CO', {
+      day: '2-digit',
+      month: 'short'
+    });
+  }
+
+  private getNights(reservation: ReservationI): number {
+    if (typeof reservation.total_nights === 'number') return reservation.total_nights;
+
+    const checkIn = this.parseDate(reservation.expected_check_in);
+    const checkOut = this.parseDate(reservation.expected_check_out);
+    if (!checkIn || !checkOut) return 0;
+
+    const nights = this.diffInDays(checkIn, checkOut);
+    return nights > 0 ? nights : 0;
+  }
+
+  private formatCurrency(value: number): string {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      maximumFractionDigits: 0
+    }).format(value || 0);
+  }
+
+  private formatFileDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+    return `${year}${month}${day}`;
+  }
+
+  private escapeCsvCell(value: unknown): string {
+    const normalized = String(value ?? '');
+    const escaped = normalized.replace(/"/g, '""');
+    return `"${escaped}"`;
+  }
+
+  private dedupeMasterDataByCode(items: MasterDataI[]): MasterDataI[] {
+    const uniqueMap = new Map<string, MasterDataI>();
+
+    for (const item of items) {
+      const code = this.normalizeCode(item.code);
+      if (!code) continue;
+
+      const existing = uniqueMap.get(code);
+      if (!existing) {
+        uniqueMap.set(code, item);
+        continue;
+      }
+
+      const existingOrder = Number(existing.sort_order ?? Number.MAX_SAFE_INTEGER);
+      const currentOrder = Number(item.sort_order ?? Number.MAX_SAFE_INTEGER);
+
+      if (currentOrder < existingOrder) {
+        uniqueMap.set(code, item);
+      }
+    }
+
+    return Array.from(uniqueMap.values()).sort((a, b) => {
+      const orderDiff = Number(a.sort_order || 0) - Number(b.sort_order || 0);
+      if (orderDiff !== 0) return orderDiff;
+      return (a.name || '').localeCompare(b.name || '', 'es-CO');
+    });
+  }
+}
+

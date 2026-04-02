@@ -299,27 +299,55 @@ input:focus {
 
 .room-card {
   background: #fff;
-  border: 1px solid #dce5f2;
-  border-top: 5px solid #3b82f6;
-  border-radius: 16px;
-  padding: 14px;
+  border: 1px solid #d9e1ec;
+  border-top: 6px solid #3b82f6;
+  border-radius: 14px;
+  box-shadow: 0 9px 20px rgba(15, 23, 42, 0.05);
+  padding: 14px 14px 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 9px;
+  cursor: pointer;
+}
+
+.room-card.is-available {
+  border-top-color: #22c55e;
+}
+
+.room-card.is-occupied,
+.room-card.is-reserved {
+  border-top-color: #3b82f6;
+}
+
+.room-card.is-leaving-today {
+  border-top-color: #eab308;
+}
+
+.room-card.is-maintenance {
+  border-top-color: #ef4444;
+}
+
+.room-card.is-cleaning {
+  border-top-color: #06b6d4;
+}
+
+.room-card.is-out-of-service {
+  border-top-color: #94a3b8;
 }
 
 .room-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
 }
 
 .room-head h2 {
   margin: 0;
-  font-size: 40px;
+  font-size: 42px;
   line-height: 1;
   letter-spacing: -0.02em;
+  color: #0f172a;
 }
 
 .status-chip {
@@ -332,6 +360,11 @@ input:focus {
   font-weight: 600;
 }
 
+.status-chip-card {
+  margin-top: 4px;
+  padding: 4px 10px;
+}
+
 .status-dot {
   width: 7px;
   height: 7px;
@@ -341,63 +374,133 @@ input:focus {
 .room-type {
   margin: 0;
   color: #546377;
-  font-size: 15px;
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.room-type i {
+  color: #4a68a8;
+  font-size: 13px;
 }
 
 .room-price {
-  margin: 0;
+  margin: 2px 0 0;
   color: #0f1f41;
   font-weight: 700;
-  font-size: 29px;
+  font-size: 34px;
 }
 
 .room-price small {
   margin-left: 3px;
-  font-size: 14px;
+  font-size: 18px;
   color: #8a94a6;
-  font-weight: 500;
+  font-weight: 600;
 }
 
-.maintenance {
-  margin: 0;
+.reservation-info {
+  background: #f6f8fb;
+  border: 1px solid #edf2f9;
   border-radius: 10px;
-  background: #fff4eb;
-  color: #bb5726;
-  padding: 9px 10px;
-  font-size: 13px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.room-actions {
-  margin-top: auto;
-  display: flex;
+.reservation-info p {
+  margin: 0;
+  color: #334155;
+  font-size: 14px;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
+.reservation-info p i {
+  color: #8392a8;
+  width: 14px;
+}
+
+.reservation-info p strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.maintenance {
+  margin: 0;
+  border-radius: 9px;
+  background: #fff3f2;
+  color: #c2413b;
+  border: 1px solid #ffe0de;
+  padding: 9px 10px;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.room-actions {
+  margin-top: auto;
+  padding-top: 2px;
+}
+
 .action-btn {
-  flex: 1;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 10px;
-  min-height: 38px;
+  min-height: 40px;
   padding: 0 12px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .action-btn:disabled {
   cursor: not-allowed;
 }
 
-.icon-btn {
-  min-height: 38px;
-  border: 1px solid #d7deea;
-  background: #fff;
-  color: #475569;
-  border-radius: 10px;
-  padding: 0 10px;
-  font-size: 13px;
-  cursor: pointer;
+.card-main-btn {
+  width: 100%;
+}
+
+.card-main-btn.is-checkin {
+  background: #0f1f41;
+  color: #fff;
+}
+
+.card-main-btn.is-detail {
+  background: #e8edf4;
+  border-color: #dce4ee;
+  color: #334155;
+}
+
+.card-main-btn.is-checkout {
+  background: #ef4444;
+  color: #fff;
+}
+
+.card-main-btn.is-disabled {
+  background: #eef2f7;
+  border-color: #e2e8f0;
+  color: #94a3b8;
+}
+
+.card-main-btn.is-checkin:not(:disabled):hover {
+  background: #112750;
+}
+
+.card-main-btn.is-checkout:not(:disabled):hover {
+  background: #dc2626;
+}
+
+.card-main-btn.is-detail:not(:disabled):hover {
+  background: #dfe7f2;
 }
 
 .table-card {
@@ -454,6 +557,10 @@ tbody tr:hover {
   margin: 0;
   font-weight: 700;
   color: #0f172a;
+}
+
+.table-clickable-row {
+  cursor: pointer;
 }
 
 td small {
