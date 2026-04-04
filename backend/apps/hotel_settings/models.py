@@ -1,4 +1,7 @@
+from django.core.exceptions import ValidationError
 from django.db import models
+
+from apps.master_data.models import MasterData
 
 
 class HotelSettings(models.Model):
@@ -118,3 +121,77 @@ class HotelFloor(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.floor_number})"
+
+class ReservationPolicy(models.Model):
+    hotel_settings = models.ForeignKey(
+        HotelSettings,
+        on_delete=models.CASCADE,
+        related_name="reservation_policies",
+    )
+    policy_type = models.ForeignKey(
+        MasterData,
+        on_delete=models.PROTECT,
+        related_name="reservation_policies_by_type",
+        limit_choices_to={"group": MasterData.Group.RESERVATION_POLICY_TYPE},
+    )
+    penalty_type = models.ForeignKey(
+        MasterData,
+        on_delete=models.PROTECT,
+        related_name="reservation_policies_by_penalty_type",
+        limit_choices_to={"group": MasterData.Group.RESERVATION_PENALTY_TYPE},
+    )
+
+    name = models.CharField(max_length=150)
+    description = models.TextField(blank=True, null=True)
+
+    penalty_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        default=0,
+    )
+    hours_before_checkin = models.PositiveIntegerField(blank=True, null=True)
+
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "reservation_policy"
+        ordering = ["-id"]
+        unique_together = ("hotel_settings", "name")
+
+    @property
+    def policy_type_code(self):
+        return self.policy_type.code if self.policy_type else None
+
+    @property
+    def penalty_type_code(self):
+        return self.penalty_type.code if self.penalty_type else None
+
+    def clean(self):
+        errors = {}
+
+        if self.penalty_value is not None and self.penalty_value < 0:
+            errors["penalty_value"] = "Penalty value cannot be negative."
+
+        if self.hours_before_checkin is not None and self.hours_before_checkin < 0:
+            errors["hours_before_checkin"] = "Hours before check-in cannot be negative."
+
+        if self.penalty_type:
+            penalty_code = (self.penalty_type.code or "").strip().upper()
+
+            if penalty_code in ["PERCENTAGE"] and self.penalty_value is None:
+                errors["penalty_value"] = "Penalty value is required for percentage penalties."
+
+            if penalty_code == "PERCENTAGE" and self.penalty_value is not None:
+                if self.penalty_value > 100:
+                    errors["penalty_value"] = "Percentage penalty cannot be greater than 100."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.name} - {self.hotel_settings.hotel_name}"

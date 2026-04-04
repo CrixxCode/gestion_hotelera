@@ -1,12 +1,13 @@
 # accounts/views.py
 
 from django.contrib.auth import authenticate, login, logout, get_user_model
+from django.conf import settings
 from django.views.decorators.csrf import ensure_csrf_cookie
 import logging
 logger = logging.getLogger(__name__)
 from django.utils.decorators import method_decorator
 
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -72,7 +73,7 @@ class SessionLoginView(APIView):
 
         user = authenticate(request, username=username, password=password)
         if not user:
-            return Response({"detail": "Credenciales inválidas."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Credenciales inválidas."}, status=status.HTTP_401_UNAUTHORIZED)
         if not user.is_active:
             return Response({"detail": "Usuario inactivo."}, status=status.HTTP_403_FORBIDDEN)
 
@@ -145,10 +146,16 @@ class PasswordResetRequestView(APIView):
             context={"request": request, "base_url": request.data.get("base_url")}
         )
         ser.is_valid(raise_exception=True)
-        result = ser.save()
-        if result.get("found"):
-            return Response({"detail": "Correo de recuperación enviado.", "sent": True}, status=status.HTTP_200_OK)
-        return Response({"detail": "No se encontró un usuario con ese email.", "sent": False}, status=status.HTTP_404_NOT_FOUND)
+        ser.save()
+        return Response(
+            {
+                "detail": (
+                    "Si existe una cuenta asociada al correo, se enviara el enlace de recuperacion."
+                ),
+                "sent": True,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class PasswordResetConfirmView(APIView):
@@ -179,6 +186,11 @@ class UserViewSet(viewsets.ModelViewSet):
         "create": RegisterSerializer,
         "register": RegisterSerializer,
     }
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["roles__slug", "is_active", "is_staff"]
+    search_fields = ["username", "email", "first_name", "last_name"]
+    ordering_fields = ["date_joined", "username", "email", "first_name", "last_name"]
+    ordering = ["-date_joined"]
 
     def get_serializer_class(self):
         return self.serializer_action_classes.get(self.action, self.serializer_class)
@@ -189,7 +201,8 @@ class UserViewSet(viewsets.ModelViewSet):
         return self.required_scopes
 
     def get_permissions(self):
-        if self.action in ("create", "register"):
+        allow_public_register = getattr(settings, "ALLOW_PUBLIC_USER_REGISTRATION", False)
+        if self.action in ("create", "register") and allow_public_register:
             return [AllowAny()]
         # engancha scopes dinámicos antes de evaluar permisos
         self.required_scopes = self.get_required_scopes()
@@ -397,3 +410,4 @@ class ProfileUpdateView(APIView):
         serializer.save()
         return Response(serializer.data)
     
+

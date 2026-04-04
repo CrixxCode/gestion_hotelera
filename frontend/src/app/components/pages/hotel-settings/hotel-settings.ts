@@ -2,13 +2,17 @@ import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { forkJoin, map, Observable, of, switchMap } from 'rxjs';
+import { catchError, forkJoin, map, Observable, of, switchMap } from 'rxjs';
 import { environment } from '../../../../enviorements/environment';
+import { MasterDataI } from '../master-data/master-data-model';
 import { AuthService } from '../../../services/auth/auth';
 import { HotelSettingsService } from '../../../services/hotel-settings';
+import { MasterDataService } from '../../../services/master-data.service';
+import { ReservationService } from '../../../services/reservation';
+import { ReservationPolicyI, ReservationPolicyPayloadI } from '../../../modules/reservations/reservation-model';
 import { HotelFloor, HotelSettings as HotelSettingsModel } from './hotel-setting-model';
 
-type SettingsTab = 'general' | 'contact' | 'structure' | 'operation';
+type SettingsTab = 'general' | 'contact' | 'structure' | 'operation' | 'policies';
 type SettingsForm = {
   hotel_name: string;
   legal_name: string;
@@ -37,6 +41,17 @@ type SettingsForm = {
   timezone: string;
 };
 
+type ReservationPolicyForm = {
+  id: number | null;
+  policy_type: number | null;
+  penalty_type: number | null;
+  name: string;
+  description: string;
+  penalty_value: number | null;
+  hours_before_checkin: number | null;
+  is_active: boolean;
+};
+
 @Component({
   selector: 'app-hotel-settings',
   standalone: true,
@@ -53,6 +68,8 @@ export class HotelSettings implements OnInit {
   errorMessage = '';
   successMessage = '';
   canEdit = false;
+  canReadPolicies = false;
+  canEditPolicies = false;
 
   activeTab: SettingsTab = 'general';
   settingsId: number | null = null;
@@ -61,6 +78,13 @@ export class HotelSettings implements OnInit {
   form: SettingsForm = this.buildDefaultForm();
   floors: HotelFloor[] = [];
   deletedFloorIds: number[] = [];
+  reservationPolicies: ReservationPolicyI[] = [];
+  policyTypes: MasterDataI[] = [];
+  penaltyTypes: MasterDataI[] = [];
+  policyForm: ReservationPolicyForm = this.buildDefaultPolicyForm();
+  policyLoading = false;
+  policySaving = false;
+  policyDeletingId: number | null = null;
 
   private initialSnapshot = '';
 
@@ -68,6 +92,7 @@ export class HotelSettings implements OnInit {
     { key: 'general', label: 'Información General', icon: 'fa-solid fa-building' },
     { key: 'contact', label: 'Contacto & Ubicación', icon: 'fa-solid fa-location-dot' },
     { key: 'structure', label: 'Estructura', icon: 'fa-solid fa-layer-group' },
+    { key: 'policies', label: 'Politicas de Reserva', icon: 'fa-solid fa-file-contract' },
     { key: 'operation', label: 'Operación', icon: 'fa-regular fa-clock' },
   ];
 
@@ -94,7 +119,9 @@ export class HotelSettings implements OnInit {
   constructor(
     private settingsSvc: HotelSettingsService,
     private http: HttpClient,
-    private auth: AuthService
+    private auth: AuthService,
+    private masterDataService: MasterDataService,
+    private reservationService: ReservationService
   ) {}
 
   ngOnInit(): void {
@@ -144,6 +171,19 @@ export class HotelSettings implements OnInit {
     return this.initialSnapshot !== this.currentSnapshot();
   }
 
+  get isActiveTabReadOnly(): boolean {
+    if (this.activeTab === 'policies') return !this.canEditPolicies;
+    return !this.canEdit;
+  }
+
+  get activePoliciesCount(): number {
+    return this.reservationPolicies.filter((policy) => policy.is_active !== false).length;
+  }
+
+  get isPercentagePenaltySelected(): boolean {
+    return this.getPenaltyTypeCode(this.policyForm.penalty_type) === 'PERCENTAGE';
+  }
+
   setStars(value: number): void {
     if (!this.canEdit) return;
     this.form.stars = value;
@@ -187,6 +227,144 @@ export class HotelSettings implements OnInit {
     const start = `${prefix}01`;
     const end = `${prefix}${String(roomCount).padStart(2, '0')}`;
     return `${start} - ${end}`;
+  }
+
+  trackPolicy(_: number, policy: ReservationPolicyI): number {
+    return policy.id;
+  }
+
+  newPolicy(): void {
+    if (!this.canEditPolicies) return;
+    this.policyForm = this.buildDefaultPolicyForm();
+    this.applyPolicyCatalogDefaults();
+    this.errorMessage = '';
+    this.successMessage = '';
+  }
+
+  editPolicy(policy: ReservationPolicyI): void {
+    if (!this.canEditPolicies) return;
+
+    const penaltyValue =
+      policy.penalty_value === undefined || policy.penalty_value === null || policy.penalty_value === ''
+        ? null
+        : Number(policy.penalty_value);
+
+    this.policyForm = {
+      id: policy.id,
+      policy_type: Number(policy.policy_type) || null,
+      penalty_type: Number(policy.penalty_type) || null,
+      name: (policy.name || '').trim(),
+      description: String(policy.description || ''),
+      penalty_value: Number.isNaN(penaltyValue) ? null : penaltyValue,
+      hours_before_checkin:
+        policy.hours_before_checkin === undefined || policy.hours_before_checkin === null
+          ? null
+          : Number(policy.hours_before_checkin),
+      is_active: policy.is_active !== false
+    };
+
+    this.errorMessage = '';
+    this.successMessage = '';
+  }
+
+  cancelPolicyEdition(): void {
+    this.policyForm = this.buildDefaultPolicyForm();
+    this.applyPolicyCatalogDefaults();
+    this.errorMessage = '';
+    this.successMessage = '';
+  }
+
+  savePolicy(): void {
+    if (!this.canEditPolicies) {
+      this.errorMessage = 'No tienes permisos para modificar politicas de reserva.';
+      return;
+    }
+
+    const validation = this.validatePolicyBeforeSave();
+    if (validation) {
+      this.errorMessage = validation;
+      return;
+    }
+
+    const payload = this.buildPolicyPayload();
+    if (!payload) {
+      this.errorMessage = 'No se pudo construir la politica a guardar.';
+      return;
+    }
+
+    this.policySaving = true;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    const request$ = this.policyForm.id
+      ? this.reservationService.updateReservationPolicy(this.policyForm.id, payload)
+      : this.reservationService.createReservationPolicy(payload);
+
+    request$.subscribe({
+      next: () => {
+        this.policySaving = false;
+        const wasEditing = !!this.policyForm.id;
+        this.policyForm = this.buildDefaultPolicyForm();
+        this.applyPolicyCatalogDefaults();
+        this.loadReservationPolicies();
+        this.successMessage = wasEditing
+          ? 'Politica de reserva actualizada correctamente.'
+          : 'Politica de reserva creada correctamente.';
+      },
+      error: (error) => {
+        this.policySaving = false;
+        this.errorMessage = this.extractApiErrorMessage(
+          error,
+          'No se pudo guardar la politica de reserva.'
+        );
+      }
+    });
+  }
+
+  deletePolicy(policy: ReservationPolicyI): void {
+    if (!this.canEditPolicies) return;
+    const policyName = (policy.name || '').trim() || `#${policy.id}`;
+    const confirmed = window.confirm(`Deseas eliminar la politica "${policyName}"?`);
+    if (!confirmed) return;
+
+    this.policyDeletingId = policy.id;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    this.reservationService.deleteReservationPolicy(policy.id).subscribe({
+      next: () => {
+        if (this.policyForm.id === policy.id) {
+          this.policyForm = this.buildDefaultPolicyForm();
+          this.applyPolicyCatalogDefaults();
+        }
+
+        this.loadReservationPolicies();
+        this.policyDeletingId = null;
+        this.successMessage = 'Politica de reserva eliminada correctamente.';
+      },
+      error: (error) => {
+        this.policyDeletingId = null;
+        this.errorMessage = this.extractApiErrorMessage(
+          error,
+          'No se pudo eliminar la politica de reserva.'
+        );
+      }
+    });
+  }
+
+  policyPenaltyLabel(policy: ReservationPolicyI): string {
+    const penaltyCode = this.normalizeCode(policy.penalty_type_code);
+    const penaltyValue = Number(policy.penalty_value);
+
+    if (Number.isNaN(penaltyValue)) {
+      return policy.penalty_type_name || policy.penalty_type_code || 'Sin penalidad';
+    }
+
+    if (penaltyCode === 'PERCENTAGE') {
+      return `${penaltyValue}%`;
+    }
+
+    return penaltyValue.toLocaleString('es-CO');
   }
 
   saveSettings(): void {
@@ -318,15 +496,29 @@ export class HotelSettings implements OnInit {
     this.auth.getUserInfo().subscribe({
       next: (user) => {
         const keys = Array.isArray(user.resource_keys) ? user.resource_keys : [];
-        this.canEdit = this.hasWritePermission(keys);
+        this.canEdit = this.hasSettingsWritePermission(keys);
+        this.canReadPolicies = this.hasPoliciesReadPermission(keys);
+        this.canEditPolicies = this.hasPoliciesWritePermission(keys);
+
+        if (this.canReadPolicies) {
+          this.loadPolicyCatalogs();
+          if (this.settingsId) {
+            this.loadReservationPolicies();
+          }
+        } else {
+          this.resetPolicyState();
+        }
       },
       error: () => {
         this.canEdit = false;
-      },
+        this.canReadPolicies = false;
+        this.canEditPolicies = false;
+        this.resetPolicyState();
+      }
     });
   }
 
-  private hasWritePermission(resourceKeys: string[]): boolean {
+  private hasSettingsWritePermission(resourceKeys: string[]): boolean {
     const normalized = new Set(resourceKeys.map((k) => (k || '').trim().toLowerCase()));
     return (
       normalized.has('*') ||
@@ -339,6 +531,30 @@ export class HotelSettings implements OnInit {
     );
   }
 
+  private hasPoliciesReadPermission(resourceKeys: string[]): boolean {
+    const normalized = new Set(resourceKeys.map((k) => (k || '').trim().toLowerCase()));
+    return (
+      normalized.has('*') ||
+      normalized.has('reservation-policies.read') ||
+      normalized.has('reservation_policies.read') ||
+      normalized.has('reservation-policies.write') ||
+      normalized.has('reservation_policies.write') ||
+      normalized.has('reservation-policies.*') ||
+      normalized.has('reservation_policies.*')
+    );
+  }
+
+  private hasPoliciesWritePermission(resourceKeys: string[]): boolean {
+    const normalized = new Set(resourceKeys.map((k) => (k || '').trim().toLowerCase()));
+    return (
+      normalized.has('*') ||
+      normalized.has('reservation-policies.write') ||
+      normalized.has('reservation_policies.write') ||
+      normalized.has('reservation-policies.*') ||
+      normalized.has('reservation_policies.*')
+    );
+  }
+
   private applySettings(settings: HotelSettingsModel | null): void {
     if (!settings) {
       this.settingsId = null;
@@ -346,6 +562,7 @@ export class HotelSettings implements OnInit {
       this.form = this.buildDefaultForm();
       this.floors = [];
       this.deletedFloorIds = [];
+      this.clearPoliciesCollection();
       return;
     }
 
@@ -366,6 +583,100 @@ export class HotelSettings implements OnInit {
       room_count: Number(floor.room_count) || 0,
     }));
     this.deletedFloorIds = [];
+
+    if (this.canReadPolicies) {
+      this.loadReservationPolicies();
+    } else {
+      this.clearPoliciesCollection();
+    }
+  }
+
+  private loadPolicyCatalogs(): void {
+    forkJoin({
+      policyTypes: this.masterDataService
+        .listMasterData({
+          group: 'RESERVATION_POLICY_TYPE',
+          is_active: 'true',
+          ordering: 'sort_order,name'
+        })
+        .pipe(catchError(() => of([] as MasterDataI[]))),
+      penaltyTypes: this.masterDataService
+        .listMasterData({
+          group: 'RESERVATION_PENALTY_TYPE',
+          is_active: 'true',
+          ordering: 'sort_order,name'
+        })
+        .pipe(catchError(() => of([] as MasterDataI[])))
+    }).subscribe({
+      next: ({ policyTypes, penaltyTypes }) => {
+        this.policyTypes = [...policyTypes];
+        this.penaltyTypes = [...penaltyTypes];
+        this.applyPolicyCatalogDefaults();
+      }
+    });
+  }
+
+  private loadReservationPolicies(): void {
+    const settingsId = this.settingsId;
+    if (!this.canReadPolicies || !settingsId) {
+      this.clearPoliciesCollection();
+      return;
+    }
+
+    this.policyLoading = true;
+    this.reservationService
+      .listReservationPolicies({
+        ordering: '-id',
+        hotel_settings: settingsId,
+        is_active: true
+      })
+      .subscribe({
+      next: (policies) => {
+        this.policyLoading = false;
+        this.reservationPolicies = policies.sort((a, b) => b.id - a.id);
+      },
+      error: (error) => {
+        this.policyLoading = false;
+        this.reservationPolicies = [];
+
+        if (error?.status === 403) {
+          this.canReadPolicies = false;
+          this.canEditPolicies = false;
+          this.resetPolicyState();
+          this.errorMessage = 'No tienes permisos para ver politicas de reserva.';
+          return;
+        }
+
+        this.errorMessage = 'No se pudieron cargar las politicas de reserva.';
+      }
+    });
+  }
+
+  private clearPoliciesCollection(): void {
+    this.reservationPolicies = [];
+    this.policyForm = this.buildDefaultPolicyForm();
+    this.policyLoading = false;
+    this.policySaving = false;
+    this.policyDeletingId = null;
+    this.applyPolicyCatalogDefaults();
+  }
+
+  private resetPolicyState(): void {
+    this.policyTypes = [];
+    this.penaltyTypes = [];
+    this.clearPoliciesCollection();
+  }
+
+  private applyPolicyCatalogDefaults(): void {
+    if (this.policyForm.id) return;
+
+    if (!this.policyForm.policy_type && this.policyTypes.length > 0) {
+      this.policyForm.policy_type = this.policyTypes[0].id;
+    }
+
+    if (!this.policyForm.penalty_type && this.penaltyTypes.length > 0) {
+      this.policyForm.penalty_type = this.penaltyTypes[0].id;
+    }
   }
 
   private syncFloors(settingsId: number): Observable<void> {
@@ -458,6 +769,77 @@ export class HotelSettings implements OnInit {
     return null;
   }
 
+  private validatePolicyBeforeSave(): string | null {
+    if (!this.settingsId) {
+      return 'Debes guardar primero la configuracion principal del hotel.';
+    }
+
+    if (!(this.policyForm.name || '').trim()) {
+      return 'El nombre de la politica es obligatorio.';
+    }
+
+    if (!this.policyForm.policy_type) {
+      return 'Debes seleccionar el tipo de politica.';
+    }
+
+    if (!this.policyForm.penalty_type) {
+      return 'Debes seleccionar el tipo de penalidad.';
+    }
+
+    if (this.policyForm.penalty_value !== null && Number(this.policyForm.penalty_value) < 0) {
+      return 'El valor de penalidad no puede ser negativo.';
+    }
+
+    if (
+      this.policyForm.hours_before_checkin !== null &&
+      Number(this.policyForm.hours_before_checkin) < 0
+    ) {
+      return 'Las horas antes del check-in no pueden ser negativas.';
+    }
+
+    if (this.isPercentagePenaltySelected) {
+      if (this.policyForm.penalty_value === null) {
+        return 'El valor de penalidad es obligatorio para penalidad porcentual.';
+      }
+
+      if (Number(this.policyForm.penalty_value) > 100) {
+        return 'La penalidad porcentual no puede ser mayor a 100.';
+      }
+    }
+
+    return null;
+  }
+
+  private buildPolicyPayload(): ReservationPolicyPayloadI | null {
+    if (!this.settingsId) return null;
+
+    const penaltyValue =
+      this.policyForm.penalty_value === null || this.policyForm.penalty_value === undefined
+        ? null
+        : Number(this.policyForm.penalty_value);
+    const hoursBeforeCheckin =
+      this.policyForm.hours_before_checkin === null || this.policyForm.hours_before_checkin === undefined
+        ? null
+        : Number(this.policyForm.hours_before_checkin);
+
+    return {
+      hotel_settings: this.settingsId,
+      policy_type: Number(this.policyForm.policy_type || 0),
+      penalty_type: Number(this.policyForm.penalty_type || 0),
+      name: (this.policyForm.name || '').trim(),
+      description: this.emptyAsNull(this.policyForm.description),
+      penalty_value: penaltyValue,
+      hours_before_checkin: hoursBeforeCheckin,
+      is_active: this.policyForm.is_active
+    };
+  }
+
+  private getPenaltyTypeCode(penaltyTypeId: number | null): string {
+    if (!penaltyTypeId) return '';
+    const selected = this.penaltyTypes.find((item) => item.id === penaltyTypeId);
+    return this.normalizeCode(selected?.code);
+  }
+
   private currentSnapshot(): string {
     const normalizedFloors = this.floors
       .map((floor) => ({
@@ -485,6 +867,43 @@ export class HotelSettings implements OnInit {
   private emptyAsUndefined(value?: string | null): string | undefined {
     const normalized = (value || '').trim();
     return normalized ? normalized : undefined;
+  }
+
+  private emptyAsNull(value?: string | null): string | null {
+    const normalized = (value || '').trim();
+    return normalized ? normalized : null;
+  }
+
+  private normalizeCode(value: string | undefined): string {
+    return String(value || '').trim().toUpperCase();
+  }
+
+  private extractApiErrorMessage(error: unknown, fallback: string): string {
+    const payload =
+      error && typeof error === 'object' ? (error as Record<string, unknown>)['error'] : null;
+
+    if (typeof payload === 'string' && payload.trim()) {
+      return payload.trim();
+    }
+
+    if (payload && typeof payload === 'object') {
+      const detail = (payload as Record<string, unknown>)['detail'];
+      if (typeof detail === 'string' && detail.trim()) {
+        return detail.trim();
+      }
+
+      for (const value of Object.values(payload as Record<string, unknown>)) {
+        if (typeof value === 'string' && value.trim()) {
+          return value.trim();
+        }
+        if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') {
+          const first = value[0].trim();
+          if (first) return first;
+        }
+      }
+    }
+
+    return fallback;
   }
 
   private buildDefaultForm(): SettingsForm {
@@ -517,9 +936,23 @@ export class HotelSettings implements OnInit {
     };
   }
 
+  private buildDefaultPolicyForm(): ReservationPolicyForm {
+    return {
+      id: null,
+      policy_type: null,
+      penalty_type: null,
+      name: '',
+      description: '',
+      penalty_value: null,
+      hours_before_checkin: null,
+      is_active: true
+    };
+  }
+
   private extractUpdatedAt(settings: unknown): string | null {
     if (!settings || typeof settings !== 'object') return null;
     const value = (settings as Record<string, unknown>)['updated_at'];
     return typeof value === 'string' ? value : null;
   }
 }
+

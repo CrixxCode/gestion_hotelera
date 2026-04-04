@@ -17,6 +17,33 @@ export type ReservationVisualStatus =
   | 'FINALIZADA'
   | 'OTRA';
 
+export interface ReservationPolicyI {
+  id: number;
+  hotel_settings: number;
+  policy_type: number;
+  policy_type_name?: string;
+  policy_type_code?: string;
+  penalty_type: number;
+  penalty_type_name?: string;
+  penalty_type_code?: string;
+  name: string;
+  description?: string | null;
+  penalty_value?: string | number | null;
+  hours_before_checkin?: number | null;
+  is_active?: boolean;
+}
+
+export interface ReservationPolicyPayloadI {
+  hotel_settings: number;
+  policy_type: number;
+  penalty_type: number;
+  name: string;
+  description?: string | null;
+  penalty_value?: string | number | null;
+  hours_before_checkin?: number | null;
+  is_active?: boolean;
+}
+
 export interface ReservationI {
   id: number;
   client: number;
@@ -35,9 +62,21 @@ export interface ReservationI {
   promo_code?: string | null;
   total_discount?: string | number;
   notes?: string | null;
+  policies?: ReservationPolicyI[];
   total_rooms?: number;
   total_guests?: number;
   total_nights?: number;
+  rooms_subtotal?: string | number;
+  total_deposits?: string | number;
+  total_amount?: string | number;
+  pending_amount?: string | number;
+  payment_status_code?: string;
+  payment_status_label?: string;
+  can_add_payment?: boolean;
+  can_confirm?: boolean;
+  can_check_in?: boolean;
+  can_check_out?: boolean;
+  can_cancel?: boolean;
   created_by?: string | null;
   created_at?: string;
 }
@@ -52,6 +91,7 @@ export interface ReservationWritePayloadI {
   promo_code?: string | null;
   total_discount?: string | number;
   notes?: string | null;
+  policies?: number[];
 }
 
 export interface ReservationRoomI {
@@ -123,6 +163,16 @@ export interface ReservationDepositI {
   status_code?: string;
   notes?: string | null;
   created_at?: string;
+}
+
+export interface ReservationDepositPayloadI {
+  reservation: number;
+  deposit_date: string;
+  amount: string | number;
+  payment_method: number;
+  reference?: string | null;
+  status: number;
+  notes?: string | null;
 }
 
 export interface ReservationDetailI extends ReservationI {

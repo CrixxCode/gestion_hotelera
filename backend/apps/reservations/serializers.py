@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import serializers
 
 from apps.master_data.models import MasterData
@@ -9,9 +10,41 @@ from apps.reservations.models import (
 )
 from apps.reservations.services import (
     RESERVATION_STATUS_PENDING,
+    can_add_payment_to_reservation,
     find_overlapping_reservation_room,
+    get_reservation_financials,
+    get_reservation_flow_permissions,
+    get_reservation_payment_status,
     get_reservation_status_by_code,
+    validate_reservation_deposit_rules,
 )
+from apps.hotel_settings.models import ReservationPolicy
+
+
+class ReservationPolicySummarySerializer(serializers.ModelSerializer):
+    policy_type_name = serializers.CharField(source="policy_type.name", read_only=True)
+    policy_type_code = serializers.CharField(source="policy_type.code", read_only=True)
+    penalty_type_name = serializers.CharField(source="penalty_type.name", read_only=True)
+    penalty_type_code = serializers.CharField(source="penalty_type.code", read_only=True)
+
+    class Meta:
+        model = ReservationPolicy
+        fields = [
+            "id",
+            "hotel_settings",
+            "policy_type",
+            "policy_type_name",
+            "policy_type_code",
+            "penalty_type",
+            "penalty_type_name",
+            "penalty_type_code",
+            "name",
+            "description",
+            "penalty_value",
+            "hours_before_checkin",
+            "is_active",
+        ]
+        read_only_fields = fields
 
 
 class ReservationRoomSerializer(serializers.ModelSerializer):
@@ -139,8 +172,128 @@ class ReservationDepositSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Deposit amount must be greater than zero.")
         return value
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
 
-class ReservationListSerializer(serializers.ModelSerializer):
+        reservation = attrs.get("reservation") or getattr(self.instance, "reservation", None)
+        amount = attrs.get("amount", getattr(self.instance, "amount", None))
+        exclude_deposit_id = getattr(self.instance, "id", None)
+
+        errors = validate_reservation_deposit_rules(
+            reservation,
+            amount,
+            exclude_deposit_id=exclude_deposit_id,
+        )
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        return attrs
+
+    def create(self, validated_data):
+        reservation = validated_data["reservation"]
+        amount = validated_data["amount"]
+
+        with transaction.atomic():
+            locked_reservation = (
+                Reservation.objects.select_related("status")
+                .prefetch_related("rooms_detail", "deposits")
+                .select_for_update()
+                .get(pk=reservation.pk)
+            )
+
+            errors = validate_reservation_deposit_rules(locked_reservation, amount)
+            if errors:
+                raise serializers.ValidationError(errors)
+
+            validated_data["reservation"] = locked_reservation
+            return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        reservation = validated_data.get("reservation") or instance.reservation
+        amount = validated_data.get("amount", instance.amount)
+        exclude_deposit_id = instance.id
+
+        with transaction.atomic():
+            locked_reservation = (
+                Reservation.objects.select_related("status")
+                .prefetch_related("rooms_detail", "deposits")
+                .select_for_update()
+                .get(pk=reservation.pk)
+            )
+
+            errors = validate_reservation_deposit_rules(
+                locked_reservation,
+                amount,
+                exclude_deposit_id=exclude_deposit_id,
+            )
+            if errors:
+                raise serializers.ValidationError(errors)
+
+            validated_data["reservation"] = locked_reservation
+            return super().update(instance, validated_data)
+
+
+class ReservationBusinessRulesMixin:
+    def _get_business_rules(self, obj):
+        if not hasattr(self, "_business_rules_cache"):
+            self._business_rules_cache = {}
+
+        cache_key = getattr(obj, "pk", None)
+        if cache_key in self._business_rules_cache:
+            return self._business_rules_cache[cache_key]
+
+        financials = get_reservation_financials(obj)
+        payment = get_reservation_payment_status(obj, financials=financials)
+        flow = get_reservation_flow_permissions(obj)
+
+        values = {
+            "rooms_subtotal": financials["rooms_subtotal"],
+            "total_deposits": financials["total_deposits"],
+            "total_amount": financials["total_amount"],
+            "pending_amount": financials["pending_amount"],
+            "payment_status_code": payment["code"],
+            "payment_status_label": payment["label"],
+            "can_add_payment": can_add_payment_to_reservation(obj, financials=financials),
+            **flow,
+        }
+        self._business_rules_cache[cache_key] = values
+        return values
+
+    def get_rooms_subtotal(self, obj):
+        return self._get_business_rules(obj)["rooms_subtotal"]
+
+    def get_total_deposits(self, obj):
+        return self._get_business_rules(obj)["total_deposits"]
+
+    def get_total_amount(self, obj):
+        return self._get_business_rules(obj)["total_amount"]
+
+    def get_pending_amount(self, obj):
+        return self._get_business_rules(obj)["pending_amount"]
+
+    def get_payment_status_code(self, obj):
+        return self._get_business_rules(obj)["payment_status_code"]
+
+    def get_payment_status_label(self, obj):
+        return self._get_business_rules(obj)["payment_status_label"]
+
+    def get_can_add_payment(self, obj):
+        return self._get_business_rules(obj)["can_add_payment"]
+
+    def get_can_confirm(self, obj):
+        return self._get_business_rules(obj)["can_confirm"]
+
+    def get_can_check_in(self, obj):
+        return self._get_business_rules(obj)["can_check_in"]
+
+    def get_can_check_out(self, obj):
+        return self._get_business_rules(obj)["can_check_out"]
+
+    def get_can_cancel(self, obj):
+        return self._get_business_rules(obj)["can_cancel"]
+
+
+class ReservationListSerializer(ReservationBusinessRulesMixin, serializers.ModelSerializer):
     client_full_name = serializers.CharField(source="client.full_name", read_only=True)
     client_document_number = serializers.CharField(source="client.document_number", read_only=True)
     status_name = serializers.CharField(source="status.name", read_only=True)
@@ -150,6 +303,18 @@ class ReservationListSerializer(serializers.ModelSerializer):
     total_rooms = serializers.IntegerField(read_only=True)
     total_guests = serializers.IntegerField(read_only=True)
     total_nights = serializers.IntegerField(read_only=True)
+    policies = ReservationPolicySummarySerializer(many=True, read_only=True)
+    rooms_subtotal = serializers.SerializerMethodField()
+    total_deposits = serializers.SerializerMethodField()
+    total_amount = serializers.SerializerMethodField()
+    pending_amount = serializers.SerializerMethodField()
+    payment_status_code = serializers.SerializerMethodField()
+    payment_status_label = serializers.SerializerMethodField()
+    can_add_payment = serializers.SerializerMethodField()
+    can_confirm = serializers.SerializerMethodField()
+    can_check_in = serializers.SerializerMethodField()
+    can_check_out = serializers.SerializerMethodField()
+    can_cancel = serializers.SerializerMethodField()
 
     class Meta:
         model = Reservation
@@ -170,9 +335,21 @@ class ReservationListSerializer(serializers.ModelSerializer):
             "real_check_out",
             "promo_code",
             "total_discount",
+            "policies",
             "total_rooms",
             "total_guests",
             "total_nights",
+            "rooms_subtotal",
+            "total_deposits",
+            "total_amount",
+            "pending_amount",
+            "payment_status_code",
+            "payment_status_label",
+            "can_add_payment",
+            "can_confirm",
+            "can_check_in",
+            "can_check_out",
+            "can_cancel",
             "created_by",
             "created_at",
         ]
@@ -187,11 +364,22 @@ class ReservationListSerializer(serializers.ModelSerializer):
             "total_rooms",
             "total_guests",
             "total_nights",
+            "rooms_subtotal",
+            "total_deposits",
+            "total_amount",
+            "pending_amount",
+            "payment_status_code",
+            "payment_status_label",
+            "can_add_payment",
+            "can_confirm",
+            "can_check_in",
+            "can_check_out",
+            "can_cancel",
             "created_at",
         )
 
 
-class ReservationDetailSerializer(serializers.ModelSerializer):
+class ReservationDetailSerializer(ReservationBusinessRulesMixin, serializers.ModelSerializer):
     client_full_name = serializers.CharField(source="client.full_name", read_only=True)
     client_document_number = serializers.CharField(source="client.document_number", read_only=True)
     client_email = serializers.EmailField(source="client.email", read_only=True)
@@ -205,10 +393,22 @@ class ReservationDetailSerializer(serializers.ModelSerializer):
     rooms_detail = ReservationRoomSerializer(many=True, read_only=True)
     guests = ReservationGuestSerializer(many=True, read_only=True)
     deposits = ReservationDepositSerializer(many=True, read_only=True)
+    policies = ReservationPolicySummarySerializer(many=True, read_only=True)
 
     total_rooms = serializers.IntegerField(read_only=True)
     total_guests = serializers.IntegerField(read_only=True)
     total_nights = serializers.IntegerField(read_only=True)
+    rooms_subtotal = serializers.SerializerMethodField()
+    total_deposits = serializers.SerializerMethodField()
+    total_amount = serializers.SerializerMethodField()
+    pending_amount = serializers.SerializerMethodField()
+    payment_status_code = serializers.SerializerMethodField()
+    payment_status_label = serializers.SerializerMethodField()
+    can_add_payment = serializers.SerializerMethodField()
+    can_confirm = serializers.SerializerMethodField()
+    can_check_in = serializers.SerializerMethodField()
+    can_check_out = serializers.SerializerMethodField()
+    can_cancel = serializers.SerializerMethodField()
 
     class Meta:
         model = Reservation
@@ -232,9 +432,21 @@ class ReservationDetailSerializer(serializers.ModelSerializer):
             "promo_code",
             "total_discount",
             "notes",
+            "policies",
             "total_rooms",
             "total_guests",
             "total_nights",
+            "rooms_subtotal",
+            "total_deposits",
+            "total_amount",
+            "pending_amount",
+            "payment_status_code",
+            "payment_status_label",
+            "can_add_payment",
+            "can_confirm",
+            "can_check_in",
+            "can_check_out",
+            "can_cancel",
             "rooms_detail",
             "guests",
             "deposits",
@@ -254,6 +466,18 @@ class ReservationDetailSerializer(serializers.ModelSerializer):
             "total_rooms",
             "total_guests",
             "total_nights",
+            "rooms_subtotal",
+            "total_deposits",
+            "total_amount",
+            "pending_amount",
+            "payment_status_code",
+            "payment_status_label",
+            "can_add_payment",
+            "can_confirm",
+            "can_check_in",
+            "can_check_out",
+            "can_cancel",
+            "policies",
             "rooms_detail",
             "guests",
             "deposits",
@@ -262,6 +486,12 @@ class ReservationDetailSerializer(serializers.ModelSerializer):
 
 
 class ReservationWriteSerializer(serializers.ModelSerializer):
+    policies = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=ReservationPolicy.objects.filter(is_active=True),
+        required=False,
+    )
+    
     class Meta:
         model = Reservation
         fields = [
@@ -269,6 +499,7 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
             "client",
             "status",
             "origin",
+            "policies",
             "expected_check_in",
             "expected_check_out",
             "real_check_in",
@@ -352,6 +583,7 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        policies = validated_data.pop("policies", None)
         validated_data.pop("status", None)
         validated_data["real_check_in"] = None
         validated_data["real_check_out"] = None
@@ -368,10 +600,21 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
             )
 
         validated_data["status"] = pending_status
-        return super().create(validated_data)
+        reservation = super().create(validated_data)
+
+        if policies is not None:
+            reservation.policies.set(policies)
+
+        return reservation
 
     def update(self, instance, validated_data):
+        policies = validated_data.pop("policies", None)
         validated_data.pop("status", None)
         validated_data.pop("real_check_in", None)
         validated_data.pop("real_check_out", None)
-        return super().update(instance, validated_data)
+        reservation = super().update(instance, validated_data)
+
+        if policies is not None:
+            reservation.policies.set(policies)
+
+        return reservation

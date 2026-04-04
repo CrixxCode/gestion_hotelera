@@ -1,8 +1,15 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import { Observable } from 'rxjs';
+import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
 import { ReservationService } from '../../../services/reservation';
-import { ReservationDetailI, ReservationGuestI, ReservationStatusStyleI, ReservationVisualStatus } from '../reservation-model';
+import {
+  ReservationDetailI,
+  ReservationGuestI,
+  ReservationPolicyI,
+  ReservationStatusStyleI,
+  ReservationVisualStatus
+} from '../reservation-model';
 
 @Component({
   selector: 'app-detail-reservation',
@@ -14,6 +21,8 @@ import { ReservationDetailI, ReservationGuestI, ReservationStatusStyleI, Reserva
 export class DetailReservation implements OnChanges {
   @Input() reservationId: number | null = null;
   @Input() preloaded: ReservationDetailI | null = null;
+  @Input() paymentMethods: MasterDataI[] = [];
+  @Input() depositStatuses: MasterDataI[] = [];
 
   @Output() closed = new EventEmitter<void>();
   @Output() editRequested = new EventEmitter<ReservationDetailI>();
@@ -23,7 +32,9 @@ export class DetailReservation implements OnChanges {
   loading = false;
   errorMessage = '';
   actionLoading = false;
+  paymentLoading = false;
   showGuestsModal = false;
+  showPoliciesModal = false;
 
   constructor(private reservationService: ReservationService) {}
 
@@ -32,11 +43,13 @@ export class DetailReservation implements OnChanges {
       this.reservation = this.preloaded;
       this.errorMessage = '';
       this.showGuestsModal = false;
+      this.showPoliciesModal = false;
       return;
     }
 
     if (changes['reservationId']) {
       this.showGuestsModal = false;
+      this.showPoliciesModal = false;
       this.loadReservation();
     }
   }
@@ -130,6 +143,22 @@ export class DetailReservation implements OnChanges {
     return Math.max(0, this.guests.length - this.guestSummaryRows.length);
   }
 
+  get policies(): ReservationPolicyI[] {
+    return this.reservation?.policies || [];
+  }
+
+  get hasPolicies(): boolean {
+    return this.policies.length > 0;
+  }
+
+  get policySummaryRows(): ReservationPolicyI[] {
+    return this.policies.slice(0, 2);
+  }
+
+  get hiddenPoliciesCount(): number {
+    return Math.max(0, this.policies.length - this.policySummaryRows.length);
+  }
+
   get stayCheckoutLabel(): string {
     if (!this.reservation?.expected_check_out) return 'Sin registro';
     if (this.visualStatus === 'POR_SALIR_HOY') return 'Hoy';
@@ -180,6 +209,17 @@ export class DetailReservation implements OnChanges {
     return this.canCancel;
   }
 
+  get showAddPaymentAction(): boolean {
+    if (!this.reservation) return false;
+
+    if (typeof this.reservation.can_add_payment === 'boolean') {
+      return this.reservation.can_add_payment;
+    }
+
+    if (this.totalAmount <= 0) return false;
+    return this.pendingAmount > 0;
+  }
+
   get totalNights(): number {
     if (!this.reservation) return 0;
     if (typeof this.reservation.total_nights === 'number') return this.reservation.total_nights;
@@ -193,10 +233,20 @@ export class DetailReservation implements OnChanges {
   }
 
   get totalAmount(): number {
+    const backendTotal = Number(this.reservation?.total_amount);
+    if (Number.isFinite(backendTotal) && backendTotal >= 0) {
+      return backendTotal;
+    }
+
     return Math.max(0, this.roomsSubtotal - this.discountAmount);
   }
 
   get roomsSubtotal(): number {
+    const backendSubtotal = Number(this.reservation?.rooms_subtotal);
+    if (Number.isFinite(backendSubtotal) && backendSubtotal >= 0) {
+      return backendSubtotal;
+    }
+
     if (!this.reservation) return 0;
 
     return (this.reservation.rooms_detail || []).reduce((sum, room) => {
@@ -219,6 +269,11 @@ export class DetailReservation implements OnChanges {
   }
 
   get totalDeposits(): number {
+    const backendDeposits = Number(this.reservation?.total_deposits);
+    if (Number.isFinite(backendDeposits) && backendDeposits >= 0) {
+      return backendDeposits;
+    }
+
     if (!this.reservation) return 0;
 
     return (this.reservation.deposits || []).reduce((sum, deposit) => {
@@ -228,11 +283,19 @@ export class DetailReservation implements OnChanges {
   }
 
   get pendingAmount(): number {
+    const backendPending = Number(this.reservation?.pending_amount);
+    if (Number.isFinite(backendPending) && backendPending >= 0) {
+      return backendPending;
+    }
+
     return Math.max(0, this.totalAmount - this.totalDeposits);
   }
 
   get paymentLabel(): string {
     if (!this.reservation) return 'Sin datos';
+
+    const backendLabel = String(this.reservation.payment_status_label || '').trim();
+    if (backendLabel) return backendLabel;
 
     if (this.totalAmount <= 0 && this.totalDeposits <= 0) {
       return 'Sin cargos';
@@ -287,18 +350,33 @@ export class DetailReservation implements OnChanges {
 
   get canConfirm(): boolean {
     if (!this.reservation) return false;
+
+    if (typeof this.reservation.can_confirm === 'boolean') {
+      return this.reservation.can_confirm;
+    }
+
     const statusCode = this.normalizeCode(this.reservation.status_code);
     return statusCode === 'PENDIENTE' && !this.reservation.real_check_in && !this.reservation.real_check_out;
   }
 
   get canCheckIn(): boolean {
     if (!this.reservation) return false;
+
+    if (typeof this.reservation.can_check_in === 'boolean') {
+      return this.reservation.can_check_in;
+    }
+
     const statusCode = this.normalizeCode(this.reservation.status_code);
     return statusCode === 'CONFIRMADA' && !this.reservation.real_check_in && !this.reservation.real_check_out;
   }
 
   get canCheckOut(): boolean {
     if (!this.reservation) return false;
+
+    if (typeof this.reservation.can_check_out === 'boolean') {
+      return this.reservation.can_check_out;
+    }
+
     const statusCode = this.normalizeCode(this.reservation.status_code);
     return (
       (statusCode === 'EN_CURSO' || !!this.reservation.real_check_in) &&
@@ -308,12 +386,18 @@ export class DetailReservation implements OnChanges {
 
   get canCancel(): boolean {
     if (!this.reservation) return false;
+
+    if (typeof this.reservation.can_cancel === 'boolean') {
+      return this.reservation.can_cancel;
+    }
+
     const statusCode = this.normalizeCode(this.reservation.status_code);
     return ['PENDIENTE', 'CONFIRMADA'].includes(statusCode) && !this.reservation.real_check_in && !this.reservation.real_check_out;
   }
 
   closeDrawer(): void {
     this.showGuestsModal = false;
+    this.showPoliciesModal = false;
     this.closed.emit();
   }
 
@@ -326,9 +410,91 @@ export class DetailReservation implements OnChanges {
     this.showGuestsModal = false;
   }
 
+  openPoliciesModal(): void {
+    if (!this.hasPolicies) return;
+    this.showPoliciesModal = true;
+  }
+
+  closePoliciesModal(): void {
+    this.showPoliciesModal = false;
+  }
+
   requestEdit(): void {
     if (!this.reservation) return;
     this.editRequested.emit(this.reservation);
+  }
+
+  addPayment(): void {
+    if (!this.reservation || this.paymentLoading || !this.showAddPaymentAction) return;
+
+    const paymentMethodId = this.getDefaultPaymentMethodId();
+    if (!paymentMethodId) {
+      this.errorMessage = 'No hay metodos de pago activos configurados.';
+      return;
+    }
+
+    const depositStatusId = this.getDefaultDepositStatusId();
+    if (!depositStatusId) {
+      this.errorMessage = 'No hay estados de deposito activos configurados.';
+      return;
+    }
+
+    const pendingAmount = this.pendingAmount;
+    const promptValue = window.prompt(
+      `Saldo pendiente: ${this.formatCurrency(pendingAmount)}. Ingresa el monto del pago:`,
+      pendingAmount.toFixed(0)
+    );
+
+    if (promptValue === null) return;
+
+    const normalizedAmount = Number(String(promptValue).replace(',', '.').trim());
+    if (Number.isNaN(normalizedAmount) || normalizedAmount <= 0) {
+      this.errorMessage = 'El monto del pago debe ser un numero mayor a cero.';
+      return;
+    }
+
+    if (normalizedAmount > pendingAmount) {
+      this.errorMessage = 'El monto no puede ser mayor al saldo pendiente.';
+      return;
+    }
+
+    this.paymentLoading = true;
+    this.errorMessage = '';
+
+    this.reservationService
+      .createReservationDeposit({
+        reservation: this.reservation.id,
+        deposit_date: this.toIsoDate(new Date()),
+        amount: normalizedAmount,
+        payment_method: paymentMethodId,
+        reference: null,
+        status: depositStatusId,
+        notes: 'Pago registrado desde detalle de la reserva.'
+      })
+      .subscribe({
+        next: () => {
+          if (!this.reservation) {
+            this.paymentLoading = false;
+            return;
+          }
+
+          this.reservationService.getReservationById(this.reservation.id).subscribe({
+            next: (detail) => {
+              this.paymentLoading = false;
+              this.reservation = detail;
+              this.flowChanged.emit(detail);
+            },
+            error: () => {
+              this.paymentLoading = false;
+              this.errorMessage = 'El pago se registro, pero no fue posible actualizar el detalle.';
+            }
+          });
+        },
+        error: () => {
+          this.paymentLoading = false;
+          this.errorMessage = 'No se pudo registrar el pago para esta reserva.';
+        }
+      });
   }
 
   confirmReservation(): void {
@@ -415,6 +581,32 @@ export class DetailReservation implements OnChanges {
     const documentType = guest.document_type_code || guest.document_type_name || 'Doc';
     const documentNumber = guest.document_number || 'Sin numero';
     return `${documentType}: ${documentNumber}`;
+  }
+
+  getPolicyTypeLabel(policy: ReservationPolicyI): string {
+    return policy.policy_type_name || policy.policy_type_code || 'Sin tipo';
+  }
+
+  getPenaltyTypeLabel(policy: ReservationPolicyI): string {
+    return policy.penalty_type_name || policy.penalty_type_code || 'Sin penalidad';
+  }
+
+  formatPolicyPenalty(policy: ReservationPolicyI): string {
+    const penaltyValue = Number(policy.penalty_value ?? 0);
+    if (Number.isNaN(penaltyValue) || penaltyValue <= 0) return 'No definida';
+
+    const penaltyCode = this.normalizeCode(policy.penalty_type_code);
+    if (penaltyCode === 'PERCENTAGE') {
+      return `${penaltyValue}%`;
+    }
+
+    return this.formatCurrency(penaltyValue);
+  }
+
+  getPolicyHoursLabel(policy: ReservationPolicyI): string {
+    const hours = Number(policy.hours_before_checkin ?? 0);
+    if (Number.isNaN(hours) || hours <= 0) return 'No definida';
+    return `${hours} h antes del check-in`;
   }
 
   trackById(_: number, item: { id: number }): number {
@@ -512,6 +704,34 @@ export class DetailReservation implements OnChanges {
 
   private normalizeCode(value: string | undefined): string {
     return String(value || '').trim().toUpperCase();
+  }
+
+  private getDefaultPaymentMethodId(): number | null {
+    const preferredCodes = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'PSE'];
+    for (const code of preferredCodes) {
+      const match = this.paymentMethods.find((method) => this.normalizeCode(method.code) === code);
+      if (match) return match.id;
+    }
+
+    return this.paymentMethods[0]?.id ?? null;
+  }
+
+  private getDefaultDepositStatusId(): number | null {
+    const preferredCodes = ['VALIDADO', 'PENDIENTE'];
+    for (const code of preferredCodes) {
+      const match = this.depositStatuses.find((item) => this.normalizeCode(item.code) === code);
+      if (match) return match.id;
+    }
+
+    return this.depositStatuses[0]?.id ?? null;
+  }
+
+  private toIsoDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
   }
 
   private resolveStatusStyle(status: ReservationVisualStatus): ReservationStatusStyleI {

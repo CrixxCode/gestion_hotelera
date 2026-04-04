@@ -21,14 +21,18 @@ class FilterOrderingTests(APITestCase):
         self.client.force_login(self.u1)
 
     def test_search_and_order(self):
-        url = "/api/v1/users/?search=et&ordering=-username"
+        url = "/api/users/?search=et&ordering=-username"
         r = self.client.get(url)
         self.assertEqual(r.status_code, 200)
-        usernames = [u["username"] for u in r.data["results"]]
+        payload = r.data["results"] if isinstance(r.data, dict) and "results" in r.data else r.data
+        usernames = [u["username"] for u in payload]
         self.assertTrue("beto" in usernames or "ana" in usernames)
 
     def test_filter_by_role_slug(self):
-        url = "/api/v1/users/?roles__slug=manager"
+        url = "/api/users/?roles__slug=manager"
         r = self.client.get(url)
         self.assertEqual(r.status_code, 200)
-        self.assertGreaterEqual(r.data["count"], 2)
+        if isinstance(r.data, dict) and "count" in r.data:
+            self.assertGreaterEqual(r.data["count"], 2)
+        else:
+            self.assertGreaterEqual(len(r.data), 2)

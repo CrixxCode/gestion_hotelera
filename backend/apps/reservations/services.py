@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, time
+from decimal import Decimal, InvalidOperation
 from typing import Iterable
 
 from django.utils import timezone
@@ -44,6 +45,20 @@ RESERVATION_STATUS_CANCELLED = "CANCELADA"
 CLIENT_STATUS_ACTIVE = "ACTIVO"
 CLIENT_STATUS_CURRENT_GUEST = "HUESPED_ACTUAL"
 
+PAYMENT_STATUS_NO_CHARGES = "SIN_CARGOS"
+PAYMENT_STATUS_PENDING = "PENDIENTE"
+PAYMENT_STATUS_PARTIAL = "PARCIAL"
+PAYMENT_STATUS_PAID = "PAGADO"
+
+PAYMENT_STATUS_LABELS = {
+    PAYMENT_STATUS_NO_CHARGES: "Sin cargos",
+    PAYMENT_STATUS_PENDING: "Pendiente",
+    PAYMENT_STATUS_PARTIAL: "Parcial",
+    PAYMENT_STATUS_PAID: "Pagado",
+}
+
+MONEY_ZERO = Decimal("0.00")
+
 
 def _normalize_code(value) -> str:
     return str(value or "").strip().upper()
@@ -59,6 +74,184 @@ def get_master_data_code(group: str, code: str):
 
 def get_reservation_status_by_code(code: str):
     return get_master_data_code(MasterData.Group.RESERVATION_STATUS, code)
+
+
+def _to_decimal(value) -> Decimal:
+    if value is None:
+        return MONEY_ZERO
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return MONEY_ZERO
+
+
+def _iter_reservation_rooms(reservation):
+    prefetched = getattr(reservation, "_prefetched_objects_cache", {}).get("rooms_detail")
+    if prefetched is not None:
+        return prefetched
+    return reservation.rooms_detail.all()
+
+
+def _iter_reservation_deposits(reservation):
+    prefetched = getattr(reservation, "_prefetched_objects_cache", {}).get("deposits")
+    if prefetched is not None:
+        return prefetched
+    return reservation.deposits.all()
+
+
+def get_reservation_financials(reservation, *, exclude_deposit_id: int | None = None) -> dict[str, Decimal]:
+    nights = max(int(getattr(reservation, "total_nights", 0) or 0), 0)
+
+    rooms_subtotal = MONEY_ZERO
+    for room in _iter_reservation_rooms(reservation):
+        subtotal = getattr(room, "subtotal", None)
+        if subtotal is None:
+            subtotal = _to_decimal(getattr(room, "night_rate", 0)) * Decimal(nights)
+        rooms_subtotal += _to_decimal(subtotal)
+
+    total_discount = _to_decimal(getattr(reservation, "total_discount", 0))
+    if total_discount < MONEY_ZERO:
+        total_discount = MONEY_ZERO
+
+    total_amount = rooms_subtotal - total_discount
+    if total_amount < MONEY_ZERO:
+        total_amount = MONEY_ZERO
+
+    total_deposits = MONEY_ZERO
+    for deposit in _iter_reservation_deposits(reservation):
+        if exclude_deposit_id and getattr(deposit, "id", None) == exclude_deposit_id:
+            continue
+        total_deposits += _to_decimal(getattr(deposit, "amount", 0))
+
+    pending_amount = total_amount - total_deposits
+    if pending_amount < MONEY_ZERO:
+        pending_amount = MONEY_ZERO
+
+    return {
+        "rooms_subtotal": rooms_subtotal,
+        "total_discount": total_discount,
+        "total_amount": total_amount,
+        "total_deposits": total_deposits,
+        "pending_amount": pending_amount,
+    }
+
+
+def get_reservation_payment_status(
+    reservation,
+    *,
+    financials: dict[str, Decimal] | None = None,
+) -> dict[str, str]:
+    values = financials or get_reservation_financials(reservation)
+    total_amount = values["total_amount"]
+    total_deposits = values["total_deposits"]
+    pending_amount = values["pending_amount"]
+
+    if total_amount <= MONEY_ZERO and total_deposits <= MONEY_ZERO:
+        code = PAYMENT_STATUS_NO_CHARGES
+    elif pending_amount <= MONEY_ZERO and total_amount > MONEY_ZERO:
+        code = PAYMENT_STATUS_PAID
+    elif total_deposits > MONEY_ZERO and pending_amount > MONEY_ZERO:
+        code = PAYMENT_STATUS_PARTIAL
+    else:
+        code = PAYMENT_STATUS_PENDING
+
+    return {
+        "code": code,
+        "label": PAYMENT_STATUS_LABELS[code],
+    }
+
+
+def get_reservation_flow_permissions(reservation) -> dict[str, bool]:
+    status_code = _normalize_code(getattr(reservation, "status_code", None))
+    has_check_in = getattr(reservation, "real_check_in", None) is not None
+    has_check_out = getattr(reservation, "real_check_out", None) is not None
+
+    can_confirm = (
+        status_code == RESERVATION_STATUS_PENDING
+        and not has_check_in
+        and not has_check_out
+    )
+    can_check_in = (
+        status_code == RESERVATION_STATUS_CONFIRMED
+        and not has_check_in
+        and not has_check_out
+    )
+    can_check_out = (
+        (status_code == RESERVATION_STATUS_IN_PROGRESS or has_check_in)
+        and not has_check_out
+    )
+    can_cancel = (
+        status_code in {RESERVATION_STATUS_PENDING, RESERVATION_STATUS_CONFIRMED}
+        and not has_check_in
+        and not has_check_out
+    )
+
+    return {
+        "can_confirm": can_confirm,
+        "can_check_in": can_check_in,
+        "can_check_out": can_check_out,
+        "can_cancel": can_cancel,
+    }
+
+
+def can_add_payment_to_reservation(
+    reservation,
+    *,
+    financials: dict[str, Decimal] | None = None,
+) -> bool:
+    status_code = _normalize_code(getattr(reservation, "status_code", None))
+    if status_code == RESERVATION_STATUS_CANCELLED:
+        return False
+
+    values = financials or get_reservation_financials(reservation)
+    if values["total_amount"] <= MONEY_ZERO:
+        return False
+
+    return values["pending_amount"] > MONEY_ZERO
+
+
+def validate_reservation_deposit_rules(
+    reservation,
+    amount,
+    *,
+    exclude_deposit_id: int | None = None,
+) -> dict[str, str]:
+    errors: dict[str, str] = {}
+
+    if reservation is None:
+        errors["reservation"] = "Reservation is required."
+        return errors
+
+    status_code = _normalize_code(getattr(reservation, "status_code", None))
+    if status_code == RESERVATION_STATUS_CANCELLED:
+        errors["reservation"] = "No puedes registrar pagos en una reserva cancelada."
+        return errors
+
+    amount_decimal = _to_decimal(amount)
+    if amount_decimal <= MONEY_ZERO:
+        errors["amount"] = "Deposit amount must be greater than zero."
+        return errors
+
+    financials = get_reservation_financials(
+        reservation,
+        exclude_deposit_id=exclude_deposit_id,
+    )
+
+    if financials["total_amount"] <= MONEY_ZERO:
+        errors["amount"] = "La reserva no tiene cargos para registrar pagos."
+        return errors
+
+    if financials["pending_amount"] <= MONEY_ZERO:
+        errors["amount"] = "La reserva ya esta completamente pagada."
+        return errors
+
+    if amount_decimal > financials["pending_amount"]:
+        errors["amount"] = (
+            f"El monto no puede superar el saldo pendiente ({financials['pending_amount']})."
+        )
+        return errors
+
+    return errors
 
 
 def is_reservation_inactive(reservation) -> bool:

@@ -66,7 +66,7 @@
         <span>Buscar</span>
         <div class="search-control">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="text" [(ngModel)]="search" (input)="applyFilters()" placeholder="Reserva, cliente o documento..." />
+          <input type="text" [(ngModel)]="search" (input)="onSearchInput()" placeholder="Reserva, cliente o documento..." />
         </div>
       </label>
 
@@ -328,11 +328,28 @@
     </div>
   </section>
 
+  <section class="pagination-bar" *ngIf="!loading && !errorMessage && totalPages > 1">
+    <button type="button" class="btn btn-light" (click)="previousPage()" [disabled]="!hasPreviousPage">
+      <i class="fa-solid fa-chevron-left"></i>
+      Anterior
+    </button>
+
+    <p>
+      Pagina {{ currentPage }} de {{ totalPages }} · {{ totalReservations }} reserva(s)
+    </p>
+
+    <button type="button" class="btn btn-light" (click)="nextPage()" [disabled]="!hasNextPage">
+      Siguiente
+      <i class="fa-solid fa-chevron-right"></i>
+    </button>
+  </section>
+
   <app-create-reservation
     *ngIf="showCreateOverlay"
     [clients]="clients"
     [origins]="origins"
     [documentTypes]="documentTypes"
+    [reservationPolicies]="reservationPolicies"
     [rooms]="rooms"
     [initialRoomId]="createPrefillRoomId"
     [initialCheckInMode]="createPrefillCheckInMode"
@@ -345,6 +362,7 @@
     [reservation]="reservationToEdit"
     [clients]="clients"
     [origins]="origins"
+    [reservationPolicies]="reservationPolicies"
     [rooms]="rooms"
     (closed)="closeUpdateOverlay()"
     (updated)="onReservationUpdated()">
@@ -354,6 +372,8 @@
     *ngIf="selectedReservationId"
     [reservationId]="selectedReservationId"
     [preloaded]="selectedReservationDetail"
+    [paymentMethods]="paymentMethods"
+    [depositStatuses]="depositStatuses"
     (closed)="closeDetail()"
     (editRequested)="openUpdateFromDetail($event)"
     (flowChanged)="onReservationFlowChanged($event)">

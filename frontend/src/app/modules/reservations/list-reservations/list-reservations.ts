@@ -11,10 +11,11 @@ import { RoomI } from '../../rooms/room-model';
 import { MasterDataService } from '../../../services/master-data.service';
 import { ClientsService } from '../../../services/client';
 import { RoomService } from '../../../services/room';
-import { ReservationService } from '../../../services/reservation';
+import { PaginatedResponseI, ReservationService } from '../../../services/reservation';
 import {
   ReservationDetailI,
   ReservationI,
+  ReservationPolicyI,
   ReservationStatusFilter,
   ReservationStatusStyleI,
   ReservationViewMode,
@@ -79,13 +80,21 @@ export class ListReservations implements OnInit {
   statuses: MasterDataI[] = [];
   origins: MasterDataI[] = [];
   documentTypes: MasterDataI[] = [];
+  paymentMethods: MasterDataI[] = [];
+  depositStatuses: MasterDataI[] = [];
   clients: ClientI[] = [];
   rooms: RoomI[] = [];
+  reservationPolicies: ReservationPolicyI[] = [];
 
   search = '';
   statusFilter: ReservationStatusFilter = 'ALL';
   originFilter = 'ALL';
   viewMode: ReservationViewMode = 'grid';
+  currentPage = 1;
+  pageSize = 20;
+  totalReservationsCount = 0;
+  hasNextPage = false;
+  hasPreviousPage = false;
 
   showCreateOverlay = false;
   showUpdateOverlay = false;
@@ -131,7 +140,12 @@ export class ListReservations implements OnInit {
   }
 
   get totalReservations(): number {
-    return this.reservations.length;
+    return this.totalReservationsCount;
+  }
+
+  get totalPages(): number {
+    if (this.totalReservationsCount <= 0) return 1;
+    return Math.max(1, Math.ceil(this.totalReservationsCount / this.pageSize));
   }
 
   get inProgressCount(): number {
@@ -182,9 +196,19 @@ export class ListReservations implements OnInit {
     this.detailsCache.clear();
 
     forkJoin({
-      reservations: this.reservationService
-        .listReservations({ ordering: '-id' })
-        .pipe(catchError(() => of([] as ReservationI[]))),
+      reservationsPage: this.reservationService
+        .listReservationsPage(this.buildReservationPageFilters())
+        .pipe(
+          catchError(
+            () =>
+              of({
+                count: 0,
+                next: null,
+                previous: null,
+                results: [] as ReservationI[],
+              } as PaginatedResponseI<ReservationI>)
+          )
+        ),
       statuses: this.masterDataService
         .listMasterData({ group: 'RESERVATION_STATUS', is_active: 'true', ordering: 'sort_order,name' })
         .pipe(catchError(() => of([] as MasterDataI[]))),
@@ -194,22 +218,45 @@ export class ListReservations implements OnInit {
       documentTypes: this.masterDataService
         .listMasterData({ group: 'DOCUMENT_TYPE', is_active: 'true', ordering: 'sort_order,name' })
         .pipe(catchError(() => of([] as MasterDataI[]))),
+      paymentMethods: this.masterDataService
+        .listMasterData({ group: 'PAYMENT_METHOD', is_active: 'true', ordering: 'sort_order,name' })
+        .pipe(catchError(() => of([] as MasterDataI[]))),
+      depositStatuses: this.masterDataService
+        .listMasterData({ group: 'RESERVATION_DEPOSIT_STATUS', is_active: 'true', ordering: 'sort_order,name' })
+        .pipe(catchError(() => of([] as MasterDataI[]))),
       clients: this.clientsService.listClients().pipe(catchError(() => of([] as ClientI[]))),
-      rooms: this.roomService.listRooms().pipe(catchError(() => of([] as RoomI[])))
+      rooms: this.roomService.listRooms().pipe(catchError(() => of([] as RoomI[]))),
+      reservationPolicies: this.reservationService
+        .listReservationPolicies({ ordering: '-id', is_active: true })
+        .pipe(catchError(() => of([] as ReservationPolicyI[])))
     }).subscribe({
-      next: ({ reservations, statuses, origins, documentTypes, clients, rooms }) => {
+      next: ({
+        reservationsPage,
+        statuses,
+        origins,
+        documentTypes,
+        paymentMethods,
+        depositStatuses,
+        clients,
+        rooms,
+        reservationPolicies
+      }) => {
         this.loading = false;
 
-        this.reservations = reservations;
+        this.setReservationPageData(reservationsPage);
         this.statuses = this.dedupeMasterDataByCode(statuses);
         this.origins = this.dedupeMasterDataByCode(origins);
         this.documentTypes = this.dedupeMasterDataByCode(documentTypes);
+        this.paymentMethods = this.dedupeMasterDataByCode(paymentMethods);
+        this.depositStatuses = this.dedupeMasterDataByCode(depositStatuses);
         this.clients = clients;
         this.rooms = rooms;
+        this.reservationPolicies = reservationPolicies.sort((a, b) =>
+          (a.name || '').localeCompare(b.name || '', 'es-CO')
+        );
         this.roomMap = new Map(rooms.map((room) => [room.id, room]));
 
         this.applyFilters();
-        this.preloadReservationDetails(this.reservations.map((reservation) => reservation.id));
         this.consumePendingRouteReservationAction();
       },
       error: () => {
@@ -220,23 +267,44 @@ export class ListReservations implements OnInit {
   }
 
   refreshReservations(): void {
-    this.loading = true;
-    this.detailsCache.clear();
-    this.selectedReservationDetail = null;
+    this.loadReservationsPage();
+  }
 
-    this.reservationService.listReservations({ ordering: '-id' }).subscribe({
-      next: (reservations) => {
-        this.loading = false;
-        this.reservations = reservations;
-        this.applyFilters();
-        this.preloadReservationDetails(this.reservations.map((reservation) => reservation.id));
-        this.consumePendingRouteReservationAction();
-      },
-      error: () => {
-        this.loading = false;
-        this.errorMessage = 'No se pudieron actualizar las reservas.';
-      }
-    });
+  onSearchInput(): void {
+    this.currentPage = 1;
+    this.loadReservationsPage();
+  }
+
+  previousPage(): void {
+    if (!this.hasPreviousPage || this.currentPage <= 1 || this.loading) return;
+    this.currentPage -= 1;
+    this.loadReservationsPage();
+  }
+
+  nextPage(): void {
+    if (!this.hasNextPage || this.loading) return;
+    this.currentPage += 1;
+    this.loadReservationsPage();
+  }
+
+  private loadReservationsPage(): void {
+    this.loading = true;
+    this.errorMessage = '';
+
+    this.reservationService
+      .listReservationsPage(this.buildReservationPageFilters())
+      .subscribe({
+        next: (reservationsPage) => {
+          this.loading = false;
+          this.setReservationPageData(reservationsPage);
+          this.applyFilters();
+          this.consumePendingRouteReservationAction();
+        },
+        error: () => {
+          this.loading = false;
+          this.errorMessage = 'No se pudieron actualizar las reservas.';
+        }
+      });
   }
 
   applyFilters(): void {
@@ -268,7 +336,7 @@ export class ListReservations implements OnInit {
       .sort((a, b) => b.id - a.id);
 
     if (this.viewMode === 'calendar') {
-      this.buildCalendarRows();
+      this.preloadReservationDetails(this.filteredReservations.map((reservation) => reservation.id));
     }
   }
 
@@ -281,7 +349,7 @@ export class ListReservations implements OnInit {
     this.viewMode = mode;
 
     if (mode === 'calendar') {
-      this.buildCalendarRows();
+      this.preloadReservationDetails(this.filteredReservations.map((reservation) => reservation.id));
     }
   }
 
@@ -495,6 +563,9 @@ export class ListReservations implements OnInit {
   }
 
   getPaymentLabel(reservation: ReservationI): string {
+    const backendLabel = String(reservation.payment_status_label || '').trim();
+    if (backendLabel) return backendLabel;
+
     const detail = this.detailsCache.get(reservation.id);
 
     if (!detail) return 'Sin datos';
@@ -601,6 +672,11 @@ export class ListReservations implements OnInit {
   }
 
   getCardPendingAmount(reservation: ReservationI): number {
+    const backendPending = Number(reservation.pending_amount);
+    if (Number.isFinite(backendPending) && backendPending >= 0) {
+      return backendPending;
+    }
+
     const total = this.calculateReservationAmount(reservation);
     const deposits = this.calculateDepositsAmount(reservation);
     const pending = total - deposits;
@@ -653,19 +729,19 @@ export class ListReservations implements OnInit {
   previousCalendarRange(): void {
     this.calendarStartDate = this.addDays(this.calendarStartDate, -14);
     this.initializeCalendarDays();
-    this.buildCalendarRows();
+    this.preloadReservationDetails(this.filteredReservations.map((reservation) => reservation.id));
   }
 
   nextCalendarRange(): void {
     this.calendarStartDate = this.addDays(this.calendarStartDate, 14);
     this.initializeCalendarDays();
-    this.buildCalendarRows();
+    this.preloadReservationDetails(this.filteredReservations.map((reservation) => reservation.id));
   }
 
   goCalendarToday(): void {
     this.calendarStartDate = this.startOfDay(new Date());
     this.initializeCalendarDays();
-    this.buildCalendarRows();
+    this.preloadReservationDetails(this.filteredReservations.map((reservation) => reservation.id));
   }
 
   getCalendarPeriodLabel(): string {
@@ -756,6 +832,30 @@ export class ListReservations implements OnInit {
       queryParamsHandling: 'merge',
       replaceUrl: true
     });
+  }
+
+  private buildReservationPageFilters(): {
+    search?: string;
+    ordering?: string;
+    include_finished?: boolean;
+    page: number;
+    page_size: number;
+  } {
+    const query = this.search.trim();
+
+    return {
+      search: query || undefined,
+      ordering: '-id',
+      page: this.currentPage,
+      page_size: this.pageSize,
+    };
+  }
+
+  private setReservationPageData(pageData: PaginatedResponseI<ReservationI>): void {
+    this.reservations = pageData.results || [];
+    this.totalReservationsCount = Number.isFinite(pageData.count) ? pageData.count : this.reservations.length;
+    this.hasNextPage = !!pageData.next;
+    this.hasPreviousPage = !!pageData.previous;
   }
 
   private preloadReservationDetails(ids: number[]): void {
@@ -1044,11 +1144,19 @@ export class ListReservations implements OnInit {
   }
 
   private calculateReservationAmount(reservation: ReservationI): number {
+    const backendTotal = Number(reservation.total_amount);
+    if (Number.isFinite(backendTotal) && backendTotal >= 0) {
+      return backendTotal;
+    }
+
     const detail = this.detailsCache.get(reservation.id);
 
     if (!detail) {
+      const fallbackSubtotal = Number(reservation.rooms_subtotal || 0);
       const fallbackDiscount = Number(reservation.total_discount || 0);
-      return Math.max(0, 0 - (Number.isNaN(fallbackDiscount) ? 0 : fallbackDiscount));
+      const subtotal = Number.isNaN(fallbackSubtotal) ? 0 : fallbackSubtotal;
+      const discount = Number.isNaN(fallbackDiscount) ? 0 : fallbackDiscount;
+      return Math.max(0, subtotal - discount);
     }
 
     const roomsTotal = (detail.rooms_detail || []).reduce((sum, room) => {
@@ -1063,6 +1171,11 @@ export class ListReservations implements OnInit {
   }
 
   private calculateDepositsAmount(reservation: ReservationI): number {
+    const backendDeposits = Number(reservation.total_deposits);
+    if (Number.isFinite(backendDeposits) && backendDeposits >= 0) {
+      return backendDeposits;
+    }
+
     const detail = this.detailsCache.get(reservation.id);
     if (!detail) return 0;
 

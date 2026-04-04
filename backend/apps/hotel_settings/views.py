@@ -1,5 +1,5 @@
 from django.db import transaction
-from rest_framework import status, viewsets
+from rest_framework import status, viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -9,8 +9,8 @@ from accounts.permissions import HasResourcePermission
 from apps.master_data.models import MasterData
 from apps.rooms.models import Room
 
-from .models import HotelFloor, HotelSettings
-from .serializers import HotelFloorSerializer, HotelSettingsSerializer
+from .models import HotelFloor, HotelSettings, ReservationPolicy
+from .serializers import HotelFloorSerializer, HotelSettingsSerializer, ReservationPolicySerializer
 
 
 class HotelSettingsViewSet(viewsets.ModelViewSet):
@@ -234,3 +234,72 @@ class HotelFloorViewSet(viewsets.ModelViewSet):
         floors = self.queryset.filter(hotel_settings_id=settings_id)
         serializer = self.get_serializer(floors, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+class ReservationPolicyViewSet(viewsets.ModelViewSet):
+    queryset = (
+        ReservationPolicy.objects.select_related(
+            "hotel_settings",
+            "policy_type",
+            "penalty_type",
+        ).order_by("-id")
+    )
+    serializer_class = ReservationPolicySerializer
+    pagination_class = None
+    permission_classes = [HasResourcePermission]
+    required_scopes = ["reservation-policies.read"]
+
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = [
+        "name",
+        "description",
+        "policy_type__name",
+        "policy_type__code",
+        "penalty_type__name",
+        "penalty_type__code",
+        "hotel_settings__hotel_name",
+    ]
+    ordering_fields = [
+        "id",
+        "name",
+        "penalty_value",
+        "hours_before_checkin",
+        "created_at",
+        "updated_at",
+    ]
+    ordering = ["-id"]
+
+    @staticmethod
+    def _parse_bool(value):
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return None
+
+        normalized = str(value).strip().lower()
+        if normalized in {"1", "true", "yes", "si", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+        return None
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        hotel_settings_id = (self.request.query_params.get("hotel_settings") or "").strip()
+        if hotel_settings_id.isdigit():
+            queryset = queryset.filter(hotel_settings_id=int(hotel_settings_id))
+
+        is_active = self._parse_bool(self.request.query_params.get("is_active"))
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active)
+
+        return queryset
+
+    def get_required_scopes(self):
+        if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            return ["reservation-policies.write"]
+        return self.required_scopes
+
+    def get_permissions(self):
+        self.required_scopes = self.get_required_scopes()
+        return super().get_permissions()

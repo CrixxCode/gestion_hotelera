@@ -133,6 +133,7 @@ class RoomSerializer(serializers.ModelSerializer):
     )
     room_type_name = serializers.CharField(source="room_type.name", read_only=True)
     floor_name = serializers.CharField(source="floor.name", read_only=True)
+    floor_number = serializers.IntegerField(source="floor.floor_number", read_only=True)
     florr_number = serializers.IntegerField(source="floor.floor_number", read_only=True)
 
     status = MasterDataCodeField(group=MasterData.Group.ROOM_STATUS)
@@ -157,6 +158,7 @@ class RoomSerializer(serializers.ModelSerializer):
             "room_type_name",
             "floor",
             "floor_name",
+            "floor_number",
             "florr_number",
             "status",
             "status_label",

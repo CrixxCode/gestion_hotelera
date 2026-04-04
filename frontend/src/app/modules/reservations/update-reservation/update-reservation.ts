@@ -6,7 +6,7 @@ import { MasterDataI } from '../../../components/pages/master-data/master-data-m
 import { ReservationService } from '../../../services/reservation';
 import { ClientI } from '../../clients/client-model';
 import { RoomI } from '../../rooms/room-model';
-import { ReservationDetailI, ReservationRoomPayloadI, ReservationWritePayloadI } from '../reservation-model';
+import { ReservationDetailI, ReservationPolicyI, ReservationRoomPayloadI, ReservationWritePayloadI } from '../reservation-model';
 
 @Component({
   selector: 'app-update-reservation',
@@ -19,6 +19,7 @@ export class UpdateReservation implements OnChanges {
   @Input() reservation: ReservationDetailI | null = null;
   @Input() clients: ClientI[] = [];
   @Input() origins: MasterDataI[] = [];
+  @Input() reservationPolicies: ReservationPolicyI[] = [];
   @Input() rooms: RoomI[] = [];
 
   @Output() closed = new EventEmitter<void>();
@@ -42,9 +43,11 @@ export class UpdateReservation implements OnChanges {
       promo_code: [''],
       total_discount: [0],
       notes: ['', [Validators.maxLength(1200)]],
+      policy_lines: this.fb.array([]),
       room_lines: this.fb.array([])
     });
 
+    this.addPolicyLine();
     this.addRoomLine();
   }
 
@@ -64,6 +67,16 @@ export class UpdateReservation implements OnChanges {
     });
 
     this.roomLines.clear();
+    this.policyLines.clear();
+
+    const reservationPolicies = this.reservation.policies || [];
+    if (reservationPolicies.length === 0) {
+      this.addPolicyLine();
+    } else {
+      for (const reservationPolicy of reservationPolicies) {
+        this.policyLines.push(this.buildPolicyLine(reservationPolicy.id));
+      }
+    }
 
     const roomDetails = this.reservation.rooms_detail || [];
     if (roomDetails.length === 0) {
@@ -89,8 +102,35 @@ export class UpdateReservation implements OnChanges {
     return this.reservationForm.get('room_lines') as UntypedFormArray;
   }
 
+  get policyLines(): UntypedFormArray {
+    return this.reservationForm.get('policy_lines') as UntypedFormArray;
+  }
+
   get availableRooms(): RoomI[] {
     return [...this.rooms].sort((a, b) => String(a.number).localeCompare(String(b.number), 'es-CO'));
+  }
+
+  get availableReservationPolicies(): ReservationPolicyI[] {
+    return [...this.reservationPolicies]
+      .filter((policy) => policy.is_active !== false)
+      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es-CO'));
+  }
+
+  get selectedPoliciesCount(): number {
+    return this.collectSelectedPolicyIds().length;
+  }
+
+  addPolicyLine(): void {
+    this.policyLines.push(this.buildPolicyLine());
+  }
+
+  removePolicyLine(index: number): void {
+    if (index < 0 || index >= this.policyLines.length) return;
+    this.policyLines.removeAt(index);
+
+    if (this.policyLines.length === 0) {
+      this.addPolicyLine();
+    }
   }
 
   addRoomLine(): void {
@@ -123,6 +163,7 @@ export class UpdateReservation implements OnChanges {
 
     if (this.reservationForm.invalid) {
       this.reservationForm.markAllAsTouched();
+      this.policyLines.controls.forEach((control) => control.markAllAsTouched());
       this.roomLines.controls.forEach((control) => control.markAllAsTouched());
       return;
     }
@@ -130,6 +171,12 @@ export class UpdateReservation implements OnChanges {
     const dateError = this.validateDateRange();
     if (dateError) {
       this.errorMessage = dateError;
+      return;
+    }
+
+    const policyBuild = this.buildPolicySelection();
+    if (policyBuild.error) {
+      this.errorMessage = policyBuild.error;
       return;
     }
 
@@ -141,7 +188,7 @@ export class UpdateReservation implements OnChanges {
 
     this.saving = true;
 
-    const payload = this.buildReservationPayload();
+    const payload = this.buildReservationPayload(policyBuild.policyIds);
 
     this.reservationService
       .updateReservation(this.reservation.id, payload)
@@ -176,8 +223,18 @@ export class UpdateReservation implements OnChanges {
     return index;
   }
 
+  trackByPolicyLine(index: number): number {
+    return index;
+  }
+
   trackById(index: number, item: { id?: number }): number {
     return item.id ?? index;
+  }
+
+  private buildPolicyLine(initialPolicyId: number | null = null): UntypedFormGroup {
+    return this.fb.group({
+      policy: [initialPolicyId]
+    });
   }
 
   private buildRoomLine(initial?: Partial<{ id: number; room: number; night_rate: number; adults: number; children: number }>): UntypedFormGroup {
@@ -190,7 +247,7 @@ export class UpdateReservation implements OnChanges {
     });
   }
 
-  private buildReservationPayload(): Partial<ReservationWritePayloadI> {
+  private buildReservationPayload(policyIds: number[]): Partial<ReservationWritePayloadI> {
     const raw = this.reservationForm.getRawValue();
 
     return {
@@ -200,8 +257,43 @@ export class UpdateReservation implements OnChanges {
       expected_check_out: String(raw.expected_check_out || ''),
       promo_code: raw.promo_code ? String(raw.promo_code).trim() : null,
       total_discount: raw.total_discount ? Number(raw.total_discount) : 0,
+      policies: policyIds,
       notes: raw.notes ? String(raw.notes).trim() : null
     };
+  }
+
+  private buildPolicySelection(): { policyIds: number[]; error?: string } {
+    const selectedIds: number[] = [];
+    const usedIds = new Set<number>();
+    const availablePolicyIds = new Set(this.availableReservationPolicies.map((policy) => policy.id));
+
+    for (const policyControl of this.policyLines.controls) {
+      const raw = policyControl.getRawValue();
+      const policyRaw = raw['policy'];
+      const hasSelection = policyRaw !== null && policyRaw !== undefined && `${policyRaw}`.trim() !== '';
+
+      if (!hasSelection) {
+        continue;
+      }
+
+      const policyId = Number(policyRaw);
+      if (!policyId || Number.isNaN(policyId)) {
+        return { policyIds: [], error: 'Debes seleccionar una politica valida en cada fila cargada.' };
+      }
+
+      if (!availablePolicyIds.has(policyId)) {
+        return { policyIds: [], error: 'Una de las politicas seleccionadas ya no esta disponible.' };
+      }
+
+      if (usedIds.has(policyId)) {
+        return { policyIds: [], error: 'No puedes repetir la misma politica en la reserva.' };
+      }
+
+      usedIds.add(policyId);
+      selectedIds.push(policyId);
+    }
+
+    return { policyIds: selectedIds };
   }
 
   private buildRoomOperations(): {
@@ -317,6 +409,64 @@ export class UpdateReservation implements OnChanges {
     if (!value) return '';
     const text = String(value);
     return text.includes('T') ? text.split('T')[0] : text;
+  }
+
+  private normalizeCode(value: string | undefined): string {
+    return String(value || '').trim().toUpperCase();
+  }
+
+  private findPolicyById(policyId: unknown): ReservationPolicyI | undefined {
+    const id = Number(policyId || 0);
+    if (!id || Number.isNaN(id)) return undefined;
+    return this.availableReservationPolicies.find((policy) => policy.id === id);
+  }
+
+  getPolicyTypeLabel(policyId: unknown): string {
+    const policy = this.findPolicyById(policyId);
+    if (!policy) return 'Sin tipo';
+    return policy.policy_type_name || policy.policy_type_code || 'Sin tipo';
+  }
+
+  getPolicyPenaltyLabel(policyId: unknown): string {
+    const policy = this.findPolicyById(policyId);
+    if (!policy) return 'Sin penalidad';
+
+    const penaltyType = policy.penalty_type_name || policy.penalty_type_code || 'Penalidad';
+    const rawValue = policy.penalty_value;
+    if (rawValue === null || rawValue === undefined || rawValue === '') {
+      return penaltyType;
+    }
+
+    const value = Number(rawValue);
+    if (Number.isNaN(value)) return penaltyType;
+
+    const isPercentage = this.normalizeCode(policy.penalty_type_code) === 'PERCENTAGE';
+    const formattedValue = isPercentage ? `${value}%` : value.toLocaleString('es-CO');
+    return `${penaltyType}: ${formattedValue}`;
+  }
+
+  getPolicyHoursLabel(policyId: unknown): string {
+    const policy = this.findPolicyById(policyId);
+    const hours = Number(policy?.hours_before_checkin);
+    if (Number.isNaN(hours) || hours < 0) return 'Sin limite';
+    return `${hours} hora(s)`;
+  }
+
+  private collectSelectedPolicyIds(): number[] {
+    const selectedIds: number[] = [];
+    const usedIds = new Set<number>();
+
+    for (const control of this.policyLines.controls) {
+      const raw = control.getRawValue();
+      const policyId = Number(raw['policy'] || 0);
+      if (!policyId || Number.isNaN(policyId) || usedIds.has(policyId)) {
+        continue;
+      }
+      usedIds.add(policyId);
+      selectedIds.push(policyId);
+    }
+
+    return selectedIds;
   }
 
   private extractErrorMessage(error: unknown): string {

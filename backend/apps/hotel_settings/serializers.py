@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import HotelSettings, HotelFloor
+from .models import HotelSettings, HotelFloor, ReservationPolicy
 
 
 class HotelFloorSerializer(serializers.ModelSerializer):
@@ -161,5 +161,67 @@ class HotelSettingsSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "check_out_time": "Check-out time must be different from check-in time."
             })
+
+        return attrs
+    
+class ReservationPolicySerializer(serializers.ModelSerializer):
+    policy_type_name = serializers.CharField(source="policy_type.name", read_only=True)
+    policy_type_code = serializers.CharField(source="policy_type.code", read_only=True)
+
+    penalty_type_name = serializers.CharField(source="penalty_type.name", read_only=True)
+    penalty_type_code = serializers.CharField(source="penalty_type.code", read_only=True)
+
+    hotel_name = serializers.CharField(source="hotel_settings.hotel_name", read_only=True)
+
+    class Meta:
+        model = ReservationPolicy
+        fields = [
+            "id",
+            "hotel_settings",
+            "hotel_name",
+            "policy_type",
+            "policy_type_name",
+            "policy_type_code",
+            "penalty_type",
+            "penalty_type_name",
+            "penalty_type_code",
+            "name",
+            "description",
+            "penalty_value",
+            "hours_before_checkin",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ("id", "created_at", "updated_at")
+
+    def validate_penalty_value(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("Penalty value cannot be negative.")
+        return value
+
+    def validate_hours_before_checkin(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("Hours before check-in cannot be negative.")
+        return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        penalty_type = attrs.get("penalty_type", getattr(self.instance, "penalty_type", None))
+        penalty_value = attrs.get("penalty_value", getattr(self.instance, "penalty_value", None))
+
+        if penalty_type:
+            penalty_code = str(penalty_type.code or "").strip().upper()
+
+            if penalty_code == "PERCENTAGE":
+                if penalty_value is None:
+                    raise serializers.ValidationError(
+                        {"penalty_value": "Penalty value is required for percentage penalties."}
+                    )
+                if penalty_value > 100:
+                    raise serializers.ValidationError(
+                        {"penalty_value": "Percentage penalty cannot be greater than 100."}
+                    )
 
         return attrs

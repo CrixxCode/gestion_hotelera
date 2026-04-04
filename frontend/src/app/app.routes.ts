@@ -14,6 +14,8 @@ import { MasterDataComponent } from './components/pages/master-data/master-data'
 import { ListRooms } from './modules/rooms/list-rooms/list-rooms';
 import { AmenitiesPage } from './modules/rooms/amenities/amenities';
 import { ListReservations } from './modules/reservations/list-reservations/list-reservations';
+import { ListServices } from './modules/services/list-services/list-services';
+import { ListPackages } from './modules/packages/list-packages/list-packages';
 
 export const routes: Routes = [
     {
@@ -47,6 +49,12 @@ export const routes: Routes = [
             { path: 'habitaciones', component: ListRooms },
             { path: 'amenidades', component: AmenitiesPage },
             { path: 'amenities', component: AmenitiesPage },
+            { path: 'servicios-consumos', component: ListServices },
+            { path: 'servicios', component: ListServices },
+            { path: 'services', component: ListServices },
+            { path: 'catalogo-paquetes', component: ListPackages },
+            { path: 'paquetes', component: ListPackages },
+            { path: 'packages', component: ListPackages },
             { path: 'hotel-config', component: HotelSettings },
             { path: 'master-data', component: MasterDataComponent },
         ]

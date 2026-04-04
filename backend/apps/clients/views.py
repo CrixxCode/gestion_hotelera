@@ -1,19 +1,21 @@
-from rest_framework import status, viewsets, filters
+from django.conf import settings
+
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from accounts.permissions import HasResourcePermission
 from apps.master_data.models import MasterData
+
 from .models import Client
 from .serializers import (
-    ClientSerializer,
     ClientCreateUpdateSerializer,
+    ClientSerializer,
     normalize_client_type,
     normalize_status,
 )
-
-from accounts.permissions import HasResourcePermission
 
 
 class ClientViewSet(viewsets.ModelViewSet):
@@ -21,20 +23,15 @@ class ClientViewSet(viewsets.ModelViewSet):
     serializer_class = ClientSerializer
     permission_classes = [HasResourcePermission]
 
-    # Scopes por defecto (lectura)
     required_scopes = ["clients.read"]
 
-    # Serializers por acción (igual que tu UserViewSet)
     serializer_action_classes = {
         "create": ClientCreateUpdateSerializer,
         "update": ClientCreateUpdateSerializer,
         "partial_update": ClientCreateUpdateSerializer,
-
-        # Si quieres permitir registro público de clientes para reservas online (opcional)
         "register": ClientCreateUpdateSerializer,
     }
 
-    # Búsqueda y orden (útil para p-table en Angular)
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [
         "document_type__code",
@@ -57,25 +54,19 @@ class ClientViewSet(viewsets.ModelViewSet):
         return self.serializer_action_classes.get(self.action, self.serializer_class)
 
     def get_required_scopes(self):
-        # Escritura para POST/PUT/PATCH/DELETE, lectura para el resto
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return ["clients.write"]
         return self.required_scopes
 
     def get_permissions(self):
-        # Registro público (si decides activarlo). Si no lo quieres, bórralo.
-        if self.action in ("register",):
+        allow_public_register = getattr(settings, "ALLOW_PUBLIC_CLIENT_REGISTRATION", False)
+        if self.action in ("register",) and allow_public_register:
             return [AllowAny()]
 
-        # Engancha scopes dinámicos antes de evaluar permisos (igual que tu patrón)
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
-        """
-        Override de create para usar ClientCreateUpdateSerializer (input)
-        y devolver ClientSerializer (output) para consistencia.
-        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         client = serializer.save()
@@ -85,10 +76,6 @@ class ClientViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="register")
     def register(self, request):
-        """
-        Endpoint opcional para registrar clientes sin login.
-        Útil si más adelante tendrás reservas desde web pública.
-        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         client = serializer.save()
@@ -98,10 +85,6 @@ class ClientViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["patch"], url_path="set-status")
     def set_status(self, request, pk=None):
-        """
-        Cambiar estado del cliente desde la API (ACTIVE/INACTIVE/CURRENT_GUEST).
-        Esto NO depende de reservas por ahora.
-        """
         client = self.get_object()
         try:
             new_status = normalize_status(request.data.get("status"))
@@ -112,18 +95,18 @@ class ClientViewSet(viewsets.ModelViewSet):
         if isinstance(new_status, int) or (isinstance(new_status, str) and str(new_status).isdigit()):
             status_obj = MasterData.objects.filter(
                 group=MasterData.Group.CLIENT_STATUS,
-                id=int(new_status)
+                id=int(new_status),
             ).first()
         else:
             status_obj = MasterData.objects.filter(
                 group=MasterData.Group.CLIENT_STATUS,
-                code=str(new_status).upper()
+                code=str(new_status).upper(),
             ).first()
 
         if not status_obj:
             return Response(
                 {"status": "No existe el estado solicitado en el catalogo maestro."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         client.status = status_obj
@@ -133,10 +116,6 @@ class ClientViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["patch"], url_path="set-client-type")
     def set_client_type(self, request, pk=None):
-        """
-        Cambiar tipo de cliente (VIP/FREQUENT/REGULAR).
-        Útil si quieres gestionarlo manualmente por ahora.
-        """
         client = self.get_object()
         try:
             new_type = normalize_client_type(request.data.get("client_type"))
@@ -147,18 +126,18 @@ class ClientViewSet(viewsets.ModelViewSet):
         if isinstance(new_type, int) or (isinstance(new_type, str) and str(new_type).isdigit()):
             type_obj = MasterData.objects.filter(
                 group=MasterData.Group.CLIENT_TYPE,
-                id=int(new_type)
+                id=int(new_type),
             ).first()
         else:
             type_obj = MasterData.objects.filter(
                 group=MasterData.Group.CLIENT_TYPE,
-                code=str(new_type).upper()
+                code=str(new_type).upper(),
             ).first()
 
         if not type_obj:
             return Response(
                 {"client_type": "No existe el tipo solicitado en el catalogo maestro."},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         client.client_type = type_obj

@@ -1,6 +1,3 @@
-from django.db import models
-
-# Create your models here.
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -8,6 +5,7 @@ from django.db import models
 from apps.clients.models import Client
 from apps.master_data.models import MasterData
 from apps.rooms.models import Room
+from apps.hotel_settings.models import ReservationPolicy
 
 
 class Reservation(models.Model):
@@ -27,6 +25,11 @@ class Reservation(models.Model):
         on_delete=models.PROTECT,
         related_name="reservations_by_origin",
         limit_choices_to={"group": MasterData.Group.RESERVATION_ORIGIN},
+    )
+    policies = models.ManyToManyField(
+        ReservationPolicy,
+        related_name="reservations",
+        blank=True,
     )
 
     expected_check_in = models.DateField()

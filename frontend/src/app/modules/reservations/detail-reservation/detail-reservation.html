@@ -134,6 +134,37 @@
 
         <section>
           <div class="section-headline">
+            <h3>Politicas asociadas</h3>
+            <button type="button" class="btn-link btn-link-subtle" *ngIf="hasPolicies" (click)="openPoliciesModal()">
+              Ver detalle
+            </button>
+          </div>
+
+          <div class="policy-summary-list" *ngIf="hasPolicies; else noPolicies">
+            <article class="policy-summary-item" *ngFor="let policy of policySummaryRows; trackBy: trackById">
+              <header>
+                <strong>{{ policy.name }}</strong>
+                <span>{{ getPolicyTypeLabel(policy) }}</span>
+              </header>
+              <p>{{ policy.description || 'Sin descripcion' }}</p>
+              <div class="policy-summary-meta">
+                <span>{{ getPenaltyTypeLabel(policy) }}: {{ formatPolicyPenalty(policy) }}</span>
+                <span>{{ getPolicyHoursLabel(policy) }}</span>
+              </div>
+            </article>
+          </div>
+
+          <div class="policy-summary-note" *ngIf="hiddenPoliciesCount > 0">
+            {{ hiddenPoliciesCount }} politica(s) adicional(es) en detalle completo.
+          </div>
+
+          <ng-template #noPolicies>
+            <p class="state-msg">Esta reserva no tiene politicas asociadas.</p>
+          </ng-template>
+        </section>
+
+        <section>
+          <div class="section-headline">
             <h3>Huespedes asociados</h3>
             <button type="button" class="btn-link" *ngIf="hasGuests" (click)="openGuestsModal()">Ver mas</button>
           </div>
@@ -199,16 +230,39 @@
       </ng-container>
 
       <ng-template #flowActions>
-        <button type="button" class="btn btn-primary" *ngIf="canRunPrimaryAction" (click)="runPrimaryAction()" [disabled]="actionLoading">
+        <button
+          type="button"
+          class="btn btn-primary"
+          *ngIf="canRunPrimaryAction"
+          (click)="runPrimaryAction()"
+          [disabled]="actionLoading || paymentLoading">
           {{ primaryActionLabel }}
         </button>
-        <button type="button" class="btn btn-secondary" *ngIf="showEditAction" (click)="requestEdit()" [disabled]="actionLoading">
+        <button
+          type="button"
+          class="btn btn-success"
+          *ngIf="showAddPaymentAction"
+          (click)="addPayment()"
+          [disabled]="actionLoading || paymentLoading">
+          {{ paymentLoading ? 'Registrando pago...' : 'Agregar pago' }}
+        </button>
+        <button
+          type="button"
+          class="btn btn-secondary"
+          *ngIf="showEditAction"
+          (click)="requestEdit()"
+          [disabled]="actionLoading || paymentLoading">
           Editar reserva
         </button>
-        <button type="button" class="btn btn-danger-outline" *ngIf="showCancelAction" (click)="cancelReservation()" [disabled]="actionLoading">
+        <button
+          type="button"
+          class="btn btn-danger-outline"
+          *ngIf="showCancelAction"
+          (click)="cancelReservation()"
+          [disabled]="actionLoading || paymentLoading">
           {{ actionLoading ? 'Procesando...' : 'Cancelar reserva' }}
         </button>
-        <button type="button" class="btn btn-secondary" (click)="closeDrawer()" [disabled]="actionLoading">
+        <button type="button" class="btn btn-secondary" (click)="closeDrawer()" [disabled]="actionLoading || paymentLoading">
           Cerrar
         </button>
       </ng-template>
@@ -270,6 +324,61 @@
 
     <footer class="guest-modal-footer">
       <button type="button" class="btn btn-secondary" (click)="closeGuestsModal()">Cerrar</button>
+    </footer>
+  </article>
+</div>
+
+<div class="policy-modal-overlay" *ngIf="showPoliciesModal" (click)="closePoliciesModal(); $event.stopPropagation()">
+  <article class="policy-modal" (click)="$event.stopPropagation()">
+    <header class="policy-modal-head">
+      <div>
+        <h3>Politicas de la reserva</h3>
+        <p>{{ reservationCodeLabel }} - {{ policies.length }} registro(s)</p>
+      </div>
+      <button type="button" class="policy-modal-close" title="Cerrar" (click)="closePoliciesModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </svg>
+      </button>
+    </header>
+
+    <div class="policy-modal-body" *ngIf="hasPolicies; else noPolicyModal">
+      <div class="policy-modal-grid">
+        <article class="policy-card" *ngFor="let policy of policies; trackBy: trackById">
+          <div class="policy-card-head">
+            <strong>{{ policy.name }}</strong>
+            <span>{{ getPolicyTypeLabel(policy) }}</span>
+          </div>
+
+          <div class="policy-card-meta">
+            <div>
+              <label>Tipo de penalidad</label>
+              <p>{{ getPenaltyTypeLabel(policy) }}</p>
+            </div>
+            <div>
+              <label>Valor</label>
+              <p>{{ formatPolicyPenalty(policy) }}</p>
+            </div>
+            <div>
+              <label>Ventana</label>
+              <p>{{ getPolicyHoursLabel(policy) }}</p>
+            </div>
+          </div>
+
+          <div class="policy-card-description">
+            {{ policy.description || 'Sin descripcion registrada.' }}
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <ng-template #noPolicyModal>
+      <div class="policy-modal-empty">No hay politicas asociadas para esta reserva.</div>
+    </ng-template>
+
+    <footer class="policy-modal-footer">
+      <button type="button" class="btn btn-secondary" (click)="closePoliciesModal()">Cerrar</button>
     </footer>
   </article>
 </div>

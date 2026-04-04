@@ -68,14 +68,14 @@
         Cargando configuración...
       </section>
     } @else {
-      @if (!canEdit) {
+      @if ((activeTab !== 'policies' && !canEdit) || (activeTab === 'policies' && !canEditPolicies)) {
         <section class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-700">
           <i class="fa-solid fa-lock mr-2"></i>
           Modo solo lectura: no tienes permiso para modificar esta configuración.
         </section>
       }
 
-      <fieldset [disabled]="!canEdit" class="space-y-0">
+      <fieldset [disabled]="isActiveTabReadOnly" class="space-y-0">
       @if (activeTab === 'general') {
         <section class="grid gap-4 xl:grid-cols-[1fr_2fr]">
           <article class="space-y-4">
@@ -507,6 +507,256 @@
             >
               Restaurar
             </button>
+          </article>
+        </section>
+      }
+
+      @if (activeTab === 'policies') {
+        <section class="grid gap-4 xl:grid-cols-[minmax(0,430px)_minmax(0,1fr)]">
+          <article class="min-w-0 space-y-4 overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div class="flex items-start gap-3">
+              <span class="grid h-9 w-9 place-items-center rounded-full bg-amber-50 text-amber-600">
+                <i class="fa-solid fa-file-contract"></i>
+              </span>
+              <div>
+                <h3 class="text-xl font-semibold text-slate-900">Formulario de Politica</h3>
+                <p class="text-sm text-gray-500">Crea o actualiza politicas de reserva</p>
+              </div>
+            </div>
+
+            @if (!canReadPolicies) {
+              <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                No tienes permiso para consultar politicas de reserva.
+              </div>
+            } @else if (!settingsId) {
+              <div class="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                Guarda primero la configuracion del hotel para poder crear politicas.
+              </div>
+            } @else {
+              @if (policyTypes.length === 0 || penaltyTypes.length === 0) {
+                <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                  Faltan catalogos de tipos de politica o penalidad en datos maestros.
+                </div>
+              }
+
+              <div class="min-w-0 grid gap-3">
+                <label class="grid gap-1">
+                  <span class="text-sm font-medium text-slate-700">Nombre *</span>
+                  <input
+                    [(ngModel)]="policyForm.name"
+                    class="w-full rounded-xl border border-gray-300 px-3 py-2.5 outline-none focus:border-blue-500"
+                    [disabled]="!canEditPolicies || policySaving"
+                  />
+                </label>
+
+                <label class="grid gap-1">
+                  <span class="text-sm font-medium text-slate-700">Tipo de Politica *</span>
+                  <select
+                    [(ngModel)]="policyForm.policy_type"
+                    class="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 outline-none focus:border-blue-500"
+                    [disabled]="!canEditPolicies || policySaving"
+                  >
+                    <option [ngValue]="null">Selecciona un tipo</option>
+                    @for (option of policyTypes; track option.id) {
+                      <option [ngValue]="option.id">{{ option.name }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="grid gap-1">
+                  <span class="text-sm font-medium text-slate-700">Tipo de Penalidad *</span>
+                  <select
+                    [(ngModel)]="policyForm.penalty_type"
+                    class="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 outline-none focus:border-blue-500"
+                    [disabled]="!canEditPolicies || policySaving"
+                  >
+                    <option [ngValue]="null">Selecciona una penalidad</option>
+                    @for (option of penaltyTypes; track option.id) {
+                      <option [ngValue]="option.id">{{ option.name }}</option>
+                    }
+                  </select>
+                </label>
+
+                <div class="min-w-0 grid gap-3 lg:grid-cols-2">
+                  <label class="grid gap-1">
+                    <span class="text-sm font-medium text-slate-700">
+                      Valor de Penalidad
+                      @if (isPercentagePenaltySelected) {
+                        (%)
+                      }
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      [(ngModel)]="policyForm.penalty_value"
+                      class="w-full rounded-xl border border-gray-300 px-3 py-2.5 outline-none focus:border-blue-500"
+                      [disabled]="!canEditPolicies || policySaving"
+                    />
+                  </label>
+
+                  <label class="grid gap-1">
+                    <span class="text-sm font-medium text-slate-700">Horas antes del check-in</span>
+                    <input
+                      type="number"
+                      min="0"
+                      [(ngModel)]="policyForm.hours_before_checkin"
+                      class="w-full rounded-xl border border-gray-300 px-3 py-2.5 outline-none focus:border-blue-500"
+                      [disabled]="!canEditPolicies || policySaving"
+                    />
+                  </label>
+                </div>
+
+                <label class="grid gap-1">
+                  <span class="text-sm font-medium text-slate-700">Descripcion</span>
+                  <textarea
+                    rows="3"
+                    [(ngModel)]="policyForm.description"
+                    class="w-full rounded-xl border border-gray-300 px-3 py-2.5 outline-none focus:border-blue-500"
+                    [disabled]="!canEditPolicies || policySaving"
+                  ></textarea>
+                </label>
+
+                <label class="inline-flex flex-wrap items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="policyForm.is_active"
+                    [disabled]="!canEditPolicies || policySaving"
+                  />
+                  Politica activa
+                </label>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3">
+                <button
+                  type="button"
+                  class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                  [disabled]="!canEditPolicies || policySaving || !settingsId"
+                  (click)="savePolicy()"
+                >
+                  @if (policySaving) {
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    Guardando...
+                  } @else {
+                    <i class="fa-regular fa-floppy-disk"></i>
+                    {{ policyForm.id ? 'Actualizar Politica' : 'Crear Politica' }}
+                  }
+                </button>
+
+                <button
+                  type="button"
+                  class="w-full rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-gray-50 sm:w-auto"
+                  [disabled]="policySaving"
+                  (click)="cancelPolicyEdition()"
+                >
+                  Limpiar
+                </button>
+              </div>
+            }
+          </article>
+
+          <article class="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-5 py-4">
+              <div>
+                <h3 class="text-xl font-semibold text-slate-900">Politicas Registradas</h3>
+                <p class="text-sm text-gray-500">
+                  {{ reservationPolicies.length }} total | {{ activePoliciesCount }} activas
+                </p>
+              </div>
+              <button
+                type="button"
+                class="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                [disabled]="!canEditPolicies || policySaving"
+                (click)="newPolicy()"
+              >
+                Nueva Politica
+              </button>
+            </div>
+
+            @if (!canReadPolicies) {
+              <div class="px-5 py-8 text-sm text-gray-500">
+                No tienes permisos para consultar politicas de reserva.
+              </div>
+            } @else if (policyLoading) {
+              <div class="px-5 py-8 text-sm text-gray-500">
+                <i class="fa-solid fa-spinner fa-spin mr-2"></i>
+                Cargando politicas...
+              </div>
+            } @else {
+              <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                  <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+                    <tr>
+                      <th class="px-5 py-3">Nombre</th>
+                      <th class="px-5 py-3">Tipo</th>
+                      <th class="px-5 py-3">Penalidad</th>
+                      <th class="px-5 py-3">Estado</th>
+                      <th class="px-5 py-3 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    @for (policy of reservationPolicies; track trackPolicy($index, policy)) {
+                      <tr>
+                        <td class="px-5 py-3">
+                          <p class="font-medium text-slate-800">{{ policy.name }}</p>
+                          <p class="text-xs text-gray-500">{{ policy.description || 'Sin descripcion' }}</p>
+                        </td>
+                        <td class="px-5 py-3">
+                          {{ policy.policy_type_name || policy.policy_type_code || 'Sin tipo' }}
+                        </td>
+                        <td class="px-5 py-3">
+                          {{ policy.penalty_type_name || policy.penalty_type_code || 'Sin penalidad' }}:
+                          {{ policyPenaltyLabel(policy) }}
+                        </td>
+                        <td class="px-5 py-3">
+                          <span
+                            class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold"
+                            [class.bg-emerald-100]="policy.is_active !== false"
+                            [class.text-emerald-700]="policy.is_active !== false"
+                            [class.bg-gray-100]="policy.is_active === false"
+                            [class.text-gray-600]="policy.is_active === false"
+                          >
+                            {{ policy.is_active === false ? 'Inactiva' : 'Activa' }}
+                          </span>
+                        </td>
+                        <td class="px-5 py-3 text-right">
+                          <div class="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              class="rounded-lg border border-blue-300 px-3 py-1.5 text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              [disabled]="!canEditPolicies || policySaving || policyDeletingId === policy.id"
+                              (click)="editPolicy(policy)"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              class="rounded-lg border border-red-300 px-3 py-1.5 text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              [disabled]="!canEditPolicies || policySaving || policyDeletingId === policy.id"
+                              (click)="deletePolicy(policy)"
+                            >
+                              @if (policyDeletingId === policy.id) {
+                                Eliminando...
+                              } @else {
+                                Eliminar
+                              }
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    }
+
+                    @if (reservationPolicies.length === 0) {
+                      <tr>
+                        <td colspan="5" class="px-5 py-8 text-center text-gray-500">
+                          No hay politicas de reserva registradas.
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
           </article>
         </section>
       }

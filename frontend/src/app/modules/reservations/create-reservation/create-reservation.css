@@ -143,10 +143,21 @@ select {
   padding: 0 12px;
 }
 
+select.multiselect {
+  min-height: 120px;
+  height: auto;
+  padding: 8px 10px;
+}
+
 textarea {
   padding: 10px 12px;
   resize: vertical;
   min-height: 84px;
+}
+
+.field-help {
+  color: #94a3b8;
+  font-size: 12px;
 }
 
 input:focus,
@@ -160,12 +171,14 @@ textarea:focus {
   grid-column: 1 / -1;
 }
 
+.policy-lines,
 .room-lines,
 .guest-lines {
   display: grid;
   gap: 10px;
 }
 
+.policy-line,
 .room-line,
 .guest-line {
   border: 1px solid #dce5f3;
@@ -186,6 +199,10 @@ textarea:focus {
 
 .room-grid {
   grid-template-columns: minmax(170px, 1.2fr) repeat(3, minmax(115px, 1fr));
+}
+
+.policy-grid {
+  grid-template-columns: minmax(180px, 1.3fr) minmax(130px, 1fr) minmax(180px, 1.2fr) minmax(140px, 1fr);
 }
 
 .guest-grid {
@@ -295,6 +312,7 @@ textarea:focus {
   }
 
   .grid.two,
+  .policy-grid,
   .room-grid,
   .guest-grid {
     grid-template-columns: 1fr;
@@ -304,6 +322,7 @@ textarea:focus {
     padding-top: 0;
   }
 
+  .policy-line,
   .room-line,
   .guest-line {
     flex-direction: column;

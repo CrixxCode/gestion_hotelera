@@ -19,6 +19,7 @@ describe('ListReservations', () => {
           provide: ReservationService,
           useValue: {
             listReservations: () => of([]),
+            listReservationPolicies: () => of([]),
             getReservationById: () =>
               of({
                 id: 1,

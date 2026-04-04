@@ -22,6 +22,11 @@ class MasterData(models.Model):
         PAYMENT_METHOD = "PAYMENT_METHOD", "Payment method"
         RESERVATION_DEPOSIT_STATUS = "RESERVATION_DEPOSIT_STATUS", "Reservation deposit status"
 
+        RESERVATION_POLICY_TYPE = "RESERVATION_POLICY_TYPE", "Reservation policy type"
+        RESERVATION_PENALTY_TYPE = "RESERVATION_PENALTY_TYPE", "Reservation penalty type"
+        
+        SERVICE_TYPE = "SERVICE_TYPE", "Service type"
+
     group = models.CharField(max_length=60, choices=Group.choices, db_index=True)
     code = models.CharField(max_length=80)
     name = models.CharField(max_length=120)

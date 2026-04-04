@@ -33,6 +33,8 @@ urlpatterns = [
     path("api/", include("apps.master_data.urls")),
     path("api/", include("apps.rooms.urls")),
     path("api/", include("apps.reservations.urls")),
+    path("api/", include("apps.services.urls")),
+    path("api/", include("apps.packages.urls")),
 
 ]
 
