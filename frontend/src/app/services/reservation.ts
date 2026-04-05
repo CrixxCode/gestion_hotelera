@@ -319,6 +319,14 @@ export class ReservationService {
       normalized.origin = Number(normalized.origin);
     }
 
+    if (normalized.package !== undefined && normalized.package !== null) {
+      normalized.package = Number(normalized.package);
+    }
+
+    if (normalized.package === null) {
+      normalized.package = null;
+    }
+
     if (normalized.promo_code !== undefined) {
       normalized.promo_code = normalized.promo_code ? String(normalized.promo_code).trim() : null;
     }

@@ -35,7 +35,7 @@ urlpatterns = [
     path("api/", include("apps.reservations.urls")),
     path("api/", include("apps.services.urls")),
     path("api/", include("apps.packages.urls")),
-
+    path("api/", include("apps.billing.urls")),
 ]
 
 if settings.DEBUG:

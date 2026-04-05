@@ -1,0 +1,209 @@
+<div class="payments-page">
+  <header class="page-header">
+    <div>
+      <h1>Pagos</h1>
+      <p>Consulta de cobros registrados por factura y metodo de pago.</p>
+    </div>
+
+    <button type="button" class="btn btn-light" (click)="refreshPaymentsData()" [disabled]="loading">
+      <i class="fa-solid fa-rotate-right"></i>
+      Actualizar
+    </button>
+  </header>
+
+  <section class="stats-grid">
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Total pagos</span>
+        <span class="stat-icon blue"><i class="fa-solid fa-money-bills"></i></span>
+      </div>
+      <div class="stat-value">{{ totalPayments }}</div>
+      <div class="stat-note">registros historicos</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Activos</span>
+        <span class="stat-icon green"><i class="fa-solid fa-circle-check"></i></span>
+      </div>
+      <div class="stat-value">{{ activePaymentsCount }}</div>
+      <div class="stat-note">pagos vigentes</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Total recaudado</span>
+        <span class="stat-icon gold"><i class="fa-solid fa-wallet"></i></span>
+      </div>
+      <div class="stat-value stat-money">{{ collectedAmountLabel }}</div>
+      <div class="stat-note">solo pagos activos</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Ticket promedio</span>
+        <span class="stat-icon gray"><i class="fa-solid fa-chart-column"></i></span>
+      </div>
+      <div class="stat-value stat-money">{{ averageTicketLabel }}</div>
+      <div class="stat-note">monto medio por pago</div>
+    </article>
+  </section>
+
+  <section class="toolbar-card">
+    <label class="search-field">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input
+        type="text"
+        [(ngModel)]="search"
+        (input)="applyFilters()"
+        placeholder="Buscar por factura, huesped, documento o referencia..." />
+    </label>
+
+    <select class="tool-select" [(ngModel)]="methodFilter" (change)="applyFilters()">
+      <option *ngFor="let option of methodOptions" [ngValue]="option.value">{{ option.label }}</option>
+    </select>
+
+    <select class="tool-select" [(ngModel)]="activityFilter" (change)="applyFilters()">
+      <option *ngFor="let option of activityOptions" [ngValue]="option.value">{{ option.label }}</option>
+    </select>
+
+    <div class="view-toggle">
+      <button type="button" [class.active]="viewMode === 'table'" (click)="setViewMode('table')" title="Vista tabla">
+        <i class="fa-solid fa-list"></i>
+      </button>
+      <button type="button" [class.active]="viewMode === 'grid'" (click)="setViewMode('grid')" title="Vista cuadricula">
+        <i class="fa-solid fa-grip"></i>
+      </button>
+    </div>
+
+    <span class="total-chip">{{ filteredPayments.length }} visibles</span>
+  </section>
+
+  <section class="state-message" *ngIf="loading || errorMessage || infoMessage || filteredPayments.length === 0">
+    <p *ngIf="loading">Cargando pagos...</p>
+    <p class="error" *ngIf="!loading && errorMessage">{{ errorMessage }}</p>
+    <p class="info" *ngIf="!loading && !errorMessage && infoMessage">{{ infoMessage }}</p>
+    <p *ngIf="!loading && !errorMessage && !infoMessage && filteredPayments.length === 0">
+      No hay pagos para los filtros seleccionados.
+    </p>
+  </section>
+
+  <section class="table-card" *ngIf="!loading && !errorMessage && filteredPayments.length > 0 && viewMode === 'table'">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Factura</th>
+            <th>Huesped</th>
+            <th>Reserva</th>
+            <th>Metodo</th>
+            <th>Fecha</th>
+            <th>Monto</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <tr
+            *ngFor="let payment of filteredPayments; trackBy: trackByPayment"
+            class="clickable-row"
+            (click)="openDetail(payment)">
+            <td>
+              <p class="table-main">{{ getInvoiceNumber(payment) }}</p>
+              <small>{{ payment.reference ? ('Ref: ' + payment.reference) : 'Sin referencia' }}</small>
+            </td>
+
+            <td>
+              <p class="table-main">{{ getGuestLabel(payment) }}</p>
+              <small>{{ getGuestDocument(payment) }}</small>
+            </td>
+
+            <td>{{ getReservationCode(payment) }}</td>
+            <td>{{ getMethodLabel(payment) }}</td>
+            <td>{{ getPaymentDateLabel(payment) }}</td>
+            <td>
+              <p class="table-main">{{ getAmountLabel(payment) }}</p>
+            </td>
+
+            <td>
+              <span
+                class="status-chip"
+                [ngStyle]="{
+                  'background-color': getStatusTone(payment).bg,
+                  color: getStatusTone(payment).color
+                }">
+                <span class="dot" [ngStyle]="{ 'background-color': getStatusTone(payment).dot }"></span>
+                {{ payment.is_active ? 'Activo' : 'Inactivo' }}
+              </span>
+            </td>
+
+            <td>
+              <div class="row-actions">
+                <button type="button" class="row-btn" title="Ver detalle" (click)="$event.stopPropagation(); openDetail(payment)">
+                  <i class="fa-regular fa-eye"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="payment-grid" *ngIf="!loading && !errorMessage && filteredPayments.length > 0 && viewMode === 'grid'">
+    <article
+      class="payment-card"
+      *ngFor="let payment of filteredPayments; trackBy: trackByPayment"
+      (click)="openDetail(payment)">
+      <header class="payment-head">
+        <div>
+          <span class="invoice-number">{{ getInvoiceNumber(payment) }}</span>
+          <small>{{ getPaymentDateLabel(payment) }}</small>
+        </div>
+
+        <span
+          class="status-chip"
+          [ngStyle]="{
+            'background-color': getStatusTone(payment).bg,
+            color: getStatusTone(payment).color
+          }">
+          <span class="dot" [ngStyle]="{ 'background-color': getStatusTone(payment).dot }"></span>
+          {{ payment.is_active ? 'Activo' : 'Inactivo' }}
+        </span>
+      </header>
+
+      <div class="payment-body">
+        <div class="guest-block">
+          <h3>{{ getGuestLabel(payment) }}</h3>
+          <p>{{ getGuestDocument(payment) }}</p>
+        </div>
+
+        <div class="meta-row">
+          <span>{{ getReservationCode(payment) }}</span>
+          <span>{{ getMethodLabel(payment) }}</span>
+          <span *ngIf="payment.reference">Ref: {{ payment.reference }}</span>
+        </div>
+      </div>
+
+      <footer class="payment-foot">
+        <div>
+          <small>Monto</small>
+          <strong>{{ getAmountLabel(payment) }}</strong>
+        </div>
+
+        <button type="button" class="row-btn" (click)="openDetail(payment); $event.stopPropagation()">
+          <i class="fa-regular fa-eye"></i>
+          Ver detalle
+        </button>
+      </footer>
+    </article>
+  </section>
+
+  <app-detail-payment
+    *ngIf="selectedPayment"
+    [payment]="selectedPayment"
+    (closed)="closeDetail()"
+    (paymentUpdated)="onPaymentUpdated($event)">
+  </app-detail-payment>
+</div>

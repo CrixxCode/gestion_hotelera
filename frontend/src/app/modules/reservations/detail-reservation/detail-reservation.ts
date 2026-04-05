@@ -238,7 +238,7 @@ export class DetailReservation implements OnChanges {
       return backendTotal;
     }
 
-    return Math.max(0, this.roomsSubtotal - this.discountAmount);
+    return Math.max(0, this.roomsSubtotal + this.packageSubtotal - this.discountAmount);
   }
 
   get roomsSubtotal(): number {
@@ -261,11 +261,22 @@ export class DetailReservation implements OnChanges {
   }
 
   get roomChargeLabel(): string {
-    const nights = this.totalNights;
-    if (nights <= 0 || this.roomsSubtotal <= 0) return 'Habitacion';
+    if (this.packageSubtotal > 0) return 'Alojamiento';
 
-    const nightRate = this.roomsSubtotal / nights;
+    const nights = this.totalNights;
+    if (nights <= 0 || this.roomChargeAmount <= 0) return 'Habitacion';
+
+    const nightRate = this.roomChargeAmount / nights;
     return `Habitacion (${nights}n x ${this.formatCurrency(nightRate)})`;
+  }
+
+  get roomChargeAmount(): number {
+    return this.roomsSubtotal;
+  }
+
+  get packageSubtotal(): number {
+    const value = Number(this.reservation?.package_price || 0);
+    return Number.isNaN(value) ? 0 : value;
   }
 
   get totalDeposits(): number {

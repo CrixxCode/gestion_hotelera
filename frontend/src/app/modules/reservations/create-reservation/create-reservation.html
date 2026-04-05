@@ -45,6 +45,16 @@
           </label>
 
           <label>
+            <span>Paquete</span>
+            <select formControlName="package">
+              <option [ngValue]="null">Sin paquete</option>
+              <option *ngFor="let item of getAvailablePackagesForDates(); trackBy: trackById" [ngValue]="item.id">
+                {{ getPackageOptionLabel(item) }}
+              </option>
+            </select>
+          </label>
+
+          <label>
             <span>Check-in esperado *</span>
             <input type="date" formControlName="expected_check_in" />
           </label>
@@ -63,6 +73,56 @@
             <span>Notas internas</span>
             <textarea rows="3" formControlName="notes" placeholder="Observaciones para recepcion y operaciones..."></textarea>
           </label>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>Habitaciones de la reserva</h2>
+          <button type="button" class="btn btn-ghost" (click)="addRoomLine()">
+            <i class="fa-solid fa-plus"></i>
+            Agregar habitacion
+          </button>
+        </div>
+
+        <div formArrayName="room_lines" class="room-lines">
+          <article
+            class="room-line"
+            *ngFor="let roomControl of roomLines.controls; let idx = index; trackBy: trackByRoomLine"
+            [formGroupName]="idx">
+            <div class="line-grid room-grid">
+              <label>
+                <span>Habitacion</span>
+                <select formControlName="room">
+                  <option [ngValue]="null">Sin asignar</option>
+                  <option *ngFor="let room of availableRooms; trackBy: trackById" [ngValue]="room.id">
+                    Hab. {{ room.number }}
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>Tarifa noche</span>
+                <input type="number" formControlName="night_rate" min="0" step="0.01" placeholder="0" />
+              </label>
+
+              <label>
+                <span>Adultos</span>
+                <input type="number" formControlName="adults" min="1" step="1" />
+              </label>
+
+              <label>
+                <span>Ninos</span>
+                <input type="number" formControlName="children" min="0" step="1" />
+              </label>
+            </div>
+
+            <div class="line-actions">
+              <button type="button" class="row-btn danger" (click)="removeRoomLine(idx)" title="Eliminar fila">
+                <i class="fa-regular fa-trash-can"></i>
+              </button>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -117,56 +177,6 @@
 
         <small class="field-help" *ngIf="selectedPoliciesCount > 0">{{ selectedPoliciesCount }} politica(s) seleccionada(s)</small>
         <small class="field-help" *ngIf="selectedPoliciesCount === 0">Opcional. Agrega politicas si aplica.</small>
-      </section>
-
-      <section>
-        <div class="section-head">
-          <h2>Habitaciones de la reserva</h2>
-          <button type="button" class="btn btn-ghost" (click)="addRoomLine()">
-            <i class="fa-solid fa-plus"></i>
-            Agregar habitacion
-          </button>
-        </div>
-
-        <div formArrayName="room_lines" class="room-lines">
-          <article
-            class="room-line"
-            *ngFor="let roomControl of roomLines.controls; let idx = index; trackBy: trackByRoomLine"
-            [formGroupName]="idx">
-            <div class="line-grid room-grid">
-              <label>
-                <span>Habitacion</span>
-                <select formControlName="room">
-                  <option [ngValue]="null">Sin asignar</option>
-                  <option *ngFor="let room of availableRooms; trackBy: trackById" [ngValue]="room.id">
-                    Hab. {{ room.number }}
-                  </option>
-                </select>
-              </label>
-
-              <label>
-                <span>Tarifa noche</span>
-                <input type="number" formControlName="night_rate" min="0" step="0.01" placeholder="0" />
-              </label>
-
-              <label>
-                <span>Adultos</span>
-                <input type="number" formControlName="adults" min="1" step="1" />
-              </label>
-
-              <label>
-                <span>Ninos</span>
-                <input type="number" formControlName="children" min="0" step="1" />
-              </label>
-            </div>
-
-            <div class="line-actions">
-              <button type="button" class="row-btn danger" (click)="removeRoomLine(idx)" title="Eliminar fila">
-                <i class="fa-regular fa-trash-can"></i>
-              </button>
-            </div>
-          </article>
-        </div>
       </section>
 
       <section>

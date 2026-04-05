@@ -53,6 +53,8 @@ class ReservationViewSet(viewsets.ModelViewSet):
         "client__last_name",
         "client__document_number",
         "client__email",
+        "package__name",
+        "package_name",
         "promo_code",
         "notes",
     ]
@@ -63,6 +65,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
         "real_check_in",
         "real_check_out",
         "created_at",
+        "package_price",
         "total_discount",
     ]
     ordering = ["-id"]
@@ -92,6 +95,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 "client",
                 "status",
                 "origin",
+                "package",
                 "created_by",
             )
             .order_by("-id")
@@ -102,6 +106,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 "policies",
                 "rooms_detail",
                 "deposits",
+                "charges",
             )
         elif self.action in {"retrieve", "confirm", "check_in", "check_out", "cancel"}:
             queryset = queryset.prefetch_related(
@@ -111,6 +116,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
                 "guests__document_type",
                 "deposits__payment_method",
                 "deposits__status",
+                "charges",
             )
 
         if self.action != "list":

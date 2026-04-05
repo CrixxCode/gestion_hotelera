@@ -33,6 +33,8 @@ class ReservationAdmin(admin.ModelAdmin):
         "client",
         "status",
         "origin",
+        "package",
+        "package_price",
         "expected_check_in",
         "expected_check_out",
         "total_rooms",
@@ -53,12 +55,15 @@ class ReservationAdmin(admin.ModelAdmin):
         "client__last_name",
         "client__document_number",
         "client__email",
+        "package__name",
+        "package_name",
         "promo_code",
     )
     autocomplete_fields = (
         "client",
         "status",
         "origin",
+        "package",
         "created_by",
     )
     readonly_fields = (
@@ -82,6 +87,9 @@ class ReservationAdmin(admin.ModelAdmin):
                     "client",
                     "status",
                     "origin",
+                    "package",
+                    "package_name",
+                    "package_price",
                     "created_by",
                 )
             },

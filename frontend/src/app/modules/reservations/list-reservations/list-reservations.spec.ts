@@ -6,6 +6,7 @@ import { ReservationService } from '../../../services/reservation';
 import { MasterDataService } from '../../../services/master-data.service';
 import { ClientsService } from '../../../services/client';
 import { RoomService } from '../../../services/room';
+import { PackagesService } from '../../../services/package';
 
 describe('ListReservations', () => {
   let component: ListReservations;
@@ -18,7 +19,13 @@ describe('ListReservations', () => {
         {
           provide: ReservationService,
           useValue: {
-            listReservations: () => of([]),
+            listReservationsPage: () =>
+              of({
+                count: 0,
+                next: null,
+                previous: null,
+                results: []
+              }),
             listReservationPolicies: () => of([]),
             getReservationById: () =>
               of({
@@ -52,6 +59,12 @@ describe('ListReservations', () => {
           provide: RoomService,
           useValue: {
             listRooms: () => of([])
+          }
+        },
+        {
+          provide: PackagesService,
+          useValue: {
+            listPackages: () => of([])
           }
         }
       ]

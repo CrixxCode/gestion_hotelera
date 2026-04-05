@@ -55,6 +55,11 @@ export interface ReservationI {
   origin: number;
   origin_name?: string;
   origin_code?: string;
+  package?: number | null;
+  package_name?: string;
+  package_catalog_name?: string;
+  package_display_name?: string;
+  package_price?: string | number;
   expected_check_in: string;
   expected_check_out: string;
   real_check_in?: string | null;
@@ -67,6 +72,7 @@ export interface ReservationI {
   total_guests?: number;
   total_nights?: number;
   rooms_subtotal?: string | number;
+  package_subtotal?: string | number;
   total_deposits?: string | number;
   total_amount?: string | number;
   pending_amount?: string | number;
@@ -84,6 +90,7 @@ export interface ReservationI {
 export interface ReservationWritePayloadI {
   client: number;
   origin: number;
+  package?: number | null;
   expected_check_in: string;
   expected_check_out: string;
   real_check_in?: string | null;

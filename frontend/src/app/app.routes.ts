@@ -16,6 +16,8 @@ import { AmenitiesPage } from './modules/rooms/amenities/amenities';
 import { ListReservations } from './modules/reservations/list-reservations/list-reservations';
 import { ListServices } from './modules/services/list-services/list-services';
 import { ListPackages } from './modules/packages/list-packages/list-packages';
+import { ListBill } from './modules/billing/list-bill/list-bill';
+import { ListPayments } from './modules/payments/list-payments/list-payments';
 
 export const routes: Routes = [
     {
@@ -52,6 +54,11 @@ export const routes: Routes = [
             { path: 'servicios-consumos', component: ListServices },
             { path: 'servicios', component: ListServices },
             { path: 'services', component: ListServices },
+            { path: 'facturacion', component: ListBill },
+            { path: 'facturas', component: ListBill },
+            { path: 'billing', component: ListBill },
+            { path: 'pagos', component: ListPayments },
+            { path: 'payments', component: ListPayments },
             { path: 'catalogo-paquetes', component: ListPackages },
             { path: 'paquetes', component: ListPackages },
             { path: 'packages', component: ListPackages },

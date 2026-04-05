@@ -5,6 +5,7 @@ import { forkJoin, of, switchMap } from 'rxjs';
 import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
 import { ReservationService } from '../../../services/reservation';
 import { ClientI } from '../../clients/client-model';
+import { PackageI } from '../../packages/package-model';
 import { RoomI } from '../../rooms/room-model';
 import { ReservationDetailI, ReservationPolicyI, ReservationRoomPayloadI, ReservationWritePayloadI } from '../reservation-model';
 
@@ -21,6 +22,7 @@ export class UpdateReservation implements OnChanges {
   @Input() origins: MasterDataI[] = [];
   @Input() reservationPolicies: ReservationPolicyI[] = [];
   @Input() rooms: RoomI[] = [];
+  @Input() packages: PackageI[] = [];
 
   @Output() closed = new EventEmitter<void>();
   @Output() updated = new EventEmitter<void>();
@@ -38,6 +40,7 @@ export class UpdateReservation implements OnChanges {
     this.reservationForm = this.fb.group({
       client: [null, [Validators.required]],
       origin: [null, [Validators.required]],
+      package: [null],
       expected_check_in: ['', [Validators.required]],
       expected_check_out: ['', [Validators.required]],
       promo_code: [''],
@@ -59,6 +62,7 @@ export class UpdateReservation implements OnChanges {
     this.reservationForm.reset({
       client: this.reservation.client ?? null,
       origin: this.reservation.origin ?? null,
+      package: this.reservation.package ?? null,
       expected_check_in: this.normalizeDateInput(this.reservation.expected_check_in),
       expected_check_out: this.normalizeDateInput(this.reservation.expected_check_out),
       promo_code: this.reservation.promo_code || '',
@@ -113,6 +117,12 @@ export class UpdateReservation implements OnChanges {
   get availableReservationPolicies(): ReservationPolicyI[] {
     return [...this.reservationPolicies]
       .filter((policy) => policy.is_active !== false)
+      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es-CO'));
+  }
+
+  get availablePackages(): PackageI[] {
+    return [...this.packages]
+      .filter((item) => item.is_active !== false)
       .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es-CO'));
   }
 
@@ -174,6 +184,12 @@ export class UpdateReservation implements OnChanges {
       return;
     }
 
+    const packageError = this.validateSelectedPackage();
+    if (packageError) {
+      this.errorMessage = packageError;
+      return;
+    }
+
     const policyBuild = this.buildPolicySelection();
     if (policyBuild.error) {
       this.errorMessage = policyBuild.error;
@@ -231,13 +247,36 @@ export class UpdateReservation implements OnChanges {
     return item.id ?? index;
   }
 
+  getAvailablePackagesForDates(): PackageI[] {
+    const checkIn = this.parseDate(this.reservationForm.get('expected_check_in')?.value);
+    const checkOut = this.parseDate(this.reservationForm.get('expected_check_out')?.value);
+
+    return this.availablePackages.filter((item) => {
+      if (!checkIn || !checkOut) {
+        return true;
+      }
+
+      return this.isPackageWithinDateRange(item, checkIn, checkOut);
+    });
+  }
+
+  getPackageOptionLabel(item: PackageI): string {
+    const price = Number(item.base_price || 0);
+    const formattedPrice = Number.isNaN(price)
+      ? String(item.base_price || 0)
+      : price.toLocaleString('es-CO');
+    return `${item.name} - ${formattedPrice}`;
+  }
+
   private buildPolicyLine(initialPolicyId: number | null = null): UntypedFormGroup {
     return this.fb.group({
       policy: [initialPolicyId]
     });
   }
 
-  private buildRoomLine(initial?: Partial<{ id: number; room: number; night_rate: number; adults: number; children: number }>): UntypedFormGroup {
+  private buildRoomLine(
+    initial?: Partial<{ id: number; room: number; night_rate: number; adults: number; children: number }>
+  ): UntypedFormGroup {
     return this.fb.group({
       id: [initial?.id ?? null],
       room: [initial?.room ?? null],
@@ -253,6 +292,7 @@ export class UpdateReservation implements OnChanges {
     return {
       client: Number(raw.client),
       origin: Number(raw.origin),
+      package: raw.package ? Number(raw.package) : null,
       expected_check_in: String(raw.expected_check_in || ''),
       expected_check_out: String(raw.expected_check_out || ''),
       promo_code: raw.promo_code ? String(raw.promo_code).trim() : null,
@@ -393,6 +433,30 @@ export class UpdateReservation implements OnChanges {
     return '';
   }
 
+  private validateSelectedPackage(): string {
+    const packageRaw = this.reservationForm.get('package')?.value;
+    const hasPackage = packageRaw !== null && packageRaw !== undefined && `${packageRaw}`.trim() !== '';
+    if (!hasPackage) return '';
+
+    const packageId = Number(packageRaw);
+    if (!packageId || Number.isNaN(packageId)) {
+      return 'Debes seleccionar un paquete valido.';
+    }
+
+    const selectedPackage = this.findPackageById(packageId);
+    if (!selectedPackage || selectedPackage.is_active === false) {
+      return 'El paquete seleccionado ya no esta disponible.';
+    }
+
+    const checkIn = this.parseDate(this.reservationForm.get('expected_check_in')?.value);
+    const checkOut = this.parseDate(this.reservationForm.get('expected_check_out')?.value);
+    if (checkIn && checkOut && !this.isPackageWithinDateRange(selectedPackage, checkIn, checkOut)) {
+      return 'El paquete seleccionado no esta vigente para las fechas de la reserva.';
+    }
+
+    return '';
+  }
+
   private parseDate(value: string | null | undefined): Date | null {
     if (!value) return null;
 
@@ -413,6 +477,27 @@ export class UpdateReservation implements OnChanges {
 
   private normalizeCode(value: string | undefined): string {
     return String(value || '').trim().toUpperCase();
+  }
+
+  private findPackageById(packageId: unknown): PackageI | undefined {
+    const id = Number(packageId || 0);
+    if (!id || Number.isNaN(id)) return undefined;
+    return this.availablePackages.find((item) => item.id === id);
+  }
+
+  private isPackageWithinDateRange(item: PackageI, checkIn: Date, checkOut: Date): boolean {
+    const startDate = this.parseDate(item.start_date || null);
+    const endDate = this.parseDate(item.end_date || null);
+
+    if (startDate && checkIn < startDate) {
+      return false;
+    }
+
+    if (endDate && checkOut > endDate) {
+      return false;
+    }
+
+    return true;
   }
 
   private findPolicyById(policyId: unknown): ReservationPolicyI | undefined {

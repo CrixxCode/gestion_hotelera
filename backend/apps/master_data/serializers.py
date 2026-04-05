@@ -16,7 +16,6 @@ class MasterDataSerializer(serializers.ModelSerializer):
             "code",
             "name",
             "description",
-            "metadata",
             "is_active",
             "sort_order",
             "created_at",

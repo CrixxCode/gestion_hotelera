@@ -26,12 +26,15 @@ class MasterData(models.Model):
         RESERVATION_PENALTY_TYPE = "RESERVATION_PENALTY_TYPE", "Reservation penalty type"
         
         SERVICE_TYPE = "SERVICE_TYPE", "Service type"
+        
+        CHARGE_TYPE = "CHARGE_TYPE", "Charge type"
+        
+        INVOICE_STATUS = "INVOICE_STATUS", "Invoice status"
 
     group = models.CharField(max_length=60, choices=Group.choices, db_index=True)
     code = models.CharField(max_length=80)
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True, null=True)
-    metadata = models.JSONField(default=dict, blank=True)
     is_active = models.BooleanField(default=True)
     sort_order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -66,12 +69,15 @@ class RoomType(MasterData):
 
     @property
     def capacity(self):
-        return int((self.metadata or {}).get("capacity", 1))
+        metadata = getattr(self, "metadata", None) or {}
+        return int(metadata.get("capacity", 1))
 
     @property
     def bed_count(self):
-        return int((self.metadata or {}).get("bed_count", 1))
+        metadata = getattr(self, "metadata", None) or {}
+        return int(metadata.get("bed_count", 1))
 
     @property
     def bed_type(self):
-        return (self.metadata or {}).get("bed_type")
+        metadata = getattr(self, "metadata", None) or {}
+        return metadata.get("bed_type")

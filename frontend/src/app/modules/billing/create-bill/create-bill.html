@@ -1,0 +1,54 @@
+<section class="manual-charge-card">
+  <form [formGroup]="chargeForm" (ngSubmit)="submit()" class="manual-charge-form">
+    <div class="row-main">
+      <label>
+        <span>Categoria</span>
+        <select formControlName="charge_type">
+          <option [ngValue]="null">Seleccionar...</option>
+          <option *ngFor="let chargeType of chargeTypes; trackBy: trackById" [ngValue]="chargeType.id">
+            {{ chargeType.name }}
+          </option>
+        </select>
+      </label>
+
+      <label>
+        <span>Servicio</span>
+        <select formControlName="service">
+          <option [ngValue]="null">{{ hasServicesCatalog ? 'Seleccionar...' : 'Cargo manual' }}</option>
+          <option *ngFor="let service of services; trackBy: trackById" [ngValue]="service.id">{{ service.name }}</option>
+        </select>
+      </label>
+
+      <label class="qty">
+        <span>Cant.</span>
+        <input type="number" min="1" step="1" formControlName="quantity" />
+      </label>
+
+      <button type="submit" class="btn btn-primary" [disabled]="saving">
+        {{ saving ? 'Registrando...' : 'Registrar' }}
+      </button>
+
+      <button type="button" class="btn btn-close" (click)="close()" [disabled]="saving" title="Cerrar">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <div class="row-manual" *ngIf="manualMode">
+      <label class="description">
+        <span>Descripcion</span>
+        <input type="text" formControlName="description" placeholder="Ej: Cargo extra por consumo especial" />
+      </label>
+
+      <label class="price">
+        <span>Valor unitario</span>
+        <input type="number" min="0" step="1000" formControlName="unit_price" />
+      </label>
+    </div>
+  </form>
+
+  <p class="feedback error" *ngIf="errorMessage">{{ errorMessage }}</p>
+  <p class="feedback hint" *ngIf="!errorMessage && manualMode">
+    Modo manual: este cargo no toma precio del catalogo de servicios.
+  </p>
+</section>
+

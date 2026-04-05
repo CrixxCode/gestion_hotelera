@@ -12,6 +12,8 @@ import { MasterDataService } from '../../../services/master-data.service';
 import { ClientsService } from '../../../services/client';
 import { RoomService } from '../../../services/room';
 import { PaginatedResponseI, ReservationService } from '../../../services/reservation';
+import { PackagesService } from '../../../services/package';
+import { PackageI } from '../../packages/package-model';
 import {
   ReservationDetailI,
   ReservationI,
@@ -85,6 +87,7 @@ export class ListReservations implements OnInit {
   clients: ClientI[] = [];
   rooms: RoomI[] = [];
   reservationPolicies: ReservationPolicyI[] = [];
+  packages: PackageI[] = [];
 
   search = '';
   statusFilter: ReservationStatusFilter = 'ALL';
@@ -128,6 +131,7 @@ export class ListReservations implements OnInit {
     private masterDataService: MasterDataService,
     private clientsService: ClientsService,
     private roomService: RoomService,
+    private packagesService: PackagesService,
     private confirmationService: ConfirmationService,
     private router: Router,
     private route: ActivatedRoute
@@ -226,6 +230,9 @@ export class ListReservations implements OnInit {
         .pipe(catchError(() => of([] as MasterDataI[]))),
       clients: this.clientsService.listClients().pipe(catchError(() => of([] as ClientI[]))),
       rooms: this.roomService.listRooms().pipe(catchError(() => of([] as RoomI[]))),
+      packages: this.packagesService
+        .listPackages({ ordering: 'name' })
+        .pipe(catchError(() => of([] as PackageI[]))),
       reservationPolicies: this.reservationService
         .listReservationPolicies({ ordering: '-id', is_active: true })
         .pipe(catchError(() => of([] as ReservationPolicyI[])))
@@ -239,6 +246,7 @@ export class ListReservations implements OnInit {
         depositStatuses,
         clients,
         rooms,
+        packages,
         reservationPolicies
       }) => {
         this.loading = false;
@@ -251,6 +259,7 @@ export class ListReservations implements OnInit {
         this.depositStatuses = this.dedupeMasterDataByCode(depositStatuses);
         this.clients = clients;
         this.rooms = rooms;
+        this.packages = packages.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es-CO'));
         this.reservationPolicies = reservationPolicies.sort((a, b) =>
           (a.name || '').localeCompare(b.name || '', 'es-CO')
         );
@@ -1153,10 +1162,12 @@ export class ListReservations implements OnInit {
 
     if (!detail) {
       const fallbackSubtotal = Number(reservation.rooms_subtotal || 0);
+      const fallbackPackage = Number(reservation.package_price || 0);
       const fallbackDiscount = Number(reservation.total_discount || 0);
       const subtotal = Number.isNaN(fallbackSubtotal) ? 0 : fallbackSubtotal;
+      const packageAmount = Number.isNaN(fallbackPackage) ? 0 : fallbackPackage;
       const discount = Number.isNaN(fallbackDiscount) ? 0 : fallbackDiscount;
-      return Math.max(0, subtotal - discount);
+      return Math.max(0, subtotal + packageAmount - discount);
     }
 
     const roomsTotal = (detail.rooms_detail || []).reduce((sum, room) => {
@@ -1164,10 +1175,11 @@ export class ListReservations implements OnInit {
       if (Number.isNaN(subtotal)) return sum;
       return sum + subtotal;
     }, 0);
+    const packageAmount = Number(detail.package_price || reservation.package_price || 0);
 
     const discount = Number(detail.total_discount || reservation.total_discount || 0);
 
-    return Math.max(0, roomsTotal - (Number.isNaN(discount) ? 0 : discount));
+    return Math.max(0, roomsTotal + (Number.isNaN(packageAmount) ? 0 : packageAmount) - (Number.isNaN(discount) ? 0 : discount));
   }
 
   private calculateDepositsAmount(reservation: ReservationI): number {

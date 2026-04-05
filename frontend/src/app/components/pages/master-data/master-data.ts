@@ -37,7 +37,6 @@ export class MasterDataComponent implements OnInit {
     code: string;
     name: string;
     description: string;
-    metadataText: string;
     is_active: boolean;
     sort_order: number;
   } = this.emptyForm();
@@ -172,7 +171,6 @@ export class MasterDataComponent implements OnInit {
       code: item.code,
       name: item.name,
       description: item.description || '',
-      metadataText: this.toMetadataText(item.metadata),
       is_active: item.is_active,
       sort_order: Number(item.sort_order || 0)
     };
@@ -197,20 +195,11 @@ export class MasterDataComponent implements OnInit {
       return;
     }
 
-    let metadata: Record<string, unknown> = {};
-    try {
-      metadata = this.parseMetadataText(this.form.metadataText);
-    } catch {
-      this.toast('Metadata debe ser un JSON valido (objeto).', 'danger');
-      return;
-    }
-
     const payload: Partial<MasterDataI> = {
       group,
       code,
       name,
       description,
-      metadata,
       is_active: !!this.form.is_active,
       sort_order: Number(this.form.sort_order || 0)
     };
@@ -280,30 +269,9 @@ export class MasterDataComponent implements OnInit {
       code: '',
       name: '',
       description: '',
-      metadataText: '{}',
       is_active: true,
       sort_order: 0
     };
-  }
-
-  private toMetadataText(value?: Record<string, unknown>): string {
-    if (!value || Object.keys(value).length === 0) return '{}';
-    try {
-      return JSON.stringify(value, null, 2);
-    } catch {
-      return '{}';
-    }
-  }
-
-  private parseMetadataText(value: string): Record<string, unknown> {
-    const trimmed = (value || '').trim();
-    if (!trimmed) return {};
-
-    const parsed = JSON.parse(trimmed);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      throw new Error('Metadata invalida');
-    }
-    return parsed as Record<string, unknown>;
   }
 
   private normalizeGroupCode(value: string): string {

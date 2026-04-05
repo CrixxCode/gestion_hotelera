@@ -146,13 +146,13 @@ class PasswordResetRequestView(APIView):
             context={"request": request, "base_url": request.data.get("base_url")}
         )
         ser.is_valid(raise_exception=True)
-        ser.save()
+        result = ser.save()
         return Response(
             {
                 "detail": (
                     "Si existe una cuenta asociada al correo, se enviara el enlace de recuperacion."
                 ),
-                "sent": True,
+                "sent": bool((result or {}).get("sent", True)),
             },
             status=status.HTTP_200_OK,
         )

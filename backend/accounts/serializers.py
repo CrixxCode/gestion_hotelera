@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth import get_user_model, password_validation
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.translation import gettext_lazy as _
@@ -13,6 +15,7 @@ from rest_framework import serializers
 from .models import Role, Resource
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 # -----------------------------
@@ -280,9 +283,18 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@hotel.local")
         msg = EmailMultiAlternatives(subject, text_body, from_email, [email])
         msg.attach_alternative(html_body, "text/html")
-        msg.send(fail_silently=False)
+        try:
+            msg.send(fail_silently=False)
+        except Exception:
+            logger.exception(
+                "Password reset email could not be sent for user_id=%s email=%s",
+                user.pk,
+                email,
+            )
+            # Avoid exposing internals and keep API response stable.
+            return {"found": True, "sent": False}
 
-        return {"found": True}
+        return {"found": True, "sent": True}
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):

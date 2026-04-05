@@ -124,43 +124,19 @@
             </div>
             <div class="info-row">
               <div class="info-label">
+                <i class="pi pi-briefcase"></i>
+                <span>Paquete</span>
+              </div>
+              <strong>{{ reservation.package_display_name || reservation.package_catalog_name || reservation.package_name || 'Sin paquete' }}</strong>
+            </div>
+            <div class="info-row">
+              <div class="info-label">
                 <i class="pi pi-calendar"></i>
                 <span>Creada el</span>
               </div>
               <strong>{{ formatDate(reservation.created_at || null) }}</strong>
             </div>
           </div>
-        </section>
-
-        <section>
-          <div class="section-headline">
-            <h3>Politicas asociadas</h3>
-            <button type="button" class="btn-link btn-link-subtle" *ngIf="hasPolicies" (click)="openPoliciesModal()">
-              Ver detalle
-            </button>
-          </div>
-
-          <div class="policy-summary-list" *ngIf="hasPolicies; else noPolicies">
-            <article class="policy-summary-item" *ngFor="let policy of policySummaryRows; trackBy: trackById">
-              <header>
-                <strong>{{ policy.name }}</strong>
-                <span>{{ getPolicyTypeLabel(policy) }}</span>
-              </header>
-              <p>{{ policy.description || 'Sin descripcion' }}</p>
-              <div class="policy-summary-meta">
-                <span>{{ getPenaltyTypeLabel(policy) }}: {{ formatPolicyPenalty(policy) }}</span>
-                <span>{{ getPolicyHoursLabel(policy) }}</span>
-              </div>
-            </article>
-          </div>
-
-          <div class="policy-summary-note" *ngIf="hiddenPoliciesCount > 0">
-            {{ hiddenPoliciesCount }} politica(s) adicional(es) en detalle completo.
-          </div>
-
-          <ng-template #noPolicies>
-            <p class="state-msg">Esta reserva no tiene politicas asociadas.</p>
-          </ng-template>
         </section>
 
         <section>
@@ -202,7 +178,11 @@
           <div class="billing-table">
             <div class="billing-row">
               <span>{{ roomChargeLabel }}</span>
-              <strong>{{ formatCurrency(roomsSubtotal) }}</strong>
+              <strong>{{ formatCurrency(roomChargeAmount) }}</strong>
+            </div>
+            <div class="billing-row" *ngIf="packageSubtotal > 0">
+              <span>Paquetes</span>
+              <strong>{{ formatCurrency(packageSubtotal) }}</strong>
             </div>
             <div class="billing-row" *ngIf="discountAmount > 0">
               <span>Descuento</span>
@@ -220,6 +200,19 @@
               {{ paymentLabel }}
             </strong>
           </div>
+        </section>
+
+        <section>
+          <div class="section-headline">
+            <h3>Politicas asociadas</h3>
+            <button type="button" class="btn-link btn-link-subtle" *ngIf="hasPolicies" (click)="openPoliciesModal()">
+              Ver politicas
+            </button>
+          </div>
+
+          <ng-template #noPolicies>
+            <p class="state-msg">Esta reserva no tiene politicas asociadas.</p>
+          </ng-template>
         </section>
       </ng-container>
     </div>

@@ -1,0 +1,243 @@
+<div class="bill-overlay" (click)="closeDrawer()">
+  <article class="bill-modal" (click)="$event.stopPropagation()">
+    <header class="bill-head">
+      <div class="head-left">
+        <div class="room-badge">{{ roomBadgeLabel }}</div>
+
+        <div class="guest-block">
+          <h2>{{ guestName }}</h2>
+          <span class="origin-chip">{{ originLabel }}</span>
+          <p>{{ reservationSecondaryLabel }}</p>
+        </div>
+      </div>
+
+      <div class="head-right">
+        <span>Saldo pendiente</span>
+        <strong [ngStyle]="{ color: pendingAmount > 0 ? '#f0c660' : '#86efac' }">
+          {{ formatCurrency(pendingAmount) }}
+        </strong>
+        <small>Total factura: {{ formatCurrency(totalWithTaxAmount) }}</small>
+        <small>Pagado: {{ formatCurrency(totalPaidAmount) }} | {{ chargeCount }} cargos</small>
+      </div>
+    </header>
+
+    <div class="category-bar">
+      <div class="category-chips">
+        <span
+          *ngFor="let group of groupedCharges; trackBy: trackByGroup"
+          class="category-chip"
+          [ngStyle]="{
+            'background-color': getGroupTone(group).chipBg,
+            color: getGroupTone(group).chipColor
+          }">
+          <i [class]="getGroupTone(group).icon"></i>
+          {{ group.label }} {{ formatCurrency(group.total) }}
+        </span>
+      </div>
+
+      <div class="category-actions">
+        <button type="button" class="btn btn-dark" (click)="toggleCreateChargeForm()">
+          <i class="fa-solid fa-plus"></i>
+          {{ showCreateChargeForm ? 'Ocultar cargo' : 'Agregar cargo' }}
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-success"
+          (click)="toggleCreatePaymentForm()"
+          [disabled]="!showCreatePaymentForm && !canRegisterPayments">
+          <i class="fa-solid fa-money-bill-wave"></i>
+          {{ showCreatePaymentForm ? 'Ocultar pago' : 'Agregar pago' }}
+        </button>
+
+        <button type="button" class="btn btn-light" (click)="printInvoice()">
+          <i class="fa-solid fa-print"></i>
+          Imprimir
+        </button>
+
+        <button type="button" class="btn btn-close" (click)="closeDrawer()" title="Cerrar">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="bill-body">
+      <section class="state-card" *ngIf="loading || errorMessage || infoMessage || refreshing">
+        <p *ngIf="loading">Cargando detalle de factura...</p>
+        <p *ngIf="refreshing && !loading">Actualizando datos...</p>
+        <p class="error" *ngIf="!loading && errorMessage">{{ errorMessage }}</p>
+        <p class="info" *ngIf="!loading && !errorMessage && infoMessage">{{ infoMessage }}</p>
+      </section>
+
+      <app-create-bill
+        *ngIf="!loading && showCreateChargeForm"
+        [reservationId]="activeInvoice?.reservation || null"
+        [chargeTypes]="chargeTypes"
+        [services]="services"
+        (created)="onChargeCreated()"
+        (cancelled)="onCreateChargeCancelled()">
+      </app-create-bill>
+
+      <app-create-payment
+        *ngIf="!loading && showCreatePaymentForm"
+        [invoiceId]="activeInvoice?.id || null"
+        [pendingAmount]="pendingAmount"
+        [paymentMethods]="paymentMethods"
+        (created)="onPaymentCreated()"
+        (cancelled)="onCreatePaymentCancelled()">
+      </app-create-payment>
+
+      <section class="empty-state" *ngIf="!loading && groupedCharges.length === 0">
+        <p>Esta factura aun no tiene cargos activos.</p>
+        <button type="button" class="btn btn-dark" (click)="toggleCreateChargeForm()">
+          <i class="fa-solid fa-plus"></i>
+          Registrar primer cargo
+        </button>
+      </section>
+
+      <section class="charge-groups" *ngIf="!loading && groupedCharges.length > 0">
+        <article class="charge-group" *ngFor="let group of groupedCharges; trackBy: trackByGroup">
+          <header class="group-head">
+            <div class="group-title">
+              <span
+                class="group-icon"
+                [ngStyle]="{
+                  'background-color': getGroupTone(group).iconBg,
+                  color: getGroupTone(group).iconColor
+                }">
+                <i [class]="getGroupTone(group).icon"></i>
+              </span>
+              <strong>{{ group.label }}</strong>
+            </div>
+
+            <span class="group-total" [ngStyle]="{ color: getGroupTone(group).amountColor }">
+              {{ formatCurrency(group.total) }}
+            </span>
+          </header>
+
+          <div class="charge-lines">
+            <div class="charge-line" *ngFor="let charge of group.rows; trackBy: trackByCharge">
+              <div class="line-left">
+                <strong>{{ charge.description }}</strong>
+                <small>
+                  {{ formatHour(charge.charge_date) }} |
+                  {{ charge.is_automatic ? 'Automatico' : 'Manual' }}
+                </small>
+              </div>
+
+              <div class="line-right">
+                <small>{{ charge.quantity }} x {{ formatCurrency(+charge.unit_price) }}</small>
+                <strong>{{ formatCurrency(+charge.total_amount) }}</strong>
+                <button
+                  *ngIf="!charge.is_automatic"
+                  type="button"
+                  class="line-remove"
+                  title="Retirar cargo"
+                  [disabled]="removingChargeId === charge.id"
+                  (click)="deactivateCharge(charge)">
+                  <i class="fa-regular fa-trash-can"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="payments-panel" *ngIf="!loading">
+        <header class="payments-head">
+          <div class="payments-title">
+            <span class="payments-head-icon">
+              <i class="fa-solid fa-wallet"></i>
+            </span>
+            <div>
+              <h3>Pagos registrados</h3>
+              <p>{{ paymentCount }} pago(s) | Saldo pendiente: {{ formatCurrency(pendingAmount) }}</p>
+            </div>
+          </div>
+
+          <strong>{{ formatCurrency(totalPaidAmount) }}</strong>
+        </header>
+
+        <section class="payments-empty" *ngIf="payments.length === 0">
+          <p>Aun no hay pagos registrados en esta factura.</p>
+          <button
+            type="button"
+            class="btn btn-success"
+            (click)="toggleCreatePaymentForm()"
+            [disabled]="!showCreatePaymentForm && !canRegisterPayments">
+            <i class="fa-solid fa-money-bill-wave"></i>
+            Registrar primer pago
+          </button>
+        </section>
+
+        <div class="payments-list" *ngIf="payments.length > 0">
+          <article class="payment-line" *ngFor="let payment of payments; trackBy: trackByPayment">
+            <div class="payment-left">
+              <span
+                class="payment-icon"
+                [ngStyle]="{
+                  'background-color': getPaymentTone(payment).iconBg,
+                  color: getPaymentTone(payment).iconColor
+                }">
+                <i [class]="getPaymentTone(payment).icon"></i>
+              </span>
+
+              <div class="payment-meta">
+                <div class="payment-top">
+                  <strong>{{ getPaymentMethodLabel(payment) }}</strong>
+                  <span
+                    class="payment-chip"
+                    [ngStyle]="{
+                      'background-color': getPaymentTone(payment).badgeBg,
+                      color: getPaymentTone(payment).badgeColor
+                    }">
+                    {{ payment.reference ? 'Con referencia' : 'Sin referencia' }}
+                  </span>
+                </div>
+
+                <small>
+                  {{ formatDate(payment.payment_date || payment.created_at) }} |
+                  {{ formatHour(payment.payment_date || payment.created_at) }}
+                  <span *ngIf="payment.reference"> | Ref: {{ payment.reference }}</span>
+                </small>
+              </div>
+            </div>
+
+            <div class="payment-right">
+              <small>Monto</small>
+              <strong [ngStyle]="{ color: getPaymentTone(payment).amountColor }">{{ formatCurrency(+payment.amount) }}</strong>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
+
+    <footer class="bill-footer">
+      <div class="summary-grid">
+        <div>
+          <span>Subtotal</span>
+          <strong>{{ formatCurrency(subtotalAmount) }}</strong>
+        </div>
+        <div>
+          <span>IVA</span>
+          <strong>{{ formatCurrency(taxAmount) }}</strong>
+        </div>
+        <div>
+          <span>Total con impuesto</span>
+          <strong>{{ formatCurrency(totalWithTaxAmount) }}</strong>
+        </div>
+      </div>
+
+      <div class="footer-actions">
+        <button type="button" class="btn btn-light" (click)="closeDrawer()">Cerrar</button>
+        <button
+          type="button"
+          class="btn btn-dark"
+          [disabled]="issuing || !canIssueInvoice"
+          (click)="issueAndCloseInvoice()">
+          {{ issuing ? 'Procesando...' : 'Cerrar y Facturar' }}
+        </button>
+      </div>
+    </footer>
+  </article>
+</div>

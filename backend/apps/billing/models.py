@@ -1,0 +1,216 @@
+from django.core.exceptions import ValidationError
+from django.db import models
+
+from apps.master_data.models import MasterData
+from apps.packages.models import Package
+from apps.reservations.models import Reservation
+from apps.services.models import Service
+
+class Charge(models.Model):
+    reservation = models.ForeignKey(
+        Reservation,
+        on_delete=models.CASCADE,
+        related_name="charges",
+    )
+    charge_type = models.ForeignKey(
+        MasterData,
+        on_delete=models.PROTECT,
+        related_name="charges_by_type",
+        limit_choices_to={"group": MasterData.Group.CHARGE_TYPE},
+    )
+    service = models.ForeignKey(
+        Service,
+        on_delete=models.SET_NULL,
+        related_name="charges",
+        blank=True,
+        null=True,
+    )
+    package = models.ForeignKey(
+        Package,
+        on_delete=models.SET_NULL,
+        related_name="charges",
+        blank=True,
+        null=True,
+    )
+
+    description = models.CharField(max_length=255)
+    quantity = models.PositiveIntegerField(default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    charge_date = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+    is_automatic = models.BooleanField(default=False, db_index=True)
+    automation_key = models.CharField(max_length=80, blank=True, null=True, db_index=True)
+
+    class Meta:
+        db_table = "charge"
+        ordering = ["-id"]
+
+    @property
+    def charge_type_code(self):
+        return self.charge_type.code if self.charge_type else None
+
+    def clean(self):
+        errors = {}
+
+        if self.quantity < 1:
+            errors["quantity"] = "Quantity must be at least 1."
+
+        if self.unit_price is not None and self.unit_price < 0:
+            errors["unit_price"] = "Unit price cannot be negative."
+
+        if self.total_amount is not None and self.total_amount < 0:
+            errors["total_amount"] = "Total amount cannot be negative."
+
+        if self.service and self.package:
+            errors["package"] = "A charge should reference either a service or a package, not both."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.total_amount = (self.quantity or 0) * (self.unit_price or 0)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Charge #{self.id} - Reservation #{self.reservation_id}"
+
+
+class Invoice(models.Model):
+    reservation = models.ForeignKey(
+        Reservation,
+        on_delete=models.CASCADE,
+        related_name="invoices",
+    )
+    status = models.ForeignKey(
+        MasterData,
+        on_delete=models.PROTECT,
+        related_name="invoices_by_status",
+        limit_choices_to={"group": MasterData.Group.INVOICE_STATUS},
+    )
+    invoice_number = models.CharField(max_length=50, unique=True)
+    issue_date = models.DateTimeField(auto_now_add=True)
+
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    notes = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "invoice"
+        ordering = ["-id"]
+
+    @property
+    def status_code(self):
+        return self.status.code if self.status else None
+
+    def clean(self):
+        errors = {}
+
+        if self.subtotal is not None and self.subtotal < 0:
+            errors["subtotal"] = "Subtotal cannot be negative."
+
+        if self.tax_amount is not None and self.tax_amount < 0:
+            errors["tax_amount"] = "Tax amount cannot be negative."
+
+        if self.total_amount is not None and self.total_amount < 0:
+            errors["total_amount"] = "Total amount cannot be negative."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.total_amount = (self.subtotal or 0) + (self.tax_amount or 0)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Invoice {self.invoice_number} - Reservation #{self.reservation_id}"
+
+
+class InvoiceCharge(models.Model):
+    invoice = models.ForeignKey(
+        Invoice,
+        on_delete=models.CASCADE,
+        related_name="invoice_charges",
+    )
+    charge = models.ForeignKey(
+        "billing.Charge",
+        on_delete=models.PROTECT,
+        related_name="invoice_links",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "invoice_charge"
+        ordering = ["id"]
+        unique_together = ("invoice", "charge")
+
+    def clean(self):
+        errors = {}
+
+        if self.invoice and self.charge:
+            if self.invoice.reservation_id != self.charge.reservation_id:
+                errors["charge"] = "The charge must belong to the same reservation as the invoice."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.invoice.invoice_number} - Charge #{self.charge_id}"
+
+class Payment(models.Model):
+    invoice = models.ForeignKey(
+        "billing.Invoice",
+        on_delete=models.CASCADE,
+        related_name="payments",
+    )
+    payment_method = models.ForeignKey(
+        MasterData,
+        on_delete=models.PROTECT,
+        related_name="payments_by_method",
+        limit_choices_to={"group": MasterData.Group.PAYMENT_METHOD},
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_date = models.DateTimeField(auto_now_add=True)
+    reference = models.CharField(max_length=100, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "payment"
+        ordering = ["-id"]
+
+    @property
+    def payment_method_code(self):
+        return self.payment_method.code if self.payment_method else None
+
+    def clean(self):
+        errors = {}
+
+        if self.amount is not None and self.amount <= 0:
+            errors["amount"] = "Payment amount must be greater than 0."
+
+        if self.invoice and self.amount:
+            total_paid = sum(
+                payment.amount
+                for payment in self.invoice.payments.filter(is_active=True).exclude(pk=self.pk)
+            )
+            pending_balance = self.invoice.total_amount - total_paid
+
+            if self.amount > pending_balance:
+                errors["amount"] = "Payment amount cannot be greater than the pending balance."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"Payment #{self.id} - Invoice {self.invoice.invoice_number}"

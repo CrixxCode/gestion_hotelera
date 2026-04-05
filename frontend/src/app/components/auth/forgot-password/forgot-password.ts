@@ -54,7 +54,7 @@ export class ForgotPasswordComponent {
 
   onSubmit() {
     if (this.forgotForm.invalid) {
-      this.message = 'Por favor ingresa un correo válido.';
+      this.message = 'Por favor ingresa un correo valido.';
       this.messageType = 'warn';
       setTimeout(() => (this.message = null), 4000);
       return;
@@ -67,19 +67,28 @@ export class ForgotPasswordComponent {
       next: () => {
         const baseUrl = window.location.origin + '/reset-password';
         this.authService.requestPasswordReset(email, baseUrl).subscribe({
-          next: () => {
+          next: (response: { sent?: boolean }) => {
             this.isLoading = false;
+            const sent = !!response?.sent;
+
+            if (!sent) {
+              this.emailSent = false;
+              this.messageType = 'error';
+              this.message = 'No fue posible enviar el correo de recuperacion. Verifica la configuracion SMTP del servidor.';
+              return;
+            }
+
             this.emailSent = true;
             this.messageType = 'success';
-            this.message = 'Hemos enviado un enlace de recuperación a tu correo electrónico. Por favor revisa tu bandeja de entrada.';
+            this.message = 'Hemos enviado un enlace de recuperacion a tu correo electronico. Por favor revisa tu bandeja de entrada.';
           },
           error: (err) => {
             this.isLoading = false;
             this.messageType = 'error';
             if (err.status === 404) {
-              this.message = 'No se encontró un usuario con ese correo electrónico.';
+              this.message = 'No se encontro un usuario con ese correo electronico.';
             } else {
-              this.message = 'Ocurrió un error al intentar enviar el correo. Por favor intenta más tarde.';
+              this.message = 'Ocurrio un error al intentar enviar el correo. Por favor intenta mas tarde.';
             }
           }
         });
@@ -87,8 +96,9 @@ export class ForgotPasswordComponent {
       error: () => {
         this.isLoading = false;
         this.messageType = 'error';
-        this.message = 'Error de conexión con el servidor.';
+        this.message = 'Error de conexion con el servidor.';
       }
     });
   }
 }
+

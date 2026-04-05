@@ -99,6 +99,13 @@ def _iter_reservation_deposits(reservation):
     return reservation.deposits.all()
 
 
+def _iter_reservation_charges(reservation):
+    prefetched = getattr(reservation, "_prefetched_objects_cache", {}).get("charges")
+    if prefetched is not None:
+        return prefetched
+    return reservation.charges.all()
+
+
 def get_reservation_financials(reservation, *, exclude_deposit_id: int | None = None) -> dict[str, Decimal]:
     nights = max(int(getattr(reservation, "total_nights", 0) or 0), 0)
 
@@ -109,11 +116,23 @@ def get_reservation_financials(reservation, *, exclude_deposit_id: int | None = 
             subtotal = _to_decimal(getattr(room, "night_rate", 0)) * Decimal(nights)
         rooms_subtotal += _to_decimal(subtotal)
 
+    package_subtotal = _to_decimal(getattr(reservation, "package_price", 0))
+    if package_subtotal < MONEY_ZERO:
+        package_subtotal = MONEY_ZERO
+
     total_discount = _to_decimal(getattr(reservation, "total_discount", 0))
     if total_discount < MONEY_ZERO:
         total_discount = MONEY_ZERO
 
-    total_amount = rooms_subtotal - total_discount
+    additional_charges_total = MONEY_ZERO
+    for charge in _iter_reservation_charges(reservation):
+        if not getattr(charge, "is_active", True):
+            continue
+        if getattr(charge, "is_automatic", False):
+            continue
+        additional_charges_total += _to_decimal(getattr(charge, "total_amount", 0))
+
+    total_amount = rooms_subtotal + package_subtotal + additional_charges_total - total_discount
     if total_amount < MONEY_ZERO:
         total_amount = MONEY_ZERO
 
@@ -129,6 +148,8 @@ def get_reservation_financials(reservation, *, exclude_deposit_id: int | None = 
 
     return {
         "rooms_subtotal": rooms_subtotal,
+        "package_subtotal": package_subtotal,
+        "additional_charges_total": additional_charges_total,
         "total_discount": total_discount,
         "total_amount": total_amount,
         "total_deposits": total_deposits,

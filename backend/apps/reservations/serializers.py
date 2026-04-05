@@ -2,6 +2,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from apps.master_data.models import MasterData
+from apps.packages.models import Package
 from apps.reservations.models import (
     Reservation,
     ReservationRoom,
@@ -112,6 +113,32 @@ class ReservationRoomSerializer(serializers.ModelSerializer):
                     }
                 )
 
+        if reservation and room and reservation.package_id:
+            package = reservation.package
+            room_hotel_id = getattr(getattr(room, "floor", None), "hotel_settings_id", None)
+            check_in = reservation.expected_check_in
+            check_out = reservation.expected_check_out
+
+            if package.start_date and check_in and check_in < package.start_date:
+                raise serializers.ValidationError(
+                    {"reservation": "Reservation check-in is outside the package validity period."}
+                )
+
+            if package.end_date and check_out and check_out > package.end_date:
+                raise serializers.ValidationError(
+                    {"reservation": "Reservation check-out is outside the package validity period."}
+                )
+
+            if room_hotel_id and package.hotel_settings_id != room_hotel_id:
+                raise serializers.ValidationError(
+                    {"room": "The room is not compatible with the package hotel."}
+                )
+
+            if package.room_type_id and room.room_type_id != package.room_type_id:
+                raise serializers.ValidationError(
+                    {"room": "The room type is not compatible with the selected package."}
+                )
+
         return attrs
 
 
@@ -196,7 +223,7 @@ class ReservationDepositSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             locked_reservation = (
                 Reservation.objects.select_related("status")
-                .prefetch_related("rooms_detail", "deposits")
+                .prefetch_related("rooms_detail", "deposits", "charges")
                 .select_for_update()
                 .get(pk=reservation.pk)
             )
@@ -216,7 +243,7 @@ class ReservationDepositSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             locked_reservation = (
                 Reservation.objects.select_related("status")
-                .prefetch_related("rooms_detail", "deposits")
+                .prefetch_related("rooms_detail", "deposits", "charges")
                 .select_for_update()
                 .get(pk=reservation.pk)
             )
@@ -248,6 +275,8 @@ class ReservationBusinessRulesMixin:
 
         values = {
             "rooms_subtotal": financials["rooms_subtotal"],
+            "package_subtotal": financials["package_subtotal"],
+            "additional_charges_total": financials["additional_charges_total"],
             "total_deposits": financials["total_deposits"],
             "total_amount": financials["total_amount"],
             "pending_amount": financials["pending_amount"],
@@ -261,6 +290,12 @@ class ReservationBusinessRulesMixin:
 
     def get_rooms_subtotal(self, obj):
         return self._get_business_rules(obj)["rooms_subtotal"]
+
+    def get_package_subtotal(self, obj):
+        return self._get_business_rules(obj)["package_subtotal"]
+
+    def get_additional_charges_total(self, obj):
+        return self._get_business_rules(obj)["additional_charges_total"]
 
     def get_total_deposits(self, obj):
         return self._get_business_rules(obj)["total_deposits"]
@@ -300,11 +335,15 @@ class ReservationListSerializer(ReservationBusinessRulesMixin, serializers.Model
     status_code = serializers.CharField(source="status.code", read_only=True)
     origin_name = serializers.CharField(source="origin.name", read_only=True)
     origin_code = serializers.CharField(source="origin.code", read_only=True)
+    package_catalog_name = serializers.CharField(source="package.name", read_only=True)
+    package_display_name = serializers.CharField(read_only=True)
     total_rooms = serializers.IntegerField(read_only=True)
     total_guests = serializers.IntegerField(read_only=True)
     total_nights = serializers.IntegerField(read_only=True)
     policies = ReservationPolicySummarySerializer(many=True, read_only=True)
     rooms_subtotal = serializers.SerializerMethodField()
+    package_subtotal = serializers.SerializerMethodField()
+    additional_charges_total = serializers.SerializerMethodField()
     total_deposits = serializers.SerializerMethodField()
     total_amount = serializers.SerializerMethodField()
     pending_amount = serializers.SerializerMethodField()
@@ -329,6 +368,11 @@ class ReservationListSerializer(ReservationBusinessRulesMixin, serializers.Model
             "origin",
             "origin_name",
             "origin_code",
+            "package",
+            "package_name",
+            "package_catalog_name",
+            "package_display_name",
+            "package_price",
             "expected_check_in",
             "expected_check_out",
             "real_check_in",
@@ -340,6 +384,8 @@ class ReservationListSerializer(ReservationBusinessRulesMixin, serializers.Model
             "total_guests",
             "total_nights",
             "rooms_subtotal",
+            "package_subtotal",
+            "additional_charges_total",
             "total_deposits",
             "total_amount",
             "pending_amount",
@@ -361,10 +407,16 @@ class ReservationListSerializer(ReservationBusinessRulesMixin, serializers.Model
             "status_code",
             "origin_name",
             "origin_code",
+            "package_name",
+            "package_catalog_name",
+            "package_display_name",
+            "package_price",
             "total_rooms",
             "total_guests",
             "total_nights",
             "rooms_subtotal",
+            "package_subtotal",
+            "additional_charges_total",
             "total_deposits",
             "total_amount",
             "pending_amount",
@@ -389,6 +441,8 @@ class ReservationDetailSerializer(ReservationBusinessRulesMixin, serializers.Mod
     status_code = serializers.CharField(source="status.code", read_only=True)
     origin_name = serializers.CharField(source="origin.name", read_only=True)
     origin_code = serializers.CharField(source="origin.code", read_only=True)
+    package_catalog_name = serializers.CharField(source="package.name", read_only=True)
+    package_display_name = serializers.CharField(read_only=True)
 
     rooms_detail = ReservationRoomSerializer(many=True, read_only=True)
     guests = ReservationGuestSerializer(many=True, read_only=True)
@@ -399,6 +453,8 @@ class ReservationDetailSerializer(ReservationBusinessRulesMixin, serializers.Mod
     total_guests = serializers.IntegerField(read_only=True)
     total_nights = serializers.IntegerField(read_only=True)
     rooms_subtotal = serializers.SerializerMethodField()
+    package_subtotal = serializers.SerializerMethodField()
+    additional_charges_total = serializers.SerializerMethodField()
     total_deposits = serializers.SerializerMethodField()
     total_amount = serializers.SerializerMethodField()
     pending_amount = serializers.SerializerMethodField()
@@ -425,6 +481,11 @@ class ReservationDetailSerializer(ReservationBusinessRulesMixin, serializers.Mod
             "origin",
             "origin_name",
             "origin_code",
+            "package",
+            "package_name",
+            "package_catalog_name",
+            "package_display_name",
+            "package_price",
             "expected_check_in",
             "expected_check_out",
             "real_check_in",
@@ -437,6 +498,8 @@ class ReservationDetailSerializer(ReservationBusinessRulesMixin, serializers.Mod
             "total_guests",
             "total_nights",
             "rooms_subtotal",
+            "package_subtotal",
+            "additional_charges_total",
             "total_deposits",
             "total_amount",
             "pending_amount",
@@ -463,10 +526,16 @@ class ReservationDetailSerializer(ReservationBusinessRulesMixin, serializers.Mod
             "status_code",
             "origin_name",
             "origin_code",
+            "package_name",
+            "package_catalog_name",
+            "package_display_name",
+            "package_price",
             "total_rooms",
             "total_guests",
             "total_nights",
             "rooms_subtotal",
+            "package_subtotal",
+            "additional_charges_total",
             "total_deposits",
             "total_amount",
             "pending_amount",
@@ -486,12 +555,17 @@ class ReservationDetailSerializer(ReservationBusinessRulesMixin, serializers.Mod
 
 
 class ReservationWriteSerializer(serializers.ModelSerializer):
+    package = serializers.PrimaryKeyRelatedField(
+        queryset=Package.objects.all(),
+        required=False,
+        allow_null=True,
+    )
     policies = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=ReservationPolicy.objects.filter(is_active=True),
         required=False,
     )
-    
+
     class Meta:
         model = Reservation
         fields = [
@@ -499,6 +573,9 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
             "client",
             "status",
             "origin",
+            "package",
+            "package_name",
+            "package_price",
             "policies",
             "expected_check_in",
             "expected_check_out",
@@ -510,7 +587,46 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
             "created_by",
             "created_at",
         ]
-        read_only_fields = ("id", "created_at", "status", "real_check_in", "real_check_out")
+        read_only_fields = (
+            "id",
+            "created_at",
+            "status",
+            "real_check_in",
+            "real_check_out",
+            "package_name",
+            "package_price",
+        )
+
+    def validate_package(self, value):
+        if value and not value.is_active:
+            raise serializers.ValidationError("The selected package is inactive.")
+        return value
+
+    @staticmethod
+    def _validate_package_dates(package, check_in, check_out):
+        if not package:
+            return None
+
+        if package.start_date and check_in and check_in < package.start_date:
+            return "The selected package is not available for the expected check-in date."
+
+        if package.end_date and check_out and check_out > package.end_date:
+            return "The selected package is not available for the expected check-out date."
+
+        return None
+
+    @staticmethod
+    def _build_package_snapshot(package):
+        if not package:
+            return {
+                "package_name": "",
+                "package_price": 0,
+            }
+
+        return {
+            "package_name": package.name,
+            "package_price": package.base_price,
+        }
 
     def validate(self, attrs):
         attrs.pop("status", None)
@@ -537,6 +653,7 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
             "total_discount",
             getattr(self.instance, "total_discount", 0),
         )
+        package = attrs.get("package", getattr(self.instance, "package", None))
 
         errors = {}
 
@@ -553,9 +670,17 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
         if total_discount is not None and total_discount < 0:
             errors["total_discount"] = "Total discount cannot be negative."
 
+        package_date_error = self._validate_package_dates(
+            package,
+            expected_check_in,
+            expected_check_out,
+        )
+        if package_date_error:
+            errors["package"] = package_date_error
+
         if self.instance and expected_check_in and expected_check_out:
             room_conflicts = []
-            reservation_rooms = self.instance.rooms_detail.select_related("room").all()
+            reservation_rooms = self.instance.rooms_detail.select_related("room", "room__floor").all()
             for reservation_room in reservation_rooms:
                 conflict = find_overlapping_reservation_room(
                     room_id=reservation_room.room_id,
@@ -577,6 +702,26 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
             if room_conflicts:
                 errors["rooms_detail"] = room_conflicts
 
+            if package:
+                package_conflicts = []
+                for reservation_room in reservation_rooms:
+                    room = reservation_room.room
+                    room_hotel_id = getattr(getattr(room, "floor", None), "hotel_settings_id", None)
+
+                    if room_hotel_id and package.hotel_settings_id != room_hotel_id:
+                        package_conflicts.append(
+                            f"Room {room.number} belongs to a different hotel than the selected package."
+                        )
+                        continue
+
+                    if package.room_type_id and room.room_type_id != package.room_type_id:
+                        package_conflicts.append(
+                            f"Room {room.number} is not compatible with package room type '{package.room_type.name}'."
+                        )
+
+                if package_conflicts:
+                    errors["package"] = package_conflicts
+
         if errors:
             raise serializers.ValidationError(errors)
 
@@ -584,9 +729,11 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         policies = validated_data.pop("policies", None)
+        package = validated_data.get("package")
         validated_data.pop("status", None)
         validated_data["real_check_in"] = None
         validated_data["real_check_out"] = None
+        validated_data.update(self._build_package_snapshot(package))
 
         pending_status = get_reservation_status_by_code(RESERVATION_STATUS_PENDING)
         if not pending_status:
@@ -612,6 +759,11 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
         validated_data.pop("status", None)
         validated_data.pop("real_check_in", None)
         validated_data.pop("real_check_out", None)
+
+        if "package" in validated_data:
+            package = validated_data.get("package")
+            validated_data.update(self._build_package_snapshot(package))
+
         reservation = super().update(instance, validated_data)
 
         if policies is not None:

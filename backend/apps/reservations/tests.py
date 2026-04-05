@@ -9,6 +9,7 @@ from rest_framework.test import APIClient, APITestCase
 from apps.clients.models import Client
 from apps.hotel_settings.models import HotelFloor, HotelSettings, ReservationPolicy
 from apps.master_data.models import MasterData
+from apps.packages.models import Package
 from apps.reservations.models import Reservation, ReservationDeposit, ReservationRoom
 from apps.reservations.serializers import (
     ReservationDetailSerializer,
@@ -60,6 +61,8 @@ class ReservationFlowTestCase(TestCase):
         self.room_status_available = self._md(MasterData.Group.ROOM_STATUS, "DISPONIBLE", "Disponible", 1)
         self.room_status_reserved = self._md(MasterData.Group.ROOM_STATUS, "RESERVADA", "Reservada", 2)
         self.room_status_occupied = self._md(MasterData.Group.ROOM_STATUS, "OCUPADA", "Ocupada", 3)
+        self.room_type_standard = self._md(MasterData.Group.ROOM_TYPE, "STD", "Standard", 1)
+        self.room_type_suite = self._md(MasterData.Group.ROOM_TYPE, "SUI", "Suite", 2)
 
         self.reservation_status_confirmed = self._md(
             MasterData.Group.RESERVATION_STATUS, "CONFIRMADA", "Confirmada", 1
@@ -102,6 +105,7 @@ class ReservationFlowTestCase(TestCase):
 
         self.room = Room.objects.create(
             number="101",
+            room_type=self.room_type_standard,
             floor=self.floor,
             status=self.room_status_available,
         )
@@ -134,6 +138,13 @@ class ReservationFlowTestCase(TestCase):
             name="Strict",
             penalty_value=50,
             hours_before_checkin=48,
+            is_active=True,
+        )
+        self.package_standard = Package.objects.create(
+            hotel_settings=self.hotel_settings,
+            room_type=self.room_type_standard,
+            name="Paquete Standard",
+            base_price=25000,
             is_active=True,
         )
 
@@ -201,6 +212,138 @@ class ReservationFlowTestCase(TestCase):
                 "children": 0,
             }
         )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("room", serializer.errors)
+
+    def test_reservation_serializer_snapshots_package_and_updates_total(self):
+        today = timezone.now().date()
+        serializer = ReservationWriteSerializer(
+            data={
+                "client": self.client.id,
+                "origin": self.reservation_origin.id,
+                "package": self.package_standard.id,
+                "expected_check_in": today + timedelta(days=1),
+                "expected_check_out": today + timedelta(days=3),
+            }
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        reservation = serializer.save()
+
+        self.assertEqual(reservation.package_id, self.package_standard.id)
+        self.assertEqual(reservation.package_name, self.package_standard.name)
+        self.assertEqual(str(reservation.package_price), "25000.00")
+
+        ReservationRoom.objects.create(
+            reservation=reservation,
+            room=self.room,
+            night_rate=100000,
+            adults=2,
+            children=0,
+        )
+
+        data = ReservationListSerializer(instance=reservation).data
+        self.assertEqual(str(data["rooms_subtotal"]), "200000.00")
+        self.assertEqual(str(data["package_subtotal"]), "25000.00")
+        self.assertEqual(str(data["total_amount"]), "225000.00")
+
+    def test_reservation_serializer_rejects_package_outside_booking_dates(self):
+        today = timezone.now().date()
+        limited_package = Package.objects.create(
+            hotel_settings=self.hotel_settings,
+            room_type=self.room_type_standard,
+            name="Paquete por temporada",
+            base_price=15000,
+            is_active=True,
+            start_date=today + timedelta(days=10),
+            end_date=today + timedelta(days=20),
+        )
+
+        serializer = ReservationWriteSerializer(
+            data={
+                "client": self.client.id,
+                "origin": self.reservation_origin.id,
+                "package": limited_package.id,
+                "expected_check_in": today + timedelta(days=1),
+                "expected_check_out": today + timedelta(days=3),
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("package", serializer.errors)
+
+    def test_room_serializer_rejects_room_type_when_reservation_has_package(self):
+        today = timezone.now().date()
+        suite_package = Package.objects.create(
+            hotel_settings=self.hotel_settings,
+            room_type=self.room_type_suite,
+            name="Paquete Suite",
+            base_price=50000,
+            is_active=True,
+        )
+        reservation_serializer = ReservationWriteSerializer(
+            data={
+                "client": self.client.id,
+                "origin": self.reservation_origin.id,
+                "package": suite_package.id,
+                "expected_check_in": today + timedelta(days=1),
+                "expected_check_out": today + timedelta(days=3),
+            }
+        )
+        self.assertTrue(reservation_serializer.is_valid(), reservation_serializer.errors)
+        reservation = reservation_serializer.save()
+
+        serializer = ReservationRoomSerializer(
+            data={
+                "reservation": reservation.id,
+                "room": self.room.id,
+                "night_rate": "90000.00",
+                "adults": 2,
+                "children": 0,
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("room", serializer.errors)
+
+    def test_room_serializer_rejects_room_hotel_when_reservation_has_package(self):
+        today = timezone.now().date()
+        reservation_serializer = ReservationWriteSerializer(
+            data={
+                "client": self.client.id,
+                "origin": self.reservation_origin.id,
+                "package": self.package_standard.id,
+                "expected_check_in": today + timedelta(days=1),
+                "expected_check_out": today + timedelta(days=3),
+            }
+        )
+        self.assertTrue(reservation_serializer.is_valid(), reservation_serializer.errors)
+        reservation = reservation_serializer.save()
+
+        other_hotel = HotelSettings.objects.create(hotel_name="Hotel Other")
+        other_floor = HotelFloor.objects.create(
+            hotel_settings=other_hotel,
+            floor_number=1,
+            name="Piso Other",
+            prefix="2",
+            room_count=1,
+        )
+        other_room = Room.objects.create(
+            number="201",
+            room_type=self.room_type_standard,
+            floor=other_floor,
+            status=self.room_status_available,
+        )
+
+        serializer = ReservationRoomSerializer(
+            data={
+                "reservation": reservation.id,
+                "room": other_room.id,
+                "night_rate": "90000.00",
+                "adults": 2,
+                "children": 0,
+            }
+        )
+
         self.assertFalse(serializer.is_valid())
         self.assertIn("room", serializer.errors)
 

@@ -26,6 +26,15 @@ class Reservation(models.Model):
         related_name="reservations_by_origin",
         limit_choices_to={"group": MasterData.Group.RESERVATION_ORIGIN},
     )
+    package = models.ForeignKey(
+        "packages.Package",
+        on_delete=models.SET_NULL,
+        related_name="reservations",
+        blank=True,
+        null=True,
+    )
+    package_name = models.CharField(max_length=150, blank=True, default="")
+    package_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     policies = models.ManyToManyField(
         ReservationPolicy,
         related_name="reservations",
@@ -64,6 +73,14 @@ class Reservation(models.Model):
         return self.origin.code if self.origin else None
 
     @property
+    def package_catalog_name(self):
+        return self.package.name if self.package else None
+
+    @property
+    def package_display_name(self):
+        return self.package_name or self.package_catalog_name
+
+    @property
     def total_guests(self):
         return sum(item.adults + item.children for item in self.rooms_detail.all())
 
@@ -93,6 +110,9 @@ class Reservation(models.Model):
 
         if self.total_discount is not None and self.total_discount < 0:
             errors["total_discount"] = "Total discount cannot be negative."
+
+        if self.package_price is not None and self.package_price < 0:
+            errors["package_price"] = "Package price cannot be negative."
 
         if errors:
             raise ValidationError(errors)
@@ -155,6 +175,24 @@ class ReservationRoom(models.Model):
 
         if self.children < 0:
             errors["children"] = "Children cannot be negative."
+
+        if self.reservation_id and self.room_id and self.reservation.package_id:
+            package = self.reservation.package
+            check_in = self.reservation.expected_check_in
+            check_out = self.reservation.expected_check_out
+
+            if package.start_date and check_in and check_in < package.start_date:
+                errors["reservation"] = "Reservation check-in is outside the package validity period."
+
+            if package.end_date and check_out and check_out > package.end_date:
+                errors["reservation"] = "Reservation check-out is outside the package validity period."
+
+            room_hotel_id = getattr(getattr(self.room, "floor", None), "hotel_settings_id", None)
+            if room_hotel_id and package.hotel_settings_id != room_hotel_id:
+                errors["room"] = "The room is not compatible with the package hotel."
+
+            if package.room_type_id and self.room.room_type_id != package.room_type_id:
+                errors["room"] = "The room type is not compatible with the selected package."
 
         if self.room_id and self.reservation_id:
             from apps.reservations.services import find_overlapping_reservation_room

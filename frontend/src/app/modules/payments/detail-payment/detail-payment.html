@@ -1,0 +1,96 @@
+<div class="payment-overlay" (click)="closeDrawer()">
+  <article class="payment-modal" (click)="$event.stopPropagation()">
+    <header class="payment-head">
+      <div>
+        <h2>Pago #{{ activePayment?.id || payment?.id }}</h2>
+        <p>Factura: {{ activePayment?.invoice_number || invoice?.invoice_number || ('FAC-' + (activePayment?.invoice || payment?.invoice || 0)) }}</p>
+      </div>
+
+      <span
+        class="status-chip"
+        [ngStyle]="{
+          'background-color': paymentStatusTone.bg,
+          color: paymentStatusTone.color
+        }">
+        <span class="dot" [ngStyle]="{ 'background-color': paymentStatusTone.dot }"></span>
+        {{ paymentStatusLabel }}
+      </span>
+    </header>
+
+    <section class="state-card" *ngIf="loading || errorMessage || infoMessage">
+      <p *ngIf="loading">Cargando detalle del pago...</p>
+      <p class="error" *ngIf="!loading && errorMessage">{{ errorMessage }}</p>
+      <p class="info" *ngIf="!loading && !errorMessage && infoMessage">{{ infoMessage }}</p>
+    </section>
+
+    <section class="detail-grid" *ngIf="!loading && activePayment">
+      <article class="detail-card">
+        <h3>Informacion del pago</h3>
+        <dl>
+          <div>
+            <dt>Monto</dt>
+            <dd>{{ formatCurrency(+activePayment.amount) }}</dd>
+          </div>
+          <div>
+            <dt>Metodo</dt>
+            <dd>{{ activePayment.payment_method_name || activePayment.payment_method_code || ('Metodo #' + activePayment.payment_method) }}</dd>
+          </div>
+          <div>
+            <dt>Fecha</dt>
+            <dd>{{ formatDateTime(activePayment.payment_date || activePayment.created_at) }}</dd>
+          </div>
+          <div>
+            <dt>Referencia</dt>
+            <dd>{{ activePayment.reference || 'Sin referencia' }}</dd>
+          </div>
+          <div class="notes">
+            <dt>Notas</dt>
+            <dd>{{ activePayment.notes || 'Sin observaciones' }}</dd>
+          </div>
+        </dl>
+      </article>
+
+      <article class="detail-card">
+        <h3>Resumen de factura</h3>
+        <dl>
+          <div>
+            <dt>Total factura</dt>
+            <dd>{{ formatCurrency(invoiceTotalAmount) }}</dd>
+          </div>
+          <div>
+            <dt>Total pagado</dt>
+            <dd>{{ formatCurrency(totalPaidAmount) }}</dd>
+          </div>
+          <div>
+            <dt>Saldo pendiente</dt>
+            <dd>{{ formatCurrency(pendingBalanceAmount) }}</dd>
+          </div>
+          <div>
+            <dt>Pagos registrados</dt>
+            <dd>{{ invoicePayments.length }}</dd>
+          </div>
+        </dl>
+      </article>
+    </section>
+
+    <footer class="payment-foot">
+      <button type="button" class="btn btn-light" (click)="refresh()" [disabled]="loading || updating">
+        <i class="fa-solid fa-rotate-right"></i>
+        Actualizar
+      </button>
+
+      <div class="actions-right">
+        <button
+          *ngIf="activePayment?.is_active"
+          type="button"
+          class="btn btn-danger"
+          (click)="deactivatePayment()"
+          [disabled]="loading || updating">
+          {{ updating ? 'Procesando...' : 'Inactivar pago' }}
+        </button>
+
+        <button type="button" class="btn btn-dark" (click)="closeDrawer()">Cerrar</button>
+      </div>
+    </footer>
+  </article>
+</div>
