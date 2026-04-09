@@ -6,10 +6,6 @@
     </div>
 
     <div class="header-actions">
-      <button class="btn ghost" (click)="loadData()" [disabled]="loading">
-        <i class="fa-solid fa-rotate-right"></i>
-        Actualizar
-      </button>
       <button class="btn primary" (click)="openCreate()">
         <i class="fa-solid fa-plus"></i>
         Nueva amenidad
@@ -55,19 +51,50 @@
     </article>
   </section>
 
-  <section class="table-card">
-    <div class="table-toolbar">
-      <label class="search-field">
-        <i class="fa-solid fa-magnifying-glass"></i>
-        <input [(ngModel)]="search" (input)="applyFilters()" placeholder="Buscar amenidad..." />
+  <section class="gh-filters-card">
+    <div class="gh-filters-grid">
+      <label class="search-field search-wrap gh-search-wrap">
+        <span>Buscar</span>
+        <div class="search-control gh-search-control">
+          <i class="fa-solid fa-magnifying-glass gh-search-icon"></i>
+          <input class="gh-search-input" type="text" [(ngModel)]="search" (input)="applyFilters()" placeholder="Buscar amenidad..." />
+        </div>
       </label>
 
-      <select class="tool-select" [(ngModel)]="statusFilter" (change)="applyFilters()">
-        <option value="ALL">Todos</option>
-        <option value="ACTIVE">Activas</option>
-        <option value="INACTIVE">Inactivas</option>
-      </select>
+      <label class="gh-filter-field">
+        <span>Estado</span>
+        <select class="gh-filter-select" [(ngModel)]="statusFilter" (change)="applyFilters()">
+          <option value="ALL">Todos</option>
+          <option value="ACTIVE">Activas</option>
+          <option value="INACTIVE">Inactivas</option>
+        </select>
+      </label>
+
+      <label class="gh-filter-field">
+        <span>Uso</span>
+        <select class="gh-filter-select" [(ngModel)]="usageFilter" (change)="applyFilters()">
+          <option value="ALL">Todos</option>
+          <option value="IN_USE">En uso</option>
+          <option value="NO_USE">Sin uso</option>
+        </select>
+      </label>
     </div>
+
+    <div class="gh-filters-actions gh-filters-actions-single">
+      <div class="gh-action-group">
+        <button type="button" class="gh-btn gh-btn-light" (click)="loadData()" [disabled]="loading">
+          <i class="fa-solid fa-rotate-right"></i>
+          Actualizar
+        </button>
+        <button type="button" class="gh-btn gh-btn-light" (click)="exportCsv()">
+          <i class="fa-solid fa-file-export"></i>
+          Exportar
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="table-card">
 
     <div class="table-wrap">
       <table>
@@ -195,19 +222,6 @@
       </button>
     </footer>
   </aside>
-
-  <div class="overlay" *ngIf="showDeleteConfirm" (click)="showDeleteConfirm=false; deleteTarget=null"></div>
-  <div class="confirm-modal" *ngIf="showDeleteConfirm" (click)="$event.stopPropagation()">
-    <h3>Eliminar amenidad</h3>
-    <p>
-      Se eliminara <b>{{ deleteTarget?.name }}</b>.
-      Esta accion tambien la quitara de habitaciones donde este asignada.
-    </p>
-    <div class="confirm-actions">
-      <button class="btn ghost" (click)="showDeleteConfirm=false; deleteTarget=null">Cancelar</button>
-      <button class="btn danger" (click)="confirmDelete()">Eliminar</button>
-    </div>
-  </div>
 
   <div class="toast" [class.show]="toastVisible" [class.ok]="toastKind==='success'" [class.bad]="toastKind==='danger'">
     {{ toastText }}

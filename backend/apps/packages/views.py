@@ -3,9 +3,10 @@ from rest_framework import filters, viewsets
 from apps.packages.models import Package, PackageService
 from apps.packages.serializers import PackageSerializer, PackageServiceSerializer
 from accounts.permissions import HasResourcePermission
+from accounts.soft_delete import LogicalDeleteViewSetMixin
 
 
-class PackageViewSet(viewsets.ModelViewSet):
+class PackageViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         Package.objects.select_related(
             "hotel_settings",
@@ -51,7 +52,7 @@ class PackageViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
 
-class PackageServiceViewSet(viewsets.ModelViewSet):
+class PackageServiceViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         PackageService.objects.select_related(
             "package",

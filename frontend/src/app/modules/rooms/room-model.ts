@@ -19,24 +19,48 @@ export interface AmenityI {
 
 export interface RoomTypeI {
   id: number;
+  code: string;
   name: string;
   description?: string | null;
   capacity?: number;
   bed_count?: number;
   bed_type?: string | null;
   is_active?: boolean;
+  sort_order?: number;
   created_at?: string;
+  updated_at?: string;
+}
+
+export interface RoomTypeFormPayload {
+  code: string;
+  name: string;
+  description?: string | null;
+  capacity: number;
+  bed_count: number;
+  bed_type?: string | null;
+  is_active: boolean;
+  sort_order: number;
 }
 
 export interface RateI {
   id: number;
   room_type: number;
+  room_type_name?: string;
   name: string;
   price: string | number;
   start_date?: string | null;
   end_date?: string | null;
   is_active?: boolean;
   created_at?: string;
+}
+
+export interface RateFormPayload {
+  room_type: number;
+  name: string;
+  price: number;
+  start_date?: string | null;
+  end_date?: string | null;
+  is_active: boolean;
 }
 
 export interface HotelFloorI {
@@ -53,6 +77,7 @@ export interface RoomI {
   id: number;
   number: string;
   room_type: number | null;
+  room_type_capacity?: number | null;
   floor: number;
   status: RoomStatus;
   notes?: string | null;

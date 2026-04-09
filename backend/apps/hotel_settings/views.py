@@ -6,6 +6,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from accounts.permissions import HasResourcePermission
+from accounts.soft_delete import LogicalDeleteViewSetMixin
 from apps.master_data.models import MasterData
 from apps.rooms.models import Room
 
@@ -13,7 +14,7 @@ from .models import HotelFloor, HotelSettings, ReservationPolicy
 from .serializers import HotelFloorSerializer, HotelSettingsSerializer, ReservationPolicySerializer
 
 
-class HotelSettingsViewSet(viewsets.ModelViewSet):
+class HotelSettingsViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = HotelSettings.objects.all().order_by("-id")
     serializer_class = HotelSettingsSerializer
     pagination_class = None
@@ -71,7 +72,16 @@ class HotelSettingsViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        settings_obj.delete()
+        with transaction.atomic():
+            floors = list(HotelFloor.objects.filter(hotel_settings=settings_obj))
+            floor_ids = [f.id for f in floors]
+            if floor_ids:
+                rooms = list(Room.objects.filter(floor_id__in=floor_ids))
+                for room in rooms:
+                    self.perform_destroy(room)
+                for floor in floors:
+                    self.perform_destroy(floor)
+            self.perform_destroy(settings_obj)
 
         return Response(
             {"detail": "Hotel settings deleted successfully."},
@@ -79,7 +89,7 @@ class HotelSettingsViewSet(viewsets.ModelViewSet):
         )
 
 
-class HotelFloorViewSet(viewsets.ModelViewSet):
+class HotelFloorViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = HotelFloor.objects.select_related("hotel_settings").all().order_by("floor_number")
     serializer_class = HotelFloorSerializer
     pagination_class = None
@@ -181,7 +191,9 @@ class HotelFloorViewSet(viewsets.ModelViewSet):
                 room_ids_to_delete.append(room.id)
 
         if room_ids_to_delete:
-            Room.objects.filter(id__in=room_ids_to_delete).delete()
+            rooms = Room.objects.filter(id__in=room_ids_to_delete)
+            for room in rooms:
+                self.perform_destroy(room)
 
         return room_ids_to_delete
 
@@ -235,7 +247,7 @@ class HotelFloorViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(floors, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-class ReservationPolicyViewSet(viewsets.ModelViewSet):
+class ReservationPolicyViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         ReservationPolicy.objects.select_related(
             "hotel_settings",

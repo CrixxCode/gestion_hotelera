@@ -1,8 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 
 import { RoomDetail } from './room-detail';
 import { RoomService } from '../../../services/room';
+import { ReservationService } from '../../../services/reservation';
 
 describe('RoomDetail', () => {
   let component: RoomDetail;
@@ -12,6 +16,9 @@ describe('RoomDetail', () => {
     await TestBed.configureTestingModule({
       imports: [RoomDetail],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
         {
           provide: RoomService,
           useValue: {
@@ -28,6 +35,15 @@ describe('RoomDetail', () => {
                 active_maintenance: null
               }),
             updateRoom: () => of({})
+          }
+        },
+        {
+          provide: ReservationService,
+          useValue: {
+            getReservationById: () => of(null),
+            confirmReservation: () => of({}),
+            checkInReservation: () => of({}),
+            checkOutReservation: () => of({})
           }
         }
       ]

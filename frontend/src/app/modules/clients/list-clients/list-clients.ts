@@ -7,6 +7,7 @@ import { CreateClient } from '../create-client/create-client';
 import { UpdateClient } from '../update-client/update-client';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ConfirmationService } from 'primeng/api';
+import { openActionConfirmation } from '../../../services/action-confirmations';
 
 @Component({
   selector: 'app-show-client',
@@ -141,6 +142,46 @@ export class ListClients implements OnInit {
     this.updatePagination();
   }
 
+  exportCsv(): void {
+    if (!this.filteredClients.length) return;
+
+    const headers = [
+      'cliente',
+      'correo',
+      'telefono',
+      'nacionalidad',
+      'tipo',
+      'estancias_noches',
+      'ultima_estancia',
+      'estado'
+    ];
+
+    const rows = this.filteredClients.map((client) => {
+      const fullName = client.full_name || `${client.first_name || ''} ${client.last_name || ''}`.trim();
+      const row = [
+        fullName,
+        client.email || '',
+        client.phone || '',
+        client.country || '',
+        this.getTypeLabel(client.client_type),
+        client.total_stay_nights || 0,
+        this.formatDate(client.last_stay),
+        this.getStatusLabel(client.status)
+      ];
+
+      return row.map((cell) => this.escapeCsvCell(cell)).join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `clientes-${this.formatFileDate(new Date())}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   updatePagination(): void {
     this.totalPages = Math.ceil(this.filteredClients.length / this.perPage);
 
@@ -200,17 +241,11 @@ export class ListClients implements OnInit {
 
     const fullName = client.full_name || `${client.first_name} ${client.last_name}`;
 
-    this.confirmationService.confirm({
-      message: `Deseas eliminar a ${fullName}?`,
-      header: 'Confirmar eliminacion',
-      icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Si, eliminar',
-      rejectLabel: 'Cancelar',
+    openActionConfirmation(this.confirmationService, {
+      action: 'delete',
+      target: fullName,
       key: 'clientDelete',
-      acceptButtonStyleClass: 'p-button-danger',
-      rejectButtonStyleClass: 'p-button-secondary p-button-outlined',
-      defaultFocus: 'reject',
-      accept: () => {
+      onAccept: () => {
         this.clientsService.deleteClient(client.id!).subscribe({
           next: () => {
             this.selectedClient = null;
@@ -361,5 +396,18 @@ export class ListClients implements OnInit {
     if (value === 'REGULAR') return 'REGULAR';
 
     return '';
+  }
+
+  private formatFileDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+    return `${year}${month}${day}`;
+  }
+
+  private escapeCsvCell(value: unknown): string {
+    const normalized = String(value ?? '');
+    const escaped = normalized.replace(/"/g, '""');
+    return `"${escaped}"`;
   }
 }

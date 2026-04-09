@@ -1,24 +1,33 @@
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import date as date_cls, datetime, time
 from decimal import Decimal, InvalidOperation
-from typing import Iterable
+from typing import Any, Iterable
 
+from django.core.exceptions import ValidationError
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.clients.models import Client
+from apps.inventory.models import Item, RoomInventory
 from apps.master_data.models import MasterData
-from apps.rooms.models import Room
-from apps.reservations.models import ReservationRoom
+from apps.rooms.models import CleaningTask, Room
+from apps.reservations.models import (
+    ReservationInventoryCheck,
+    ReservationInventoryCheckLine,
+    ReservationRoom,
+)
 
 
 INACTIVE_RESERVATION_STATUS_CODES = {
     "CANCELADA",
     "CANCELADO",
+    "CANCELLED",
     "ANULADA",
     "ANULADO",
     "FINALIZADA",
     "FINALIZADO",
+    "FINISHED",
     "COMPLETADA",
     "COMPLETADO",
     "CHECKED_OUT",
@@ -35,12 +44,52 @@ IN_HOUSE_RESERVATION_STATUS_CODES = {
 ROOM_STATUS_AVAILABLE = "DISPONIBLE"
 ROOM_STATUS_RESERVED = "RESERVADA"
 ROOM_STATUS_OCCUPIED = "OCUPADA"
+ROOM_STATUS_BOOKING_BLOCKED_CODES = {
+    "MANTENIMIENTO",
+    "LIMPIEZA",
+}
+
+CLEANING_TASK_TYPE_CHECK_OUT = "SALIDA"
+CLEANING_STATUS_PENDING = "PENDIENTE"
+
+INVENTORY_CHECK_TYPE_CHECK_IN = ReservationInventoryCheck.CheckType.CHECK_IN
+INVENTORY_CHECK_TYPE_CHECK_OUT = ReservationInventoryCheck.CheckType.CHECK_OUT
 
 RESERVATION_STATUS_PENDING = "PENDIENTE"
 RESERVATION_STATUS_CONFIRMED = "CONFIRMADA"
 RESERVATION_STATUS_IN_PROGRESS = "EN_CURSO"
 RESERVATION_STATUS_FINISHED = "FINALIZADA"
 RESERVATION_STATUS_CANCELLED = "CANCELADA"
+
+RESERVATION_STATUS_PENDING_CODES = (
+    RESERVATION_STATUS_PENDING,
+    "PENDING",
+)
+RESERVATION_STATUS_CONFIRMED_CODES = (
+    RESERVATION_STATUS_CONFIRMED,
+    "CONFIRMADO",
+    "CONFIRMED",
+)
+RESERVATION_STATUS_IN_PROGRESS_CODES = (
+    RESERVATION_STATUS_IN_PROGRESS,
+    "CHECKED_IN",
+    "IN_PROGRESS",
+)
+RESERVATION_STATUS_FINISHED_CODES = (
+    RESERVATION_STATUS_FINISHED,
+    "FINALIZADO",
+    "CHECKED_OUT",
+    "FINISHED",
+    "COMPLETADA",
+    "COMPLETADO",
+)
+RESERVATION_STATUS_CANCELLED_CODES = (
+    RESERVATION_STATUS_CANCELLED,
+    "CANCELADO",
+    "ANULADA",
+    "ANULADO",
+    "CANCELLED",
+)
 
 CLIENT_STATUS_ACTIVE = "ACTIVO"
 CLIENT_STATUS_CURRENT_GUEST = "HUESPED_ACTUAL"
@@ -58,10 +107,15 @@ PAYMENT_STATUS_LABELS = {
 }
 
 MONEY_ZERO = Decimal("0.00")
+ADULT_AGE_THRESHOLD = 18
 
 
 def _normalize_code(value) -> str:
     return str(value or "").strip().upper()
+
+
+def is_room_status_blocked_for_reservation(code) -> bool:
+    return _normalize_code(code) in ROOM_STATUS_BOOKING_BLOCKED_CODES
 
 
 def get_master_data_code(group: str, code: str):
@@ -72,8 +126,349 @@ def get_master_data_code(group: str, code: str):
     return MasterData.objects.filter(group=group, code=normalized_code, is_active=True).first()
 
 
+def get_master_data_code_any(group: str, codes: Iterable[str]):
+    normalized_codes = [_normalize_code(code) for code in codes if _normalize_code(code)]
+    if not normalized_codes:
+        return None
+
+    candidates = {
+        item.code: item
+        for item in MasterData.objects.filter(
+            group=group,
+            code__in=normalized_codes,
+            is_active=True,
+        )
+    }
+
+    for code in normalized_codes:
+        if code in candidates:
+            return candidates[code]
+
+    return None
+
+
 def get_reservation_status_by_code(code: str):
     return get_master_data_code(MasterData.Group.RESERVATION_STATUS, code)
+
+
+def get_reservation_status_by_codes(codes: Iterable[str]):
+    return get_master_data_code_any(MasterData.Group.RESERVATION_STATUS, codes)
+
+
+def _code_in_aliases(value, aliases: Iterable[str]) -> bool:
+    normalized_value = _normalize_code(value)
+    if not normalized_value:
+        return False
+    return normalized_value in {_normalize_code(alias) for alias in aliases}
+
+
+def is_reservation_status_pending(code) -> bool:
+    return _code_in_aliases(code, RESERVATION_STATUS_PENDING_CODES)
+
+
+def is_reservation_status_confirmed(code) -> bool:
+    return _code_in_aliases(code, RESERVATION_STATUS_CONFIRMED_CODES)
+
+
+def is_reservation_status_in_progress(code) -> bool:
+    return _code_in_aliases(code, RESERVATION_STATUS_IN_PROGRESS_CODES)
+
+
+def is_reservation_status_finished(code) -> bool:
+    return _code_in_aliases(code, RESERVATION_STATUS_FINISHED_CODES)
+
+
+def is_reservation_status_cancelled(code) -> bool:
+    return _code_in_aliases(code, RESERVATION_STATUS_CANCELLED_CODES)
+
+
+def get_pending_reservation_status():
+    return get_reservation_status_by_codes(RESERVATION_STATUS_PENDING_CODES)
+
+
+def get_confirmed_reservation_status():
+    return get_reservation_status_by_codes(RESERVATION_STATUS_CONFIRMED_CODES)
+
+
+def get_in_progress_reservation_status():
+    return get_reservation_status_by_codes(RESERVATION_STATUS_IN_PROGRESS_CODES)
+
+
+def get_finished_reservation_status():
+    return get_reservation_status_by_codes(RESERVATION_STATUS_FINISHED_CODES)
+
+
+def get_cancelled_reservation_status():
+    return get_reservation_status_by_codes(RESERVATION_STATUS_CANCELLED_CODES)
+
+
+def has_active_rate_for_room_type(room_type_id: int | None) -> bool:
+    if not room_type_id:
+        return False
+
+    from apps.rooms.models import Rate
+
+    return Rate.objects.filter(room_type_id=room_type_id, is_active=True).exists()
+
+
+def find_active_rate_for_room_type_dates(
+    *,
+    room_type_id: int | None,
+    expected_check_in=None,
+    expected_check_out=None,
+):
+    if not room_type_id:
+        return None
+
+    from apps.rooms.models import Rate
+
+    queryset = Rate.objects.filter(
+        room_type_id=room_type_id,
+        is_active=True,
+    )
+
+    if expected_check_in:
+        queryset = queryset.filter(
+            Q(start_date__isnull=True) | Q(start_date__lte=expected_check_in)
+        )
+
+    if expected_check_out:
+        queryset = queryset.filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=expected_check_out)
+        )
+
+    return queryset.order_by("-start_date", "-created_at", "-id").first()
+
+
+def _calculate_age_in_years(*, birth_date: date_cls, reference_date: date_cls) -> int:
+    age = reference_date.year - birth_date.year
+    if (reference_date.month, reference_date.day) < (birth_date.month, birth_date.day):
+        age -= 1
+    return age
+
+
+def get_reservation_guest_age_breakdown(
+    reservation,
+    *,
+    reference_date: date_cls | None = None,
+) -> dict[str, int]:
+    if not reservation:
+        return {"adults": 0, "children": 0, "total": 0}
+
+    as_of_date = reference_date or getattr(reservation, "expected_check_in", None) or timezone.localdate()
+    if isinstance(as_of_date, datetime):
+        as_of_date = as_of_date.date()
+
+    guests = getattr(reservation, "_prefetched_objects_cache", {}).get("guests")
+    if guests is None:
+        guests = reservation.guests.all()
+
+    adults = 0
+    children = 0
+    for guest in guests:
+        birth_date = getattr(guest, "birth_date", None)
+        if not birth_date:
+            adults += 1
+            continue
+
+        age = _calculate_age_in_years(birth_date=birth_date, reference_date=as_of_date)
+        if age < ADULT_AGE_THRESHOLD:
+            children += 1
+        else:
+            adults += 1
+
+    return {
+        "adults": adults,
+        "children": children,
+        "total": adults + children,
+    }
+
+
+def _distribute_guests_across_rooms(
+    *,
+    room_capacities: list[int],
+    room_count: int,
+    adults: int,
+    children: int,
+) -> list[tuple[int, int]]:
+    if room_count <= 0:
+        return []
+
+    if len(room_capacities) != room_count:
+        raise ValidationError(
+            {
+                "rooms_detail": (
+                    "No se pudo distribuir la ocupacion porque la capacidad de las habitaciones "
+                    "no coincide con la asignacion actual."
+                )
+            }
+        )
+
+    if adults < room_count:
+        raise ValidationError(
+            {
+                "adults": (
+                    "Debe existir al menos un adulto por habitacion para distribuir "
+                    "la ocupacion automaticamente."
+                )
+            }
+        )
+
+    total_capacity = sum(room_capacities)
+    total_guests = adults + children
+    if total_guests > total_capacity:
+        raise ValidationError(
+            {
+                "rooms_detail": (
+                    f"La ocupacion total ({total_guests} huespedes) supera la capacidad total "
+                    f"({total_capacity}) de las habitaciones seleccionadas."
+                )
+            }
+        )
+
+    adults_by_room = [1 for _ in range(room_count)]
+    remaining_slots = [max(capacity - 1, 0) for capacity in room_capacities]
+
+    remaining_adults = adults - room_count
+    index = 0
+    while remaining_adults > 0:
+        if sum(remaining_slots) <= 0:
+            raise ValidationError(
+                {
+                    "rooms_detail": (
+                        "La capacidad de las habitaciones no permite ubicar todos los adultos."
+                    )
+                }
+            )
+
+        room_index = index % room_count
+        if remaining_slots[room_index] <= 0:
+            index += 1
+            continue
+
+        adults_by_room[room_index] += 1
+        remaining_slots[room_index] -= 1
+        remaining_adults -= 1
+        index += 1
+
+    children_by_room = [0 for _ in range(room_count)]
+    index = 0
+    remaining_children = max(children, 0)
+    while remaining_children > 0:
+        if sum(remaining_slots) <= 0:
+            raise ValidationError(
+                {
+                    "rooms_detail": (
+                        "La capacidad de las habitaciones no permite ubicar todos los ninos."
+                    )
+                }
+            )
+
+        room_index = index % room_count
+        if remaining_slots[room_index] <= 0:
+            index += 1
+            continue
+
+        children_by_room[room_index] += 1
+        remaining_slots[room_index] -= 1
+        remaining_children -= 1
+        index += 1
+
+    return list(zip(adults_by_room, children_by_room))
+
+
+def sync_reservation_room_pricing_and_occupancy(reservation) -> None:
+    if not reservation or not getattr(reservation, "id", None):
+        return
+
+    reservation_rooms = list(
+        reservation.rooms_detail.select_related("room", "room__room_type").order_by("id")
+    )
+    if not reservation_rooms:
+        return
+
+    guest_breakdown = get_reservation_guest_age_breakdown(reservation)
+    adults = guest_breakdown["adults"]
+    children = guest_breakdown["children"]
+
+    # Si aun no hay huespedes, mantenemos un adulto base por habitacion.
+    if guest_breakdown["total"] == 0:
+        adults = len(reservation_rooms)
+        children = 0
+
+    room_capacities: list[int] = []
+    for reservation_room in reservation_rooms:
+        room = reservation_room.room
+        capacity = getattr(getattr(room, "room_type", None), "capacity", None)
+        if capacity is None or int(capacity) <= 0:
+            raise ValidationError(
+                {
+                    "room": (
+                        f"La habitacion {room.number} no tiene una capacidad valida en su tipo de habitacion."
+                    )
+                }
+            )
+        room_capacities.append(int(capacity))
+
+    distributions = _distribute_guests_across_rooms(
+        room_capacities=room_capacities,
+        room_count=len(reservation_rooms),
+        adults=adults,
+        children=children,
+    )
+
+    for index, reservation_room in enumerate(reservation_rooms):
+        room = reservation_room.room
+        room_type_id = getattr(room, "room_type_id", None)
+        if not room_type_id:
+            raise ValidationError(
+                {"room": f"La habitacion {room.number} no tiene tipo de habitacion configurado."}
+            )
+
+        expected_rate = find_active_rate_for_room_type_dates(
+            room_type_id=room_type_id,
+            expected_check_in=reservation.expected_check_in,
+            expected_check_out=reservation.expected_check_out,
+        )
+
+        if not expected_rate:
+            if has_active_rate_for_room_type(room_type_id):
+                raise ValidationError(
+                    {
+                        "night_rate": (
+                            f"No existe una tarifa activa para la habitacion {room.number} "
+                            "en el rango de fechas de la reserva."
+                        )
+                    }
+                )
+            raise ValidationError(
+                {
+                    "night_rate": (
+                        f"La habitacion {room.number} no tiene una tarifa activa configurada "
+                        "para su tipo de habitacion."
+                    )
+                }
+            )
+
+        adults_by_room, children_by_room = distributions[index]
+        occupancy = adults_by_room + children_by_room
+        if occupancy > room_capacities[index]:
+            raise ValidationError(
+                {
+                    "rooms_detail": (
+                        f"La ocupacion asignada para la habitacion {room.number} ({occupancy}) "
+                        f"supera su capacidad ({room_capacities[index]})."
+                    )
+                }
+            )
+        reservation_room.night_rate = expected_rate.price
+        reservation_room.adults = adults_by_room
+        reservation_room.children = children_by_room
+
+    ReservationRoom.objects.bulk_update(
+        reservation_rooms,
+        ["night_rate", "adults", "children"],
+    )
 
 
 def _to_decimal(value) -> Decimal:
@@ -188,21 +583,24 @@ def get_reservation_flow_permissions(reservation) -> dict[str, bool]:
     has_check_out = getattr(reservation, "real_check_out", None) is not None
 
     can_confirm = (
-        status_code == RESERVATION_STATUS_PENDING
+        is_reservation_status_pending(status_code)
         and not has_check_in
         and not has_check_out
     )
     can_check_in = (
-        status_code == RESERVATION_STATUS_CONFIRMED
+        is_reservation_status_confirmed(status_code)
         and not has_check_in
         and not has_check_out
     )
     can_check_out = (
-        (status_code == RESERVATION_STATUS_IN_PROGRESS or has_check_in)
+        (is_reservation_status_in_progress(status_code) or has_check_in)
         and not has_check_out
     )
     can_cancel = (
-        status_code in {RESERVATION_STATUS_PENDING, RESERVATION_STATUS_CONFIRMED}
+        (
+            is_reservation_status_pending(status_code)
+            or is_reservation_status_confirmed(status_code)
+        )
         and not has_check_in
         and not has_check_out
     )
@@ -221,7 +619,7 @@ def can_add_payment_to_reservation(
     financials: dict[str, Decimal] | None = None,
 ) -> bool:
     status_code = _normalize_code(getattr(reservation, "status_code", None))
-    if status_code == RESERVATION_STATUS_CANCELLED:
+    if is_reservation_status_cancelled(status_code):
         return False
 
     values = financials or get_reservation_financials(reservation)
@@ -244,7 +642,7 @@ def validate_reservation_deposit_rules(
         return errors
 
     status_code = _normalize_code(getattr(reservation, "status_code", None))
-    if status_code == RESERVATION_STATUS_CANCELLED:
+    if is_reservation_status_cancelled(status_code):
         errors["reservation"] = "No puedes registrar pagos en una reserva cancelada."
         return errors
 
@@ -415,6 +813,457 @@ def sync_room_status_for_reservation(reservation) -> None:
 
     room_ids = reservation.rooms_detail.values_list("room_id", flat=True).distinct()
     sync_room_status_for_room_ids(room_ids)
+
+
+def _get_post_checkout_cleaning_task_type():
+    task_type = get_master_data_code(
+        MasterData.Group.CLEANING_TASK_TYPE,
+        CLEANING_TASK_TYPE_CHECK_OUT,
+    )
+    if task_type:
+        return task_type
+
+    return (
+        MasterData.objects.filter(
+            group=MasterData.Group.CLEANING_TASK_TYPE,
+            is_active=True,
+        )
+        .order_by("sort_order", "id")
+        .first()
+    )
+
+
+def _get_post_checkout_cleaning_status():
+    status = get_master_data_code(
+        MasterData.Group.CLEANING_STATUS,
+        CLEANING_STATUS_PENDING,
+    )
+    if status:
+        return status
+
+    return (
+        MasterData.objects.filter(
+            group=MasterData.Group.CLEANING_STATUS,
+            is_active=True,
+        )
+        .order_by("sort_order", "id")
+        .first()
+    )
+
+
+def create_post_checkout_cleaning_tasks(reservation) -> int:
+    if not reservation or not getattr(reservation, "id", None):
+        return 0
+
+    task_type = _get_post_checkout_cleaning_task_type()
+    task_status = _get_post_checkout_cleaning_status()
+    if not task_type or not task_status:
+        return 0
+
+    room_ids = list(
+        reservation.rooms_detail.values_list("room_id", flat=True).distinct()
+    )
+    if not room_ids:
+        return 0
+
+    check_out_at = reservation.real_check_out or timezone.now()
+    if timezone.is_naive(check_out_at):
+        check_out_at = timezone.make_aware(
+            check_out_at,
+            timezone.get_current_timezone(),
+        )
+    scheduled_for = timezone.localtime(check_out_at).date()
+    notes = f"Limpieza post check-out de reserva #{reservation.id}."
+
+    existing_room_ids = set(
+        CleaningTask.objects.filter(
+            room_id__in=room_ids,
+            task_type_id=task_type.id,
+            scheduled_for=scheduled_for,
+            notes=notes,
+        ).values_list("room_id", flat=True)
+    )
+
+    room_ids_to_create = [room_id for room_id in room_ids if room_id not in existing_room_ids]
+    if not room_ids_to_create:
+        return 0
+
+    tasks_to_create = [
+        CleaningTask(
+            room_id=room_id,
+            task_type=task_type,
+            status=task_status,
+            scheduled_for=scheduled_for,
+            notes=notes,
+        )
+        for room_id in room_ids_to_create
+    ]
+
+    CleaningTask.objects.bulk_create(tasks_to_create)
+    return len(tasks_to_create)
+
+
+def _get_audit_user(user):
+    if user is not None and getattr(user, "is_authenticated", False):
+        return user
+    return None
+
+
+def _coerce_int(
+    value: Any,
+    *,
+    field_name: str,
+    min_value: int = 0,
+    line_number: int | None = None,
+) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        line_prefix = f"Linea {line_number}: " if line_number is not None else ""
+        raise ValidationError(
+            {
+                "inventory_review": (
+                    f"{line_prefix}el campo '{field_name}' debe ser un numero entero."
+                )
+            }
+        )
+
+    if parsed < min_value:
+        line_prefix = f"Linea {line_number}: " if line_number is not None else ""
+        if min_value == 0:
+            message = f"{line_prefix}el campo '{field_name}' no puede ser negativo."
+        else:
+            message = (
+                f"{line_prefix}el campo '{field_name}' debe ser mayor o igual a {min_value}."
+            )
+        raise ValidationError({"inventory_review": message})
+
+    return parsed
+
+
+def validate_checkout_inventory_review_payload(
+    reservation,
+    payload: Any,
+) -> list[dict[str, Any]]:
+    if payload in (None, "", []):
+        return []
+
+    if not isinstance(payload, list):
+        raise ValidationError(
+            {
+                "inventory_review": (
+                    "El inventario revisado debe enviarse como una lista de lineas."
+                )
+            }
+        )
+
+    reservation_room_ids = set(
+        reservation.rooms_detail.values_list("room_id", flat=True).distinct()
+    )
+    if not reservation_room_ids and payload:
+        raise ValidationError(
+            {
+                "inventory_review": (
+                    "La reserva no tiene habitaciones asociadas para registrar inventario."
+                )
+            }
+        )
+
+    normalized_lines: list[dict[str, Any]] = []
+    requested_item_ids: set[int] = set()
+
+    for index, raw_line in enumerate(payload, start=1):
+        if not isinstance(raw_line, dict):
+            raise ValidationError(
+                {
+                    "inventory_review": (
+                        f"Linea {index}: cada elemento debe ser un objeto con room, item y quantity."
+                    )
+                }
+            )
+
+        room_raw = raw_line.get("room_id", raw_line.get("room"))
+        item_raw = raw_line.get("item_id", raw_line.get("item"))
+        quantity_raw = raw_line.get("quantity")
+
+        room_id = _coerce_int(
+            room_raw,
+            field_name="room",
+            min_value=1,
+            line_number=index,
+        )
+        item_id = _coerce_int(
+            item_raw,
+            field_name="item",
+            min_value=1,
+            line_number=index,
+        )
+        quantity = _coerce_int(
+            quantity_raw,
+            field_name="quantity",
+            min_value=0,
+            line_number=index,
+        )
+
+        if room_id not in reservation_room_ids:
+            raise ValidationError(
+                {
+                    "inventory_review": (
+                        f"Linea {index}: la habitacion {room_id} no pertenece a la reserva."
+                    )
+                }
+            )
+
+        notes = raw_line.get("notes")
+        if notes is not None:
+            notes = str(notes).strip()
+
+        normalized_lines.append(
+            {
+                "room_id": room_id,
+                "item_id": item_id,
+                "quantity": quantity,
+                "notes": notes or "",
+            }
+        )
+        requested_item_ids.add(item_id)
+
+    if requested_item_ids:
+        existing_item_ids = set(
+            Item.objects.filter(id__in=requested_item_ids).values_list("id", flat=True)
+        )
+        missing_item_ids = sorted(requested_item_ids - existing_item_ids)
+        if missing_item_ids:
+            raise ValidationError(
+                {
+                    "inventory_review": (
+                        "Los siguientes items no existen: "
+                        + ", ".join(str(item_id) for item_id in missing_item_ids)
+                        + "."
+                    )
+                }
+            )
+
+    return normalized_lines
+
+
+def create_check_in_inventory_snapshot(
+    reservation,
+    *,
+    created_by=None,
+):
+    if not reservation or not getattr(reservation, "id", None):
+        return None
+
+    check, created = ReservationInventoryCheck.objects.get_or_create(
+        reservation=reservation,
+        check_type=INVENTORY_CHECK_TYPE_CHECK_IN,
+        defaults={
+            "created_by": _get_audit_user(created_by),
+            "notes": f"Snapshot inicial de inventario para reserva #{reservation.id}.",
+        },
+    )
+    if not created:
+        return check
+
+    reservation_rooms = list(
+        reservation.rooms_detail.values("id", "room_id")
+    )
+    room_ids = [line["room_id"] for line in reservation_rooms if line.get("room_id")]
+    if not room_ids:
+        return check
+
+    reservation_room_by_room_id = {
+        line["room_id"]: line["id"] for line in reservation_rooms
+    }
+
+    room_inventory_rows = RoomInventory.objects.filter(
+        room_id__in=room_ids,
+        is_active=True,
+    ).values("room_id", "item_id", "quantity")
+
+    lines_to_create = []
+    for row in room_inventory_rows:
+        quantity = max(int(row.get("quantity") or 0), 0)
+        lines_to_create.append(
+            ReservationInventoryCheckLine(
+                inventory_check=check,
+                reservation_room_id=reservation_room_by_room_id.get(row["room_id"]),
+                room_id=row["room_id"],
+                item_id=row["item_id"],
+                expected_quantity=quantity,
+                reviewed_quantity=quantity,
+                difference_quantity=0,
+            )
+        )
+
+    if lines_to_create:
+        ReservationInventoryCheckLine.objects.bulk_create(lines_to_create)
+
+    return check
+
+
+def create_checkout_inventory_comparison(
+    reservation,
+    *,
+    inventory_review_lines: list[dict[str, Any]] | None = None,
+    created_by=None,
+) -> dict[str, Any]:
+    if not reservation or not getattr(reservation, "id", None):
+        return {
+            "check_id": None,
+            "total_lines": 0,
+            "differences_count": 0,
+            "missing_items_count": 0,
+            "extra_items_count": 0,
+            "lines": [],
+        }
+
+    inventory_review_lines = inventory_review_lines or []
+
+    reservation_rooms = list(
+        reservation.rooms_detail.select_related("room").values("id", "room_id", "room__number")
+    )
+    reservation_room_by_room_id = {row["room_id"]: row["id"] for row in reservation_rooms}
+    room_number_by_id = {
+        row["room_id"]: str(row.get("room__number") or row["room_id"])
+        for row in reservation_rooms
+    }
+
+    check_in_check = (
+        ReservationInventoryCheck.objects.filter(
+            reservation=reservation,
+            check_type=INVENTORY_CHECK_TYPE_CHECK_IN,
+        )
+        .prefetch_related("lines")
+        .first()
+    )
+
+    expected_by_key: dict[tuple[int, int], int] = {}
+    if check_in_check:
+        for line in check_in_check.lines.all():
+            key = (line.room_id, line.item_id)
+            expected_by_key[key] = int(line.reviewed_quantity or 0)
+
+    if not expected_by_key:
+        room_ids = list(reservation_room_by_room_id.keys())
+        room_inventory_rows = RoomInventory.objects.filter(
+            room_id__in=room_ids,
+            is_active=True,
+        ).values("room_id", "item_id", "quantity")
+        for row in room_inventory_rows:
+            key = (row["room_id"], row["item_id"])
+            expected_by_key[key] = int(row.get("quantity") or 0)
+
+    reviewed_by_key: dict[tuple[int, int], int] = {}
+    notes_by_key: dict[tuple[int, int], str] = {}
+    for line in inventory_review_lines:
+        key = (line["room_id"], line["item_id"])
+        reviewed_by_key[key] = int(line["quantity"])
+        notes_by_key[key] = str(line.get("notes") or "").strip()
+
+    comparison_keys = set(expected_by_key.keys())
+    if reviewed_by_key:
+        comparison_keys.update(reviewed_by_key.keys())
+    else:
+        reviewed_by_key = dict(expected_by_key)
+
+    item_ids = sorted({item_id for _, item_id in comparison_keys})
+    item_name_by_id = {
+        item_id: name
+        for item_id, name in Item.objects.filter(id__in=item_ids).values_list("id", "name")
+    }
+
+    default_notes = f"Revision de inventario post check-out de reserva #{reservation.id}."
+    check, created = ReservationInventoryCheck.objects.get_or_create(
+        reservation=reservation,
+        check_type=INVENTORY_CHECK_TYPE_CHECK_OUT,
+        defaults={
+            "created_by": _get_audit_user(created_by),
+            "notes": default_notes,
+        },
+    )
+    if not created:
+        fields_to_update: list[str] = []
+        audit_user = _get_audit_user(created_by)
+        if audit_user and not check.created_by_id:
+            check.created_by = audit_user
+            fields_to_update.append("created_by")
+        if not check.notes:
+            check.notes = default_notes
+            fields_to_update.append("notes")
+        if fields_to_update:
+            check.save(update_fields=fields_to_update)
+        check.lines.all().delete()
+
+    sorted_keys = sorted(
+        comparison_keys,
+        key=lambda key: (
+            room_number_by_id.get(key[0], str(key[0])),
+            item_name_by_id.get(key[1], str(key[1])),
+            key[0],
+            key[1],
+        ),
+    )
+
+    lines_to_create = []
+    response_lines = []
+    differences_count = 0
+    missing_items_count = 0
+    extra_items_count = 0
+
+    for room_id, item_id in sorted_keys:
+        expected_quantity = int(expected_by_key.get((room_id, item_id), 0))
+        reviewed_quantity = int(
+            reviewed_by_key.get((room_id, item_id), expected_quantity)
+        )
+        difference_quantity = reviewed_quantity - expected_quantity
+        line_notes = notes_by_key.get((room_id, item_id), "")
+
+        if difference_quantity != 0:
+            differences_count += 1
+            if difference_quantity < 0:
+                missing_items_count += 1
+            else:
+                extra_items_count += 1
+
+        lines_to_create.append(
+            ReservationInventoryCheckLine(
+                inventory_check=check,
+                reservation_room_id=reservation_room_by_room_id.get(room_id),
+                room_id=room_id,
+                item_id=item_id,
+                expected_quantity=expected_quantity,
+                reviewed_quantity=reviewed_quantity,
+                difference_quantity=difference_quantity,
+                notes=line_notes,
+            )
+        )
+
+        response_lines.append(
+            {
+                "room_id": room_id,
+                "room_number": room_number_by_id.get(room_id),
+                "item_id": item_id,
+                "item_name": item_name_by_id.get(item_id),
+                "expected_quantity": expected_quantity,
+                "reviewed_quantity": reviewed_quantity,
+                "difference_quantity": difference_quantity,
+                "notes": line_notes,
+            }
+        )
+
+    if lines_to_create:
+        ReservationInventoryCheckLine.objects.bulk_create(lines_to_create)
+
+    return {
+        "check_id": check.id,
+        "total_lines": len(response_lines),
+        "differences_count": differences_count,
+        "missing_items_count": missing_items_count,
+        "extra_items_count": extra_items_count,
+        "lines": response_lines,
+    }
 
 
 def sync_client_status_by_id(client_id: int | None) -> bool:

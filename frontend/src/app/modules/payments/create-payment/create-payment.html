@@ -3,17 +3,26 @@
     <div class="top-row">
       <label>
         <span>Metodo</span>
-        <select formControlName="payment_method">
+        <select formControlName="payment_method" [class.input-error]="payment_method?.touched && payment_method?.invalid">
           <option [ngValue]="null">Seleccionar...</option>
           <option *ngFor="let method of paymentMethods; trackBy: trackById" [ngValue]="method.id">
             {{ method.name }}
           </option>
         </select>
+        <small class="field-error" *ngIf="payment_method?.touched && payment_method?.invalid">Selecciona un metodo de pago.</small>
       </label>
 
       <label>
         <span>Monto</span>
-        <input type="number" min="1" step="1000" formControlName="amount" placeholder="Ej: 120000" />
+        <input
+          type="number"
+          min="1"
+          step="1000"
+          formControlName="amount"
+          placeholder="Ej: 120000"
+          [class.input-error]="amount?.touched && amount?.invalid" />
+        <small class="field-error" *ngIf="amount?.touched && amount?.hasError('required')">Ingresa el monto.</small>
+        <small class="field-error" *ngIf="amount?.touched && amount?.hasError('min')">El monto debe ser mayor que 0.</small>
       </label>
 
       <label>

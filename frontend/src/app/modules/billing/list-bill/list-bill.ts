@@ -141,6 +141,46 @@ export class ListBill implements OnInit {
     this.loadBillingData();
   }
 
+  exportCsv(): void {
+    if (!this.filteredInvoices.length) return;
+
+    const headers = [
+      'factura',
+      'reserva',
+      'huesped',
+      'documento',
+      'estado',
+      'actividad',
+      'fecha_emision',
+      'total'
+    ];
+
+    const rows = this.filteredInvoices.map((invoice) => {
+      const reservation = this.reservationsMap.get(invoice.reservation) || null;
+      const row = [
+        invoice.invoice_number || `FAC-${invoice.id}`,
+        this.getReservationCode(invoice, reservation),
+        this.getGuestLabel(invoice),
+        this.getGuestDocument(invoice),
+        this.getStatusLabel(invoice),
+        invoice.is_active ? 'Activa' : 'Inactiva',
+        this.getIssueDateLabel(invoice),
+        this.toNumber(invoice.total_amount)
+      ];
+
+      return row.map((cell) => this.escapeCsvCell(cell)).join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `facturas-${this.formatFileDate(new Date())}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   applyFilters(): void {
     const query = String(this.search || '').trim().toLowerCase();
 
@@ -311,5 +351,18 @@ export class ListBill implements OnInit {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^A-Z0-9]/g, '');
+  }
+
+  private formatFileDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+    return `${year}${month}${day}`;
+  }
+
+  private escapeCsvCell(value: unknown): string {
+    const normalized = String(value ?? '');
+    const escaped = normalized.replace(/"/g, '""');
+    return `"${escaped}"`;
   }
 }

@@ -1,10 +1,10 @@
 ﻿import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
-import { ReactiveFormsModule, UntypedFormArray, UntypedFormBuilder, UntypedFormGroup, Validators } from '@angular/forms';
+import { AbstractControl, ReactiveFormsModule, UntypedFormArray, UntypedFormBuilder, UntypedFormGroup, Validators } from '@angular/forms';
 import { forkJoin, of } from 'rxjs';
 import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
 import { ClientI } from '../../clients/client-model';
-import { RoomI } from '../../rooms/room-model';
+import { RateI, RoomI } from '../../rooms/room-model';
 import { ReservationService } from '../../../services/reservation';
 import { PackageI } from '../../packages/package-model';
 import {
@@ -27,6 +27,7 @@ export class CreateReservation implements OnChanges {
   @Input() documentTypes: MasterDataI[] = [];
   @Input() reservationPolicies: ReservationPolicyI[] = [];
   @Input() rooms: RoomI[] = [];
+  @Input() rates: RateI[] = [];
   @Input() packages: PackageI[] = [];
   @Input() initialRoomId: number | null = null;
   @Input() initialCheckInMode = false;
@@ -36,6 +37,8 @@ export class CreateReservation implements OnChanges {
 
   saving = false;
   errorMessage = '';
+  warningMessage = '';
+  submitted = false;
 
   reservationForm: UntypedFormGroup;
 
@@ -155,7 +158,9 @@ export class CreateReservation implements OnChanges {
   }
 
   submit(): void {
+    this.submitted = true;
     this.errorMessage = '';
+    this.warningMessage = '';
 
     if (this.reservationForm.invalid) {
       this.reservationForm.markAllAsTouched();
@@ -195,6 +200,12 @@ export class CreateReservation implements OnChanges {
       return;
     }
 
+    const capacityWarning = this.validateRoomCapacityAgainstGuests(roomBuild.payloads, guestBuild.payloads.length);
+    if (capacityWarning) {
+      this.warningMessage = capacityWarning;
+      return;
+    }
+
     this.saving = true;
 
     const payload = this.buildReservationPayload(policyBuild.policyIds);
@@ -215,20 +226,34 @@ export class CreateReservation implements OnChanges {
           })
         );
 
-        const creationRequests = [...roomRequests, ...guestRequests];
-
-        if (creationRequests.length === 0) {
-          this.saving = false;
-          this.created.emit();
-          this.closeDrawer();
-          return;
-        }
-
-        forkJoin(creationRequests).subscribe({
-          next: () => {
+        const createRooms = () => {
+          if (!roomRequests.length) {
             this.saving = false;
             this.created.emit();
             this.closeDrawer();
+            return;
+          }
+
+          forkJoin(roomRequests).subscribe({
+            next: () => {
+              this.saving = false;
+              this.created.emit();
+              this.closeDrawer();
+            },
+            error: (error) => {
+              this.rollbackReservationCreation(createdReservation.id, error);
+            }
+          });
+        };
+
+        if (!guestRequests.length) {
+          createRooms();
+          return;
+        }
+
+        forkJoin(guestRequests).subscribe({
+          next: () => {
+            createRooms();
           },
           error: (error) => {
             this.rollbackReservationCreation(createdReservation.id, error);
@@ -237,6 +262,7 @@ export class CreateReservation implements OnChanges {
       },
       error: (error) => {
         this.saving = false;
+        this.warningMessage = '';
         this.errorMessage = this.extractErrorMessage(error);
       }
     });
@@ -244,6 +270,8 @@ export class CreateReservation implements OnChanges {
 
   closeDrawer(): void {
     if (this.saving) return;
+    this.submitted = false;
+    this.warningMessage = '';
     this.closed.emit();
   }
 
@@ -261,6 +289,115 @@ export class CreateReservation implements OnChanges {
 
   trackById(index: number, item: { id?: number }): number {
     return item.id ?? index;
+  }
+
+  isControlInvalid(controlName: string): boolean {
+    const control = this.reservationForm.get(controlName);
+    if (!control) return false;
+    return control.invalid && this.shouldShowControlErrors(control);
+  }
+
+  getControlError(controlName: string): string {
+    const control = this.reservationForm.get(controlName);
+    if (!control || !this.shouldShowControlErrors(control)) return '';
+
+    if (control.hasError('required')) {
+      if (controlName === 'client') return 'Debes seleccionar un cliente.';
+      if (controlName === 'origin') return 'Debes seleccionar el origen de la reserva.';
+      if (controlName === 'expected_check_in') return 'Debes indicar la fecha de check-in.';
+      if (controlName === 'expected_check_out') return 'Debes indicar la fecha de check-out.';
+      return 'Este campo es obligatorio.';
+    }
+
+    if (controlName === 'expected_check_out') {
+      const checkIn = this.parseDate(this.reservationForm.get('expected_check_in')?.value);
+      const checkOut = this.parseDate(control.value);
+      if (checkIn && checkOut && checkOut <= checkIn) {
+        return 'La fecha de check-out debe ser posterior al check-in.';
+      }
+    }
+
+    if (control.hasError('maxlength') && controlName === 'notes') {
+      return 'Las notas no pueden superar 1200 caracteres.';
+    }
+
+    return '';
+  }
+
+  isRoomFieldInvalid(index: number, field: 'room'): boolean {
+    return this.getRoomFieldError(index, field) !== '';
+  }
+
+  getRoomFieldError(index: number, field: 'room'): string {
+    const lineControl = this.roomLines.at(index);
+    if (!lineControl || !this.shouldValidateRoomLine(lineControl)) return '';
+
+    const roomRaw = lineControl.get('room')?.value;
+
+    if (field === 'room') {
+      if (!this.hasValue(roomRaw)) return 'Selecciona una habitacion.';
+      const roomId = Number(roomRaw);
+      if (!roomId || Number.isNaN(roomId)) return 'Selecciona una habitacion valida.';
+      if (this.getDuplicateRoomIds().has(roomId)) return 'Esta habitacion ya esta cargada en otra fila.';
+      return '';
+    }
+    return '';
+  }
+
+  getRoomCapacityLabel(index: number): string {
+    const lineControl = this.roomLines.at(index);
+    if (!lineControl) return 'Sin seleccionar';
+
+    const roomRaw = lineControl.get('room')?.value;
+    const roomId = Number(roomRaw || 0);
+    if (!roomId || Number.isNaN(roomId)) return 'Sin seleccionar';
+
+    const room = this.findRoomById(roomId);
+    const capacity = Number(room?.room_type_capacity || 0);
+    if (!Number.isFinite(capacity) || capacity <= 0) return 'Sin dato';
+
+    return `${capacity} persona${capacity === 1 ? '' : 's'}`;
+  }
+
+  isGuestFieldInvalid(index: number, field: 'document_type' | 'document_number' | 'first_name' | 'last_name'): boolean {
+    return this.getGuestFieldError(index, field) !== '';
+  }
+
+  getGuestFieldError(index: number, field: 'document_type' | 'document_number' | 'first_name' | 'last_name'): string {
+    const lineControl = this.guestLines.at(index);
+    if (!lineControl || !this.shouldValidateGuestLine(lineControl)) return '';
+
+    const documentTypeRaw = lineControl.get('document_type')?.value;
+    const documentType = Number(documentTypeRaw || 0);
+    const documentNumber = this.toTrimmedString(lineControl.get('document_number')?.value);
+    const firstName = this.toTrimmedString(lineControl.get('first_name')?.value);
+    const lastName = this.toTrimmedString(lineControl.get('last_name')?.value);
+
+    if (field === 'document_type') {
+      if (!documentType || Number.isNaN(documentType)) return 'Selecciona un tipo de documento valido.';
+      return '';
+    }
+
+    if (field === 'document_number') {
+      if (!documentNumber) return 'Ingresa el numero de documento.';
+      if (documentType && !Number.isNaN(documentType)) {
+        const documentKey = `${documentType}:${documentNumber.toUpperCase()}`;
+        if (this.getDuplicateGuestDocumentKeys().has(documentKey)) {
+          return 'Este documento ya esta cargado en otra fila.';
+        }
+      }
+      return '';
+    }
+
+    if (field === 'first_name' && !firstName) {
+      return 'Ingresa los nombres del huesped.';
+    }
+
+    if (field === 'last_name' && !lastName) {
+      return 'Ingresa los apellidos del huesped.';
+    }
+
+    return '';
   }
 
   getAvailablePackagesForDates(): PackageI[] {
@@ -284,12 +421,100 @@ export class CreateReservation implements OnChanges {
     return `${item.name} - ${formattedPrice}`;
   }
 
+  private shouldShowControlErrors(control: AbstractControl): boolean {
+    return control.touched || this.submitted;
+  }
+
+  private shouldValidateRoomLine(lineControl: AbstractControl): boolean {
+    return this.hasRoomLineData(lineControl) && this.shouldShowControlErrors(lineControl);
+  }
+
+  private shouldValidateGuestLine(lineControl: AbstractControl): boolean {
+    return this.hasGuestLineData(lineControl) && this.shouldShowControlErrors(lineControl);
+  }
+
+  private hasRoomLineData(lineControl: AbstractControl): boolean {
+    const roomRaw = lineControl.get('room')?.value;
+    return this.hasValue(roomRaw);
+  }
+
+  private hasGuestLineData(lineControl: AbstractControl): boolean {
+    const documentNumber = this.toTrimmedString(lineControl.get('document_number')?.value);
+    const firstName = this.toTrimmedString(lineControl.get('first_name')?.value);
+    const lastName = this.toTrimmedString(lineControl.get('last_name')?.value);
+
+    const hasCoreData = !!(documentNumber || firstName || lastName);
+    const hasOptionalData = !!(
+      lineControl.get('birth_date')?.value ||
+      this.toTrimmedString(lineControl.get('nationality')?.value) ||
+      this.toTrimmedString(lineControl.get('blood_type')?.value) ||
+      this.toTrimmedString(lineControl.get('emergency_contact_name')?.value) ||
+      this.toTrimmedString(lineControl.get('emergency_contact_phone')?.value)
+    );
+
+    return hasCoreData || hasOptionalData;
+  }
+
+  private getDuplicateRoomIds(): Set<number> {
+    const roomUsage = new Map<number, number>();
+
+    for (const lineControl of this.roomLines.controls) {
+      const roomRaw = lineControl.get('room')?.value;
+      if (!this.hasValue(roomRaw)) continue;
+
+      const roomId = Number(roomRaw);
+      if (!roomId || Number.isNaN(roomId)) continue;
+      roomUsage.set(roomId, (roomUsage.get(roomId) ?? 0) + 1);
+    }
+
+    const duplicates = new Set<number>();
+    for (const [roomId, count] of roomUsage) {
+      if (count > 1) {
+        duplicates.add(roomId);
+      }
+    }
+
+    return duplicates;
+  }
+
+  private getDuplicateGuestDocumentKeys(): Set<string> {
+    const documentUsage = new Map<string, number>();
+
+    for (const lineControl of this.guestLines.controls) {
+      if (!this.hasGuestLineData(lineControl)) continue;
+
+      const documentType = Number(lineControl.get('document_type')?.value || 0);
+      const documentNumber = this.toTrimmedString(lineControl.get('document_number')?.value).toUpperCase();
+
+      if (!documentType || Number.isNaN(documentType) || !documentNumber) {
+        continue;
+      }
+
+      const documentKey = `${documentType}:${documentNumber}`;
+      documentUsage.set(documentKey, (documentUsage.get(documentKey) ?? 0) + 1);
+    }
+
+    const duplicates = new Set<string>();
+    for (const [documentKey, count] of documentUsage) {
+      if (count > 1) {
+        duplicates.add(documentKey);
+      }
+    }
+
+    return duplicates;
+  }
+
+  private hasValue(value: unknown): boolean {
+    return value !== null && value !== undefined && String(value).trim() !== '';
+  }
+
+  private toTrimmedString(value: unknown): string {
+    return String(value || '').trim();
+  }
+
   private buildRoomLine(): UntypedFormGroup {
     return this.fb.group({
       room: [null],
-      night_rate: [null],
-      adults: [1],
-      children: [0]
     });
   }
 
@@ -366,29 +591,30 @@ export class CreateReservation implements OnChanges {
   private buildRoomPayloads(): { payloads: ReservationRoomPayloadI[]; error?: string } {
     const payloads: ReservationRoomPayloadI[] = [];
     const usedRooms = new Set<number>();
+    const checkIn = this.parseDate(this.reservationForm.get('expected_check_in')?.value);
+    const checkOut = this.parseDate(this.reservationForm.get('expected_check_out')?.value);
+    const selectedPackage = this.getSelectedPackage();
 
     for (const lineControl of this.roomLines.controls) {
       const raw = lineControl.getRawValue();
       const roomRaw = raw['room'];
-      const nightRateRaw = raw['night_rate'];
-      const adultsRaw = raw['adults'];
-      const childrenRaw = raw['children'];
 
       const hasRoom = roomRaw !== null && roomRaw !== undefined && `${roomRaw}`.trim() !== '';
-      const hasNightRate = nightRateRaw !== null && nightRateRaw !== undefined && `${nightRateRaw}`.trim() !== '';
-      const hasData = hasRoom || hasNightRate;
+      const hasData = hasRoom;
 
       if (!hasData) {
         continue;
       }
 
       const room = Number(roomRaw);
-      const nightRate = Number(nightRateRaw);
-      const adults = Number(adultsRaw ?? 1);
-      const children = Number(childrenRaw ?? 0);
 
       if (!room || Number.isNaN(room)) {
         return { payloads: [], error: 'Debes seleccionar una habitacion valida en cada fila cargada.' };
+      }
+
+      const selectedRoom = this.findRoomById(room);
+      if (!selectedRoom) {
+        return { payloads: [], error: 'La habitacion seleccionada ya no esta disponible.' };
       }
 
       if (usedRooms.has(room)) {
@@ -396,24 +622,45 @@ export class CreateReservation implements OnChanges {
       }
       usedRooms.add(room);
 
-      if (Number.isNaN(nightRate) || nightRate <= 0) {
-        return { payloads: [], error: 'La tarifa por noche debe ser mayor a cero.' };
+      if (checkIn && checkOut && this.hasRoomActiveReservationOverlap(selectedRoom, checkIn, checkOut)) {
+        const start = this.formatDateLabel(selectedRoom.active_reservation?.expected_check_in);
+        const end = this.formatDateLabel(selectedRoom.active_reservation?.expected_check_out);
+        return {
+          payloads: [],
+          error: `La habitacion ${selectedRoom.number} tiene una reserva activa que se cruza con las fechas seleccionadas (${start} a ${end}).`
+        };
       }
 
-      if (Number.isNaN(adults) || adults < 1) {
-        return { payloads: [], error: 'Cada habitacion debe tener minimo 1 adulto.' };
+      if (selectedPackage?.room_type) {
+        const requiredRoomType = Number(selectedPackage.room_type);
+        const roomType = Number(selectedRoom.room_type || 0);
+        if (!roomType || roomType !== requiredRoomType) {
+          return {
+            payloads: [],
+            error: `La habitacion ${selectedRoom.number} no coincide con el tipo requerido por el paquete.`
+          };
+        }
       }
 
-      if (Number.isNaN(children) || children < 0) {
-        return { payloads: [], error: 'La cantidad de ninos no puede ser negativa.' };
+      const roomTypeId = Number(selectedRoom.room_type || 0);
+      if (roomTypeId > 0) {
+        const hasActiveRates = this.hasActiveRatesForRoomType(roomTypeId);
+        const applicableRate = this.findApplicableRateForRoomType(roomTypeId, checkIn, checkOut);
+
+        if (hasActiveRates && !applicableRate) {
+          return {
+            payloads: [],
+            error: (
+              `No existe una tarifa activa para la habitacion ${selectedRoom.number} ` +
+              'en el rango de fechas seleccionado.'
+            )
+          };
+        }
       }
 
       payloads.push({
         reservation: 0,
         room,
-        night_rate: nightRate,
-        adults,
-        children
       });
     }
 
@@ -480,6 +727,27 @@ export class CreateReservation implements OnChanges {
     }
 
     return { payloads };
+  }
+
+  private validateRoomCapacityAgainstGuests(roomPayloads: ReservationRoomPayloadI[], guestsCount: number): string {
+    if (guestsCount <= 0 || !roomPayloads.length) return '';
+
+    const totalCapacity = roomPayloads.reduce((sum, roomPayload) => {
+      const room = this.findRoomById(roomPayload.room);
+      const capacity = Number(room?.room_type_capacity || 0);
+      if (!Number.isFinite(capacity) || capacity <= 0) return sum;
+      return sum + capacity;
+    }, 0);
+
+    if (totalCapacity > 0 && guestsCount > totalCapacity) {
+      return (
+        `Advertencia: estas intentando alojar ${guestsCount} huesped(es), ` +
+        `pero la capacidad total seleccionada es ${totalCapacity}. ` +
+        'Agrega mas habitaciones o reduce la cantidad de huespedes.'
+      );
+    }
+
+    return '';
   }
 
   private rollbackReservationCreation(reservationId: number, sourceError: unknown): void {
@@ -617,6 +885,97 @@ export class CreateReservation implements OnChanges {
     return String(value || '').trim().toUpperCase();
   }
 
+  private getSelectedPackage(): PackageI | null {
+    const packageRaw = this.reservationForm.get('package')?.value;
+    const packageId = Number(packageRaw || 0);
+    if (!packageId || Number.isNaN(packageId)) return null;
+    return this.findPackageById(packageId) || null;
+  }
+
+  private findRoomById(roomId: unknown): RoomI | undefined {
+    const id = Number(roomId || 0);
+    if (!id || Number.isNaN(id)) return undefined;
+    return this.availableRooms.find((room) => room.id === id);
+  }
+
+  private hasRoomActiveReservationOverlap(room: RoomI, checkIn: Date, checkOut: Date): boolean {
+    const activeReservation = room.active_reservation;
+    if (!activeReservation) return false;
+
+    const activeCheckIn = this.parseDate(activeReservation.expected_check_in || null);
+    const activeCheckOut = this.parseDate(activeReservation.expected_check_out || null);
+    if (!activeCheckIn || !activeCheckOut) return true;
+
+    return checkIn < activeCheckOut && checkOut > activeCheckIn;
+  }
+
+  private hasActiveRatesForRoomType(roomTypeId: number): boolean {
+    if (!roomTypeId || !Number.isFinite(roomTypeId)) return false;
+    return this.rates.some((rate) => Number(rate.room_type) === roomTypeId && rate.is_active !== false);
+  }
+
+  private findApplicableRateForRoomType(roomTypeId: number, checkIn: Date | null, checkOut: Date | null): RateI | null {
+    if (!roomTypeId || !Number.isFinite(roomTypeId)) return null;
+
+    const candidates = this.rates
+      .filter((rate) => Number(rate.room_type) === roomTypeId && rate.is_active !== false)
+      .filter((rate) => this.isRateApplicableToRange(rate, checkIn, checkOut))
+      .sort((a, b) => {
+        const aStart = this.parseDate(a.start_date || null)?.getTime() || 0;
+        const bStart = this.parseDate(b.start_date || null)?.getTime() || 0;
+        if (aStart !== bStart) return bStart - aStart;
+
+        const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
+        if (aCreated !== bCreated) return bCreated - aCreated;
+
+        return Number(b.id || 0) - Number(a.id || 0);
+      });
+
+    return candidates[0] || null;
+  }
+
+  private isRateApplicableToRange(rate: RateI, checkIn: Date | null, checkOut: Date | null): boolean {
+    const startDate = this.parseDate(rate.start_date || null);
+    const endDate = this.parseDate(rate.end_date || null);
+
+    if (checkIn && startDate && checkIn < startDate) {
+      return false;
+    }
+
+    if (checkOut && endDate && checkOut > endDate) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private formatDateLabel(value: string | null | undefined): string {
+    if (!value) return 'fecha no disponible';
+    return value;
+  }
+
+  private extractFirstMessage(value: unknown): string | null {
+    if (typeof value === 'string' && value.trim()) return value;
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const message = this.extractFirstMessage(item);
+        if (message) return message;
+      }
+      return null;
+    }
+
+    if (value && typeof value === 'object') {
+      for (const key of Object.keys(value as Record<string, unknown>)) {
+        const message = this.extractFirstMessage((value as Record<string, unknown>)[key]);
+        if (message) return message;
+      }
+    }
+
+    return null;
+  }
+
   private findPackageById(packageId: unknown): PackageI | undefined {
     const id = Number(packageId || 0);
     if (!id || Number.isNaN(id)) return undefined;
@@ -697,16 +1056,12 @@ export class CreateReservation implements OnChanges {
 
     if (!error || typeof error !== 'object') return fallback;
     const payload = (error as { error?: unknown }).error;
-    if (!payload || typeof payload !== 'object') return fallback;
+    if (!payload) return fallback;
 
-    const detail = (payload as Record<string, unknown>)['detail'];
-    if (typeof detail === 'string' && detail.trim()) return detail;
-
-    for (const key of Object.keys(payload as Record<string, unknown>)) {
-      const value = (payload as Record<string, unknown>)[key];
-      if (typeof value === 'string' && value.trim()) return value;
-      if (Array.isArray(value) && value.length && typeof value[0] === 'string') return value[0];
-    }
+    const detail = this.extractFirstMessage((payload as Record<string, unknown>)['detail']);
+    if (detail) return detail;
+    const message = this.extractFirstMessage(payload);
+    if (message) return message;
 
     return fallback;
   }

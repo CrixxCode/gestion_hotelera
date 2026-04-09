@@ -114,17 +114,28 @@ export class DetailReservation implements OnChanges {
 
     const adults = (this.reservation.rooms_detail || []).reduce((sum, room) => sum + Number(room.adults || 0), 0);
     const children = (this.reservation.rooms_detail || []).reduce((sum, room) => sum + Number(room.children || 0), 0);
+    const capacity = (this.reservation.rooms_detail || []).reduce(
+      (sum, room) => sum + Number(room.room_type_capacity || 0),
+      0
+    );
 
     if (adults <= 0 && children <= 0) {
       const totalGuests = Number(this.reservation.total_guests || 0);
-      return `${totalGuests} huesped${totalGuests === 1 ? '' : 'es'}`;
+      const occupancy = `${totalGuests} huesped${totalGuests === 1 ? '' : 'es'}`;
+      if (capacity > 0) return `Cap. ${capacity} - ${occupancy}`;
+      return occupancy;
     }
 
-    if (children > 0) {
-      return `${adults} adulto${adults === 1 ? '' : 's'} + ${children} nino${children === 1 ? '' : 's'}`;
+    const occupancy =
+      children > 0
+        ? `${adults} adulto${adults === 1 ? '' : 's'} + ${children} nino${children === 1 ? '' : 's'}`
+        : `${adults} adulto${adults === 1 ? '' : 's'}`;
+
+    if (capacity > 0) {
+      return `Cap. ${capacity} - ${occupancy}`;
     }
 
-    return `${adults} adulto${adults === 1 ? '' : 's'}`;
+    return occupancy;
   }
 
   get guests(): ReservationGuestI[] {

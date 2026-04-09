@@ -183,26 +183,7 @@
 }
 
 .search-field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid #d8e0ec;
-  border-radius: 11px;
-  background: #f8fbff;
-  padding: 9px 10px;
-}
-
-.search-field i {
-  color: #7f90ab;
-}
-
-.search-field input {
-  width: 100%;
-  border: 0;
-  outline: 0;
-  font-size: 14px;
-  color: #334155;
-  background: transparent;
+  min-width: 0;
 }
 
 .tool-select,

@@ -14,8 +14,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.throttling import ScopedRateThrottle
 from accounts.permissions import HasResourcePermission
+from accounts.soft_delete import LogicalDeleteViewSetMixin
 
-from .models import Role, Resource
+from .models import Role, Resource, UserRole, RoleResource
 from .serializers import (
     RegisterSerializer, UserSerializer, RoleSerializer, ResourceSerializer,
     UserMiniSerializer, PasswordChangeSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer
@@ -176,7 +177,7 @@ class PasswordResetConfirmView(APIView):
 # RBAC + CRUD: Users / Roles / Resources
 # -----------------------------
 
-class UserViewSet(viewsets.ModelViewSet):
+class UserViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = User.objects.all().order_by("date_joined")
     serializer_class = UserSerializer
     pagination_class = None
@@ -226,9 +227,10 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response(data, status=status.HTTP_201_CREATED)
 
 
-class RoleViewSet(viewsets.ModelViewSet):
+class RoleViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = Role.objects.all().order_by("name")
     serializer_class = RoleSerializer
+    pagination_class = None
     permission_classes = [HasResourcePermission]
     required_scopes = ["roles.read"]
 
@@ -255,7 +257,15 @@ class RoleViewSet(viewsets.ModelViewSet):
         Devuelve los usuarios asignados a ese rol.
         """
         role = self.get_object()
-        qs = role.users.all().order_by("username")
+        qs = (
+            User.objects.filter(
+                userrole__role=role,
+                userrole__is_active=True,
+                is_active=True,
+            )
+            .distinct()
+            .order_by("username")
+        )
         return Response(UserMiniSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="assign-users")
@@ -270,8 +280,16 @@ class RoleViewSet(viewsets.ModelViewSet):
         if not isinstance(ids, list):
             return Response({"detail": "user_ids debe ser una lista."}, status=status.HTTP_400_BAD_REQUEST)
 
-        users = User.objects.filter(id__in=ids)
-        role.users.add(*users)
+        users = User.objects.filter(id__in=ids, is_active=True)
+        for user in users:
+            rel, created = UserRole.objects.get_or_create(
+                user=user,
+                role=role,
+                defaults={"is_active": True},
+            )
+            if not created and not rel.is_active:
+                rel.is_active = True
+                rel.save(update_fields=["is_active"])
 
         return Response(
             {"assigned": [str(u.id) for u in users]},
@@ -290,8 +308,8 @@ class RoleViewSet(viewsets.ModelViewSet):
         if not isinstance(ids, list):
             return Response({"detail": "user_ids debe ser una lista."}, status=status.HTTP_400_BAD_REQUEST)
 
-        users = User.objects.filter(id__in=ids)
-        role.users.remove(*users)
+        users = User.objects.filter(id__in=ids, is_active=True)
+        UserRole.objects.filter(role=role, user__in=users, is_active=True).update(is_active=False)
 
         return Response(
             {"removed": [str(u.id) for u in users]},
@@ -310,7 +328,7 @@ class RoleViewSet(viewsets.ModelViewSet):
         """
         q = (request.query_params.get("q") or "").strip()
 
-        qs = User.objects.all().order_by("username")
+        qs = User.objects.filter(is_active=True).order_by("username")
         if q:
             qs = qs.filter(
                 models.Q(username__icontains=q)
@@ -334,7 +352,15 @@ class RoleViewSet(viewsets.ModelViewSet):
         Devuelve los recursos asignados a este rol.
         """
         role = self.get_object()
-        qs = role.resources.all().order_by("order", "name", "key")
+        qs = (
+            Resource.objects.filter(
+                roleresource__role=role,
+                roleresource__is_active=True,
+                is_active=True,
+            )
+            .distinct()
+            .order_by("order", "name", "key")
+        )
         return Response(ResourceSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="assign-resources")
@@ -348,8 +374,16 @@ class RoleViewSet(viewsets.ModelViewSet):
         if not isinstance(ids, list):
             return Response({"detail": "resource_ids debe ser una lista."}, status=status.HTTP_400_BAD_REQUEST)
 
-        resources = Resource.objects.filter(id__in=ids)
-        role.resources.add(*resources)
+        resources = Resource.objects.filter(id__in=ids, is_active=True)
+        for resource in resources:
+            rel, created = RoleResource.objects.get_or_create(
+                role=role,
+                resource=resource,
+                defaults={"is_active": True},
+            )
+            if not created and not rel.is_active:
+                rel.is_active = True
+                rel.save(update_fields=["is_active"])
 
         return Response({"assigned": [str(r.id) for r in resources]}, status=status.HTTP_200_OK)
 
@@ -364,13 +398,14 @@ class RoleViewSet(viewsets.ModelViewSet):
         if not isinstance(ids, list):
             return Response({"detail": "resource_ids debe ser una lista."}, status=status.HTTP_400_BAD_REQUEST)
 
-        resources = Resource.objects.filter(id__in=ids)
-        role.resources.remove(*resources)
+        resources = Resource.objects.filter(id__in=ids, is_active=True)
+        RoleResource.objects.filter(role=role, resource__in=resources, is_active=True).update(is_active=False)
 
         return Response({"removed": [str(r.id) for r in resources]}, status=status.HTTP_200_OK)
     
 
-class ResourceViewSet(viewsets.ModelViewSet):
+class ResourceViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+    queryset = Resource.objects.all()
     serializer_class = ResourceSerializer
     permission_classes = [HasResourcePermission]
     required_scopes = ["resources.read"]
@@ -386,7 +421,7 @@ class ResourceViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
     def get_queryset(self):
-        qs = Resource.objects.all().order_by("order", "name", "key")
+        qs = super().get_queryset().order_by("order", "name", "key")
         q = (self.request.query_params.get("q") or "").strip()
         if q:
             qs = qs.filter(

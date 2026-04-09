@@ -18,6 +18,7 @@
         </strong>
         <small>Total factura: {{ formatCurrency(totalWithTaxAmount) }}</small>
         <small>Pagado: {{ formatCurrency(totalPaidAmount) }} | {{ chargeCount }} cargos</small>
+        <small>Notas credito activas: {{ formatCurrency(creditNotesTotal) }} | {{ creditNotesCount }} notas</small>
       </div>
     </header>
 
@@ -50,9 +51,14 @@
           {{ showCreatePaymentForm ? 'Ocultar pago' : 'Agregar pago' }}
         </button>
 
-        <button type="button" class="btn btn-light" (click)="printInvoice()">
-          <i class="fa-solid fa-print"></i>
-          Imprimir
+        <button type="button" class="btn btn-light" (click)="openCreditNotesModal()">
+          <i class="fa-regular fa-note-sticky"></i>
+          Notas credito ({{ creditNotesCount }})
+        </button>
+
+        <button type="button" class="btn btn-light" (click)="printInvoice()" [disabled]="printing || !activeInvoice">
+          <i class="fa-solid fa-file-pdf"></i>
+          {{ printing ? 'Generando PDF...' : 'Descargar PDF' }}
         </button>
 
         <button type="button" class="btn btn-close" (click)="closeDrawer()" title="Cerrar">
@@ -74,6 +80,7 @@
         [reservationId]="activeInvoice?.reservation || null"
         [chargeTypes]="chargeTypes"
         [services]="services"
+        [packages]="packages"
         (created)="onChargeCreated()"
         (cancelled)="onCreateChargeCancelled()">
       </app-create-bill>
@@ -241,3 +248,11 @@
     </footer>
   </article>
 </div>
+
+<app-credit-note-list
+  *ngIf="showCreditNotesModal"
+  [invoice]="activeInvoice"
+  [statuses]="creditNoteStatuses"
+  (closed)="closeCreditNotesModal()"
+  (changed)="onCreditNotesChanged()">
+</app-credit-note-list>

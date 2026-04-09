@@ -106,6 +106,8 @@ export interface ReservationRoomI {
   reservation: number;
   room: number;
   room_number?: string;
+  room_type_name?: string;
+  room_type_capacity?: number | null;
   night_rate: string | number;
   adults: number;
   children: number;
@@ -119,9 +121,9 @@ export interface ReservationRoomI {
 export interface ReservationRoomPayloadI {
   reservation: number;
   room: number;
-  night_rate: string | number;
-  adults: number;
-  children: number;
+  night_rate?: string | number;
+  adults?: number;
+  children?: number;
   meal_plan?: number | null;
 }
 

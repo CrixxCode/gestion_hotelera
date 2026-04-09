@@ -198,30 +198,7 @@
   align-items: center;
 }
 
-.search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 11px;
-  padding: 10px;
-  background: #fff;
-}
-
-.search i {
-  color: #94a3b8;
-}
-
-.search input {
-  border: none;
-  outline: none;
-  width: 100%;
-  font-size: 15px;
-  color: #334155;
-  background: transparent;
-}
-
-.search.mini {
+.mh-search .gh-search-wrap {
   min-width: 320px;
 }
 
@@ -715,7 +692,7 @@
     grid-template-columns: 1fr;
   }
 
-  .search.mini {
+  .mh-search .gh-search-wrap {
     min-width: 0;
     width: 100%;
   }

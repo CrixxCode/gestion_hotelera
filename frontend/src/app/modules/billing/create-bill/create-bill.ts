@@ -3,8 +3,11 @@ import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
 import { BillingService } from '../../../services/billing';
+import { PackageI } from '../../packages/package-model';
 import { ServiceI } from '../../services/service-model';
 import { ChargeCreatePayloadI, ChargeI } from '../billing-model';
+
+type ChargeCategory = 'SERVICIO' | 'PAQUETE' | 'MANUAL';
 
 @Component({
   selector: 'app-create-bill',
@@ -17,6 +20,7 @@ export class CreateBill implements OnChanges {
   @Input() reservationId: number | null = null;
   @Input() chargeTypes: MasterDataI[] = [];
   @Input() services: ServiceI[] = [];
+  @Input() packages: PackageI[] = [];
 
   @Output() created = new EventEmitter<ChargeI>();
   @Output() cancelled = new EventEmitter<void>();
@@ -33,6 +37,7 @@ export class CreateBill implements OnChanges {
     this.chargeForm = this.fb.group({
       charge_type: [null as number | null, [Validators.required]],
       service: [null as number | null],
+      package: [null as number | null],
       quantity: [1, [Validators.required, Validators.min(1)]],
       description: [''],
       unit_price: [0, [Validators.min(0)]],
@@ -42,6 +47,11 @@ export class CreateBill implements OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['chargeTypes']) {
       this.ensureDefaultChargeType();
+      this.syncCatalogSelectionByCategory();
+    }
+
+    if (changes['services'] || changes['packages']) {
+      this.syncCatalogSelectionByCategory();
     }
   }
 
@@ -61,13 +71,95 @@ export class CreateBill implements OnChanges {
     return this.chargeForm.get('unit_price');
   }
 
+  get package() {
+    return this.chargeForm.get('package');
+  }
+
   get hasServicesCatalog(): boolean {
     return this.services.length > 0;
   }
 
+  get hasPackagesCatalog(): boolean {
+    return this.packages.length > 0;
+  }
+
+  get selectedCategory(): ChargeCategory {
+    const selectedChargeTypeId = Number(this.chargeForm.getRawValue().charge_type || 0);
+    return this.resolveCategoryByChargeTypeId(selectedChargeTypeId);
+  }
+
+  get isServiceCategory(): boolean {
+    return this.selectedCategory === 'SERVICIO';
+  }
+
+  get isPackageCategory(): boolean {
+    return this.selectedCategory === 'PAQUETE';
+  }
+
   get manualMode(): boolean {
-    const serviceId = Number(this.chargeForm.getRawValue().service || 0);
-    return !(Number.isFinite(serviceId) && serviceId > 0);
+    return this.selectedCategory === 'MANUAL';
+  }
+
+  get selectedItemLabel(): string {
+    if (this.isServiceCategory) {
+      return this.filteredServices.length ? 'Seleccionar servicio...' : 'Sin servicios activos';
+    }
+    if (this.isPackageCategory) {
+      return this.filteredPackages.length ? 'Seleccionar paquete...' : 'Sin paquetes activos';
+    }
+    return 'No aplica';
+  }
+
+  get filteredServices(): ServiceI[] {
+    return (this.services || []).filter((service) => !!service.is_active);
+  }
+
+  get filteredPackages(): PackageI[] {
+    return (this.packages || []).filter((pkg) => !!pkg.is_active);
+  }
+
+  get autoUnitPrice(): number {
+    if (this.isServiceCategory) {
+      const selectedService = this.findSelectedService();
+      return this.toNumber(selectedService?.base_price);
+    }
+
+    if (this.isPackageCategory) {
+      const selectedPackage = this.findSelectedPackage();
+      return this.toNumber(selectedPackage?.base_price);
+    }
+
+    return this.toNumber(this.chargeForm.getRawValue().unit_price);
+  }
+
+  onChargeTypeChanged(): void {
+    this.syncCatalogSelectionByCategory(true);
+  }
+
+  onServiceChanged(): void {
+    if (!this.isServiceCategory) return;
+
+    const selectedService = this.findSelectedService();
+    this.chargeForm.patchValue(
+      {
+        package: null,
+        unit_price: this.toNumber(selectedService?.base_price),
+      },
+      { emitEvent: false }
+    );
+  }
+
+  onPackageChanged(): void {
+    if (!this.isPackageCategory) return;
+
+    const selectedPackage = this.findSelectedPackage();
+    this.chargeForm.patchValue(
+      {
+        service: null,
+        unit_price: this.toNumber(selectedPackage?.base_price),
+      },
+      { emitEvent: false }
+    );
   }
 
   submit(): void {
@@ -97,9 +189,26 @@ export class CreateBill implements OnChanges {
       is_active: true,
     };
 
-    const selectedService = Number(raw.service || 0);
-    if (Number.isFinite(selectedService) && selectedService > 0) {
-      payload.service = selectedService;
+    if (this.isServiceCategory) {
+      const selectedService = this.findSelectedService();
+      if (!selectedService) {
+        this.errorMessage = 'Debes seleccionar un servicio para la categoria Servicio.';
+        return;
+      }
+
+      payload.service = selectedService.id;
+      payload.description = `Servicio: ${selectedService.name}`;
+      payload.unit_price = this.toNumber(selectedService.base_price);
+    } else if (this.isPackageCategory) {
+      const selectedPackage = this.findSelectedPackage();
+      if (!selectedPackage) {
+        this.errorMessage = 'Debes seleccionar un paquete para la categoria Paquete.';
+        return;
+      }
+
+      payload.package = selectedPackage.id;
+      payload.description = `Paquete: ${selectedPackage.name}`;
+      payload.unit_price = this.toNumber(selectedPackage.base_price);
     } else {
       const description = String(raw.description || '').trim();
       if (!description) {
@@ -153,6 +262,7 @@ export class CreateBill implements OnChanges {
   private resetFormForNextEntry(): void {
     this.chargeForm.patchValue({
       service: null,
+      package: null,
       quantity: 1,
       description: '',
       unit_price: 0
@@ -174,6 +284,81 @@ export class CreateBill implements OnChanges {
     return parsed;
   }
 
+  private syncCatalogSelectionByCategory(resetSelection = false): void {
+    const category = this.selectedCategory;
+    const patch: {
+      service?: number | null;
+      package?: number | null;
+      description?: string;
+      unit_price?: number;
+    } = {};
+
+    if (category === 'SERVICIO') {
+      if (resetSelection) {
+        patch.service = null;
+      }
+      patch.package = null;
+      patch.description = '';
+
+      const selectedService = this.findSelectedService(resetSelection ? null : undefined);
+      patch.unit_price = this.toNumber(selectedService?.base_price);
+    } else if (category === 'PAQUETE') {
+      if (resetSelection) {
+        patch.package = null;
+      }
+      patch.service = null;
+      patch.description = '';
+
+      const selectedPackage = this.findSelectedPackage(resetSelection ? null : undefined);
+      patch.unit_price = this.toNumber(selectedPackage?.base_price);
+    } else {
+      patch.service = null;
+      patch.package = null;
+      patch.description = '';
+      patch.unit_price = 0;
+    }
+
+    this.chargeForm.patchValue(patch, { emitEvent: false });
+  }
+
+  private resolveCategoryByChargeTypeId(chargeTypeId: number): ChargeCategory {
+    if (!chargeTypeId) return 'MANUAL';
+    const chargeType = this.chargeTypes.find((item) => item.id === chargeTypeId);
+    if (!chargeType) return 'MANUAL';
+
+    const normalizedCode = this.normalizeCode(chargeType.code || chargeType.name || '');
+    if (normalizedCode.includes('SERVICIO') || normalizedCode.includes('SERVICE')) return 'SERVICIO';
+    if (normalizedCode.includes('PAQUETE') || normalizedCode.includes('PACKAGE')) return 'PAQUETE';
+    return 'MANUAL';
+  }
+
+  private findSelectedService(forceId?: number | null): ServiceI | null {
+    const selectedId = forceId === undefined ? Number(this.chargeForm.getRawValue().service || 0) : Number(forceId || 0);
+    if (!Number.isFinite(selectedId) || selectedId <= 0) return null;
+    return this.filteredServices.find((service) => service.id === selectedId) || null;
+  }
+
+  private findSelectedPackage(forceId?: number | null): PackageI | null {
+    const selectedId = forceId === undefined ? Number(this.chargeForm.getRawValue().package || 0) : Number(forceId || 0);
+    if (!Number.isFinite(selectedId) || selectedId <= 0) return null;
+    return this.filteredPackages.find((pkg) => pkg.id === selectedId) || null;
+  }
+
+  private toNumber(value: unknown): number {
+    const parsed = Number(value);
+    if (Number.isNaN(parsed)) return 0;
+    return parsed;
+  }
+
+  private normalizeCode(value: unknown): string {
+    return String(value || '')
+      .trim()
+      .toUpperCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Z0-9]/g, '');
+  }
+
   private extractErrorMessage(error: unknown): string {
     const fallback = 'No fue posible registrar el cargo manual.';
 
@@ -193,4 +378,3 @@ export class CreateBill implements OnChanges {
     return fallback;
   }
 }
-

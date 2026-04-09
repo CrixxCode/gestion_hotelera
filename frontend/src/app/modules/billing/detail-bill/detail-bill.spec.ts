@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 
 import { MasterDataService } from '../../../services/master-data.service';
+import { PackagesService } from '../../../services/package';
 import { ReservationService } from '../../../services/reservation';
 import { ServicesService } from '../../../services/service';
 import { BillingService } from '../../../services/billing';
@@ -19,9 +20,13 @@ describe('DetailBill', () => {
           provide: BillingService,
           useValue: {
             getInvoiceById: () => of({}),
+            downloadInvoicePdf: () => of(new Blob()),
             listCharges: () => of([]),
+            listPayments: () => of([]),
+            listCreditNotes: () => of([]),
             updateCharge: () => of({}),
-            updateInvoice: () => of({})
+            updateInvoice: () => of({}),
+            updateCreditNote: () => of({})
           }
         },
         {
@@ -40,6 +45,12 @@ describe('DetailBill', () => {
           provide: ServicesService,
           useValue: {
             listServices: () => of([])
+          }
+        },
+        {
+          provide: PackagesService,
+          useValue: {
+            listPackages: () => of([])
           }
         }
       ]

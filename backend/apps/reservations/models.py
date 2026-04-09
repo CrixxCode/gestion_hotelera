@@ -305,3 +305,91 @@ class ReservationDeposit(models.Model):
 
     def __str__(self):
         return f"Deposit #{self.id} - Reservation #{self.reservation.id}"
+
+
+class ReservationInventoryCheck(models.Model):
+    class CheckType(models.TextChoices):
+        CHECK_IN = "CHECK_IN", "Check-in"
+        CHECK_OUT = "CHECK_OUT", "Check-out"
+
+    reservation = models.ForeignKey(
+        Reservation,
+        on_delete=models.CASCADE,
+        related_name="inventory_checks",
+    )
+    check_type = models.CharField(
+        max_length=20,
+        choices=CheckType.choices,
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="reservation_inventory_checks",
+        blank=True,
+        null=True,
+    )
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "reservation_inventory_check"
+        ordering = ["-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["reservation", "check_type"],
+                name="uq_reservation_inventory_check_type",
+            )
+        ]
+
+    def __str__(self):
+        return f"Inventory {self.check_type} - Reservation #{self.reservation_id}"
+
+
+class ReservationInventoryCheckLine(models.Model):
+    inventory_check = models.ForeignKey(
+        ReservationInventoryCheck,
+        on_delete=models.CASCADE,
+        related_name="lines",
+    )
+    reservation_room = models.ForeignKey(
+        ReservationRoom,
+        on_delete=models.SET_NULL,
+        related_name="inventory_check_lines",
+        blank=True,
+        null=True,
+    )
+    room = models.ForeignKey(
+        Room,
+        on_delete=models.PROTECT,
+        related_name="inventory_check_lines",
+    )
+    item = models.ForeignKey(
+        "inventory.Item",
+        on_delete=models.PROTECT,
+        related_name="reservation_inventory_check_lines",
+    )
+    expected_quantity = models.PositiveIntegerField(default=0)
+    reviewed_quantity = models.PositiveIntegerField(default=0)
+    difference_quantity = models.IntegerField(default=0)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "reservation_inventory_check_line"
+        ordering = ["room_id", "item_id", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["inventory_check", "room", "item"],
+                name="uq_reservation_inventory_check_line_unique",
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        self.difference_quantity = int(self.reviewed_quantity or 0) - int(self.expected_quantity or 0)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return (
+            f"Inventory line #{self.id} - Reservation #{self.inventory_check.reservation_id} "
+            f"Room {self.room_id} Item {self.item_id}"
+        )

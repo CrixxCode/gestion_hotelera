@@ -1,7 +1,24 @@
 <div class="rooms-page">
   <header class="page-header">
-    <h1>Check-In / Check-Out</h1>
-    <p>Gestiona el estado de las habitaciones y los movimientos de huespedes.</p>
+    <div>
+      <h1>Check-In / Check-Out</h1>
+      <p>Gestiona el estado de las habitaciones y los movimientos de huespedes.</p>
+    </div>
+
+    <div class="header-actions">
+      <button type="button" class="btn btn-light" (click)="goToAmenities()">
+        <i class="fa-solid fa-star"></i>
+        Amenidades
+      </button>
+      <button type="button" class="btn btn-light" (click)="goToRoomTypes()">
+        <i class="fa-solid fa-layer-group"></i>
+        Tipos
+      </button>
+      <button type="button" class="btn btn-dark" (click)="goToRates()">
+        <i class="fa-solid fa-tags"></i>
+        Tarifas
+      </button>
+    </div>
   </header>
 
   <section class="stats-grid">
@@ -44,6 +61,14 @@
 
   <section class="filters-card">
     <div class="filters-grid">
+      <label class="search-field search-wrap gh-search-wrap">
+        <span>Buscar</span>
+        <div class="search-control gh-search-control">
+          <i class="fa-solid fa-magnifying-glass gh-search-icon"></i>
+          <input class="gh-search-input" type="text" [(ngModel)]="search" (input)="applyFilters()" placeholder="Numero o descripcion..." />
+        </div>
+      </label>
+
       <label>
         <span>Estado</span>
         <select [(ngModel)]="statusFilter" (change)="applyFilters()">
@@ -60,39 +85,27 @@
           </option>
         </select>
       </label>
-
-      <label class="search-wrap">
-        <span>Buscar</span>
-        <div class="search-control">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="7"></circle>
-            <path d="m20 20-3.5-3.5"></path>
-          </svg>
-          <input type="text" [(ngModel)]="search" (input)="applyFilters()" placeholder="Numero o descripcion..." />
-        </div>
-      </label>
     </div>
 
     <div class="filters-actions">
-      <div class="actions-left">
-        <button type="button" class="btn btn-light" (click)="loadModuleData()">Actualizar</button>
+      <div class="view-toggle">
+        <button type="button" [class.active]="viewMode === 'table'" (click)="setViewMode('table')" title="Vista tabla">
+          <i class="fa-solid fa-list"></i>
+        </button>
+        <button type="button" [class.active]="viewMode === 'cards'" (click)="setViewMode('cards')" title="Vista cuadricula">
+          <i class="fa-solid fa-grip"></i>
+        </button>
       </div>
 
-      <div class="view-toggle">
-        <button type="button" [class.active]="viewMode === 'cards'" (click)="setViewMode('cards')" title="Vista tarjetas">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <rect x="3" y="3" width="8" height="8" rx="1.2"></rect>
-            <rect x="13" y="3" width="8" height="8" rx="1.2"></rect>
-            <rect x="3" y="13" width="8" height="8" rx="1.2"></rect>
-            <rect x="13" y="13" width="8" height="8" rx="1.2"></rect>
-          </svg>
+      <div class="action-group">
+        <button type="button" class="btn btn-light" (click)="loadModuleData()">
+          <i class="fa-solid fa-rotate-right"></i>
+          Actualizar
         </button>
-        <button type="button" [class.active]="viewMode === 'table'" (click)="setViewMode('table')" title="Vista tabla">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <path d="M4 7h16"></path>
-            <path d="M4 12h16"></path>
-            <path d="M4 17h16"></path>
-          </svg>
+
+        <button type="button" class="btn btn-light" (click)="exportCsv()">
+          <i class="fa-solid fa-file-export"></i>
+          Exportar
         </button>
       </div>
     </div>

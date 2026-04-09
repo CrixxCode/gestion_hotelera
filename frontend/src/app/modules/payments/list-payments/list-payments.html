@@ -4,11 +4,6 @@
       <h1>Pagos</h1>
       <p>Consulta de cobros registrados por factura y metodo de pago.</p>
     </div>
-
-    <button type="button" class="btn btn-light" (click)="refreshPaymentsData()" [disabled]="loading">
-      <i class="fa-solid fa-rotate-right"></i>
-      Actualizar
-    </button>
   </header>
 
   <section class="stats-grid">
@@ -49,34 +44,58 @@
     </article>
   </section>
 
-  <section class="toolbar-card">
-    <label class="search-field">
-      <i class="fa-solid fa-magnifying-glass"></i>
-      <input
-        type="text"
-        [(ngModel)]="search"
-        (input)="applyFilters()"
-        placeholder="Buscar por factura, huesped, documento o referencia..." />
-    </label>
+  <section class="gh-filters-card">
+    <div class="gh-filters-grid">
+      <label class="search-field search-wrap gh-search-wrap">
+        <span>Buscar</span>
+        <div class="search-control gh-search-control">
+          <i class="fa-solid fa-magnifying-glass gh-search-icon"></i>
+          <input
+            class="gh-search-input"
+            type="text"
+            [(ngModel)]="search"
+            (input)="applyFilters()"
+            placeholder="Buscar por factura, huesped, documento o referencia..." />
+        </div>
+      </label>
 
-    <select class="tool-select" [(ngModel)]="methodFilter" (change)="applyFilters()">
-      <option *ngFor="let option of methodOptions" [ngValue]="option.value">{{ option.label }}</option>
-    </select>
+      <label class="gh-filter-field">
+        <span>Estado</span>
+        <select class="gh-filter-select" [(ngModel)]="activityFilter" (change)="applyFilters()">
+          <option *ngFor="let option of activityOptions" [ngValue]="option.value">{{ option.label }}</option>
+        </select>
+      </label>
 
-    <select class="tool-select" [(ngModel)]="activityFilter" (change)="applyFilters()">
-      <option *ngFor="let option of activityOptions" [ngValue]="option.value">{{ option.label }}</option>
-    </select>
-
-    <div class="view-toggle">
-      <button type="button" [class.active]="viewMode === 'table'" (click)="setViewMode('table')" title="Vista tabla">
-        <i class="fa-solid fa-list"></i>
-      </button>
-      <button type="button" [class.active]="viewMode === 'grid'" (click)="setViewMode('grid')" title="Vista cuadricula">
-        <i class="fa-solid fa-grip"></i>
-      </button>
+      <label class="gh-filter-field">
+        <span>Metodo</span>
+        <select class="gh-filter-select" [(ngModel)]="methodFilter" (change)="applyFilters()">
+          <option *ngFor="let option of methodOptions" [ngValue]="option.value">{{ option.label }}</option>
+        </select>
+      </label>
     </div>
 
-    <span class="total-chip">{{ filteredPayments.length }} visibles</span>
+    <div class="gh-filters-actions">
+      <div class="gh-view-toggle">
+        <button type="button" [class.active]="viewMode === 'table'" (click)="setViewMode('table')" title="Vista tabla">
+          <i class="fa-solid fa-list"></i>
+        </button>
+        <button type="button" [class.active]="viewMode === 'grid'" (click)="setViewMode('grid')" title="Vista cuadricula">
+          <i class="fa-solid fa-grip"></i>
+        </button>
+      </div>
+
+      <div class="gh-action-group">
+        <button type="button" class="gh-btn gh-btn-light" (click)="refreshPaymentsData()" [disabled]="loading">
+          <i class="fa-solid fa-rotate-right"></i>
+          Actualizar
+        </button>
+
+        <button type="button" class="gh-btn gh-btn-light" (click)="exportCsv()">
+          <i class="fa-solid fa-file-export"></i>
+          Exportar
+        </button>
+      </div>
+    </div>
   </section>
 
   <section class="state-message" *ngIf="loading || errorMessage || infoMessage || filteredPayments.length === 0">

@@ -3,9 +3,10 @@ from rest_framework import filters, viewsets
 from apps.services.models import Service
 from apps.services.serializers import ServiceSerializer
 from accounts.permissions import HasResourcePermission
+from accounts.soft_delete import LogicalDeleteViewSetMixin
 
 
-class ServiceViewSet(viewsets.ModelViewSet):
+class ServiceViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         Service.objects.select_related(
             "hotel_settings",

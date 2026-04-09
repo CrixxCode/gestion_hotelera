@@ -6,6 +6,8 @@ import { AuthService } from './auth/auth';
 import {
   ChargeCreatePayloadI,
   ChargeI,
+  CreditNoteCreatePayloadI,
+  CreditNoteI,
   InvoiceChargeI,
   InvoiceCreatePayloadI,
   InvoiceI,
@@ -26,6 +28,7 @@ export class BillingService {
   private readonly invoicesUrl = `${this.apiBase}/api/invoices/`;
   private readonly invoiceChargesUrl = `${this.apiBase}/api/invoice-charges/`;
   private readonly paymentsUrl = `${this.apiBase}/api/payments/`;
+  private readonly creditNotesUrl = `${this.apiBase}/api/credit-notes/`;
 
   constructor(
     private http: HttpClient,
@@ -40,19 +43,20 @@ export class BillingService {
   }): Observable<InvoiceI[]> {
     let params = new HttpParams();
 
-    const searchTerms: string[] = [];
     if (filters?.search?.trim()) {
-      searchTerms.push(filters.search.trim());
-    }
-    if (typeof filters?.reservation === 'number' && Number.isFinite(filters.reservation) && filters.reservation > 0) {
-      searchTerms.push(String(filters.reservation));
-    }
-    if (searchTerms.length) {
-      params = params.set('search', searchTerms.join(' '));
+      params = params.set('search', filters.search.trim());
     }
 
     if (filters?.ordering?.trim()) {
       params = params.set('ordering', filters.ordering.trim());
+    }
+
+    if (typeof filters?.reservation === 'number' && Number.isFinite(filters.reservation) && filters.reservation > 0) {
+      params = params.set('reservation', String(filters.reservation));
+    }
+
+    if (typeof filters?.is_active === 'boolean') {
+      params = params.set('is_active', String(filters.is_active));
     }
 
     return this.http
@@ -60,26 +64,18 @@ export class BillingService {
         withCredentials: true,
         params
       })
-      .pipe(
-        map((res) => this.unwrapArray<InvoiceI>(res)),
-        map((invoices) => {
-          let filtered = invoices;
-
-          if (typeof filters?.reservation === 'number' && Number.isFinite(filters.reservation) && filters.reservation > 0) {
-            filtered = filtered.filter((invoice) => Number(invoice.reservation) === filters.reservation);
-          }
-
-          if (typeof filters?.is_active === 'boolean') {
-            filtered = filtered.filter((invoice) => !!invoice.is_active === filters.is_active);
-          }
-
-          return filtered;
-        })
-      );
+      .pipe(map((res) => this.unwrapArray<InvoiceI>(res)));
   }
 
   getInvoiceById(id: number): Observable<InvoiceI> {
     return this.http.get<InvoiceI>(`${this.invoicesUrl}${id}/`, { withCredentials: true });
+  }
+
+  downloadInvoicePdf(id: number): Observable<Blob> {
+    return this.http.get(`${this.invoicesUrl}${id}/pdf/`, {
+      withCredentials: true,
+      responseType: 'blob'
+    });
   }
 
   createInvoice(payload: InvoiceCreatePayloadI): Observable<InvoiceI> {
@@ -110,19 +106,20 @@ export class BillingService {
   }): Observable<ChargeI[]> {
     let params = new HttpParams();
 
-    const searchTerms: string[] = [];
     if (filters?.search?.trim()) {
-      searchTerms.push(filters.search.trim());
-    }
-    if (typeof filters?.reservation === 'number' && Number.isFinite(filters.reservation) && filters.reservation > 0) {
-      searchTerms.push(String(filters.reservation));
-    }
-    if (searchTerms.length) {
-      params = params.set('search', searchTerms.join(' '));
+      params = params.set('search', filters.search.trim());
     }
 
     if (filters?.ordering?.trim()) {
       params = params.set('ordering', filters.ordering.trim());
+    }
+
+    if (typeof filters?.reservation === 'number' && Number.isFinite(filters.reservation) && filters.reservation > 0) {
+      params = params.set('reservation', String(filters.reservation));
+    }
+
+    if (typeof filters?.is_active === 'boolean') {
+      params = params.set('is_active', String(filters.is_active));
     }
 
     return this.http
@@ -130,22 +127,7 @@ export class BillingService {
         withCredentials: true,
         params
       })
-      .pipe(
-        map((res) => this.unwrapArray<ChargeI>(res)),
-        map((charges) => {
-          let filtered = charges;
-
-          if (typeof filters?.reservation === 'number' && Number.isFinite(filters.reservation) && filters.reservation > 0) {
-            filtered = filtered.filter((charge) => Number(charge.reservation) === filters.reservation);
-          }
-
-          if (typeof filters?.is_active === 'boolean') {
-            filtered = filtered.filter((charge) => !!charge.is_active === filters.is_active);
-          }
-
-          return filtered;
-        })
-      );
+      .pipe(map((res) => this.unwrapArray<ChargeI>(res)));
   }
 
   getChargeById(id: number): Observable<ChargeI> {
@@ -179,19 +161,16 @@ export class BillingService {
   }): Observable<InvoiceChargeI[]> {
     let params = new HttpParams();
 
-    const searchTerms: string[] = [];
     if (filters?.search?.trim()) {
-      searchTerms.push(filters.search.trim());
-    }
-    if (typeof filters?.invoice === 'number' && Number.isFinite(filters.invoice) && filters.invoice > 0) {
-      searchTerms.push(String(filters.invoice));
-    }
-    if (searchTerms.length) {
-      params = params.set('search', searchTerms.join(' '));
+      params = params.set('search', filters.search.trim());
     }
 
     if (filters?.ordering?.trim()) {
       params = params.set('ordering', filters.ordering.trim());
+    }
+
+    if (typeof filters?.invoice === 'number' && Number.isFinite(filters.invoice) && filters.invoice > 0) {
+      params = params.set('invoice', String(filters.invoice));
     }
 
     return this.http
@@ -199,15 +178,7 @@ export class BillingService {
         withCredentials: true,
         params
       })
-      .pipe(
-        map((res) => this.unwrapArray<InvoiceChargeI>(res)),
-        map((rows) => {
-          if (typeof filters?.invoice !== 'number' || !Number.isFinite(filters.invoice) || filters.invoice <= 0) {
-            return rows;
-          }
-          return rows.filter((row) => Number(row.invoice) === filters.invoice);
-        })
-      );
+      .pipe(map((res) => this.unwrapArray<InvoiceChargeI>(res)));
   }
 
   createInvoiceCharge(payload: { invoice: number; charge: number }): Observable<InvoiceChargeI> {
@@ -226,19 +197,20 @@ export class BillingService {
   }): Observable<PaymentI[]> {
     let params = new HttpParams();
 
-    const searchTerms: string[] = [];
     if (filters?.search?.trim()) {
-      searchTerms.push(filters.search.trim());
-    }
-    if (typeof filters?.invoice === 'number' && Number.isFinite(filters.invoice) && filters.invoice > 0) {
-      searchTerms.push(String(filters.invoice));
-    }
-    if (searchTerms.length) {
-      params = params.set('search', searchTerms.join(' '));
+      params = params.set('search', filters.search.trim());
     }
 
     if (filters?.ordering?.trim()) {
       params = params.set('ordering', filters.ordering.trim());
+    }
+
+    if (typeof filters?.invoice === 'number' && Number.isFinite(filters.invoice) && filters.invoice > 0) {
+      params = params.set('invoice', String(filters.invoice));
+    }
+
+    if (typeof filters?.is_active === 'boolean') {
+      params = params.set('is_active', String(filters.is_active));
     }
 
     return this.http
@@ -246,22 +218,7 @@ export class BillingService {
         withCredentials: true,
         params
       })
-      .pipe(
-        map((res) => this.unwrapArray<PaymentI>(res)),
-        map((payments) => {
-          let filtered = payments;
-
-          if (typeof filters?.invoice === 'number' && Number.isFinite(filters.invoice) && filters.invoice > 0) {
-            filtered = filtered.filter((payment) => Number(payment.invoice) === filters.invoice);
-          }
-
-          if (typeof filters?.is_active === 'boolean') {
-            filtered = filtered.filter((payment) => !!payment.is_active === filters.is_active);
-          }
-
-          return filtered;
-        })
-      );
+      .pipe(map((res) => this.unwrapArray<PaymentI>(res)));
   }
 
   getPaymentById(id: number): Observable<PaymentI> {
@@ -286,6 +243,62 @@ export class BillingService {
 
   deletePayment(id: number): Observable<void> {
     return this.http.delete<void>(`${this.paymentsUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
+  listCreditNotes(filters?: {
+    search?: string;
+    ordering?: string;
+    invoice?: number;
+    is_active?: boolean;
+  }): Observable<CreditNoteI[]> {
+    let params = new HttpParams();
+
+    if (filters?.search?.trim()) {
+      params = params.set('search', filters.search.trim());
+    }
+
+    if (filters?.ordering?.trim()) {
+      params = params.set('ordering', filters.ordering.trim());
+    }
+
+    if (typeof filters?.invoice === 'number' && Number.isFinite(filters.invoice) && filters.invoice > 0) {
+      params = params.set('invoice', String(filters.invoice));
+    }
+
+    if (typeof filters?.is_active === 'boolean') {
+      params = params.set('is_active', String(filters.is_active));
+    }
+
+    return this.http
+      .get<CreditNoteI[] | DRFPaginated<CreditNoteI>>(this.creditNotesUrl, {
+        withCredentials: true,
+        params
+      })
+      .pipe(map((res) => this.unwrapArray<CreditNoteI>(res)));
+  }
+
+  getCreditNoteById(id: number): Observable<CreditNoteI> {
+    return this.http.get<CreditNoteI>(`${this.creditNotesUrl}${id}/`, { withCredentials: true });
+  }
+
+  createCreditNote(payload: CreditNoteCreatePayloadI): Observable<CreditNoteI> {
+    return this.http.post<CreditNoteI>(
+      this.creditNotesUrl,
+      this.normalizeCreditNotePayload(payload),
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
+  updateCreditNote(id: number, payload: Partial<CreditNoteCreatePayloadI>): Observable<CreditNoteI> {
+    return this.http.patch<CreditNoteI>(
+      `${this.creditNotesUrl}${id}/`,
+      this.normalizeCreditNotePayload(payload),
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
+  deleteCreditNote(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.creditNotesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
   }
 
   private unwrapArray<T>(res: unknown): T[] {
@@ -402,6 +415,43 @@ export class BillingService {
 
     if (payload.reference !== undefined) {
       normalized.reference = payload.reference ? String(payload.reference).trim() : null;
+    }
+
+    if (payload.notes !== undefined) {
+      normalized.notes = payload.notes ? String(payload.notes).trim() : null;
+    }
+
+    if (typeof payload.is_active === 'boolean') {
+      normalized.is_active = payload.is_active;
+    }
+
+    return normalized;
+  }
+
+  private normalizeCreditNotePayload(
+    payload: Partial<CreditNoteCreatePayloadI>
+  ): Partial<CreditNoteCreatePayloadI> {
+    const normalized: Partial<CreditNoteCreatePayloadI> = {};
+
+    if (typeof payload.invoice === 'number') {
+      normalized.invoice = Number(payload.invoice);
+    }
+
+    if (typeof payload.status === 'number') {
+      normalized.status = Number(payload.status);
+    }
+
+    if (typeof payload.credit_note_number === 'string') {
+      normalized.credit_note_number = payload.credit_note_number.trim();
+    }
+
+    if (typeof payload.amount === 'number') {
+      const amount = Number(payload.amount);
+      normalized.amount = Number.isFinite(amount) ? amount : 0;
+    }
+
+    if (typeof payload.reason === 'string') {
+      normalized.reason = payload.reason.trim();
     }
 
     if (payload.notes !== undefined) {

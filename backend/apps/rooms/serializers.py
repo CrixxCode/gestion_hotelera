@@ -1,4 +1,3 @@
-from django.utils.text import slugify
 from rest_framework import serializers
 
 from apps.master_data.models import MasterData
@@ -7,7 +6,7 @@ from apps.reservations.services import (
     INACTIVE_RESERVATION_STATUS_CODES,
     is_reservation_in_house,
 )
-from .models import Rate, Amenity, Room, MaintenanceOrder, CleaningTask
+from .models import Rate, Amenity, Room, MaintenanceOrder, CleaningTask, RoomType
 
 AMENITY_ICON_CATALOG = {
     "fa-solid fa-bed",
@@ -21,7 +20,6 @@ AMENITY_ICON_CATALOG = {
     "fa-solid fa-bell-concierge",
     "fa-solid fa-dumbbell",
 }
-
 
 class AmenitySerializer(serializers.ModelSerializer):
     class Meta:
@@ -46,12 +44,8 @@ class AmenitySerializer(serializers.ModelSerializer):
 
 
 class RoomTypeSerializer(serializers.ModelSerializer):
-    capacity = serializers.IntegerField(required=False, min_value=1, default=1)
-    bed_count = serializers.IntegerField(required=False, min_value=1, default=1)
-    bed_type = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-
     class Meta:
-        model = MasterData
+        model = RoomType
         fields = (
             "id",
             "code",
@@ -61,62 +55,24 @@ class RoomTypeSerializer(serializers.ModelSerializer):
             "bed_count",
             "bed_type",
             "is_active",
+            "sort_order",
             "created_at",
+            "updated_at",
         )
-        read_only_fields = ("id", "created_at")
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        metadata = instance.metadata or {}
-        data["capacity"] = int(metadata.get("capacity", 1))
-        data["bed_count"] = int(metadata.get("bed_count", 1))
-        data["bed_type"] = metadata.get("bed_type")
-        return data
+        read_only_fields = ("id", "created_at", "updated_at")
 
     def validate_code(self, value):
         return str(value).strip().upper()
 
-    def create(self, validated_data):
-        metadata = {
-            "capacity": validated_data.pop("capacity", 1),
-            "bed_count": validated_data.pop("bed_count", 1),
-            "bed_type": validated_data.pop("bed_type", None),
-        }
-
-        code = validated_data.get("code")
-        if not code:
-            generated = slugify(validated_data.get("name", "")).replace("-", "_").upper()
-            validated_data["code"] = generated or "ROOM_TYPE"
-
-        return MasterData.objects.create(
-            group=MasterData.Group.ROOM_TYPE,
-            metadata=metadata,
-            **validated_data,
-        )
-
-    def update(self, instance, validated_data):
-        metadata = dict(instance.metadata or {})
-
-        if "capacity" in validated_data:
-            metadata["capacity"] = validated_data.pop("capacity")
-        if "bed_count" in validated_data:
-            metadata["bed_count"] = validated_data.pop("bed_count")
-        if "bed_type" in validated_data:
-            metadata["bed_type"] = validated_data.pop("bed_type")
-
-        for field, value in validated_data.items():
-            setattr(instance, field, value)
-
-        instance.group = MasterData.Group.ROOM_TYPE
-        instance.metadata = metadata
-        instance.save()
-        return instance
+    def validate_name(self, value):
+        normalized = str(value or "").strip()
+        if not normalized:
+            raise serializers.ValidationError("El nombre del tipo de habitacion es obligatorio.")
+        return normalized
 
 
 class RateSerializer(serializers.ModelSerializer):
-    room_type = serializers.PrimaryKeyRelatedField(
-        queryset=MasterData.objects.filter(group=MasterData.Group.ROOM_TYPE)
-    )
+    room_type = serializers.PrimaryKeyRelatedField(queryset=RoomType.objects.all())
     room_type_name = serializers.CharField(source="room_type.name", read_only=True)
 
     class Meta:
@@ -127,11 +83,12 @@ class RateSerializer(serializers.ModelSerializer):
 
 class RoomSerializer(serializers.ModelSerializer):
     room_type = serializers.PrimaryKeyRelatedField(
-        queryset=MasterData.objects.filter(group=MasterData.Group.ROOM_TYPE),
+        queryset=RoomType.objects.all(),
         allow_null=True,
         required=False,
     )
     room_type_name = serializers.CharField(source="room_type.name", read_only=True)
+    room_type_capacity = serializers.IntegerField(source="room_type.capacity", read_only=True)
     floor_name = serializers.CharField(source="floor.name", read_only=True)
     floor_number = serializers.IntegerField(source="floor.floor_number", read_only=True)
     florr_number = serializers.IntegerField(source="floor.floor_number", read_only=True)
@@ -156,6 +113,7 @@ class RoomSerializer(serializers.ModelSerializer):
             "number",
             "room_type",
             "room_type_name",
+            "room_type_capacity",
             "floor",
             "floor_name",
             "floor_number",
@@ -193,6 +151,7 @@ class RoomSerializer(serializers.ModelSerializer):
 
         return {
             "id": reservation.id,
+            "reservation_room_id": detail.id,
             "status": reservation.status_code,
             "status_label": reservation.status.name if reservation.status else None,
             "expected_check_in": reservation.expected_check_in,
@@ -260,22 +219,9 @@ class RoomAmenityMiniSerializer(serializers.ModelSerializer):
 
 
 class RoomTypeMiniSerializer(serializers.ModelSerializer):
-    capacity = serializers.SerializerMethodField()
-    bed_count = serializers.SerializerMethodField()
-    bed_type = serializers.SerializerMethodField()
-
     class Meta:
-        model = MasterData
+        model = RoomType
         fields = ("id", "name", "capacity", "bed_count", "bed_type")
-
-    def get_capacity(self, obj):
-        return int((obj.metadata or {}).get("capacity", 1))
-
-    def get_bed_count(self, obj):
-        return int((obj.metadata or {}).get("bed_count", 1))
-
-    def get_bed_type(self, obj):
-        return (obj.metadata or {}).get("bed_type")
 
 
 class RateMiniSerializer(serializers.ModelSerializer):

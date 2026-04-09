@@ -4,11 +4,12 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.permissions import HasResourcePermission
+from accounts.soft_delete import LogicalDeleteViewSetMixin
 from .models import MasterData
 from .serializers import MasterDataSerializer
 
 
-class MasterDataViewSet(viewsets.ModelViewSet):
+class MasterDataViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = MasterData.objects.all().order_by("group", "sort_order", "name")
     serializer_class = MasterDataSerializer
     pagination_class = None

@@ -1,7 +1,10 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import { catchError, forkJoin, of } from 'rxjs';
+import { ConfirmationService } from 'primeng/api';
 import { BillingService } from '../../../services/billing';
+import { errorActionAlert, successActionAlert } from '../../../services/action-alerts';
+import { openActionConfirmation } from '../../../services/action-confirmations';
 import { InvoiceI, PaymentI } from '../../billing/billing-model';
 
 @Component({
@@ -26,7 +29,10 @@ export class DetailPayment implements OnChanges {
   invoice: InvoiceI | null = null;
   invoicePayments: PaymentI[] = [];
 
-  constructor(private billingService: BillingService) {}
+  constructor(
+    private billingService: BillingService,
+    private confirmationService: ConfirmationService
+  ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['payment']) {
@@ -72,24 +78,27 @@ export class DetailPayment implements OnChanges {
   deactivatePayment(): void {
     if (!this.activePayment || !this.activePayment.is_active || this.updating) return;
 
-    const confirmed = window.confirm('Deseas inactivar este pago?');
-    if (!confirmed) return;
+    openActionConfirmation(this.confirmationService, {
+      action: 'deactivate',
+      target: 'pago',
+      onAccept: () => {
+        this.updating = true;
+        this.errorMessage = '';
+        this.infoMessage = '';
 
-    this.updating = true;
-    this.errorMessage = '';
-    this.infoMessage = '';
-
-    this.billingService.updatePayment(this.activePayment.id, { is_active: false }).subscribe({
-      next: (updatedPayment) => {
-        this.updating = false;
-        this.activePayment = updatedPayment;
-        this.paymentUpdated.emit(updatedPayment);
-        this.infoMessage = 'Pago actualizado correctamente.';
-        this.refreshInvoicePayments();
-      },
-      error: (error) => {
-        this.updating = false;
-        this.errorMessage = this.extractErrorMessage(error, 'No fue posible inactivar el pago.');
+        this.billingService.updatePayment(this.activePayment!.id, { is_active: false }).subscribe({
+          next: (updatedPayment) => {
+            this.updating = false;
+            this.activePayment = updatedPayment;
+            this.paymentUpdated.emit(updatedPayment);
+            this.infoMessage = successActionAlert('deactivate', 'pago');
+            this.refreshInvoicePayments();
+          },
+          error: (error) => {
+            this.updating = false;
+            this.errorMessage = this.extractErrorMessage(error, errorActionAlert('deactivate', 'pago'));
+          }
+        });
       }
     });
   }

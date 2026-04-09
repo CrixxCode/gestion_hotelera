@@ -4,6 +4,12 @@ import { UserService } from '../../../services/user';
 import { MessageService } from 'primeng/api';
 import { CommonModule } from '@angular/common';
 import { ToastModule } from 'primeng/toast';
+import {
+  ACTION_ALERT_ERROR_SUMMARY,
+  ACTION_ALERT_SUCCESS_SUMMARY,
+  errorActionAlert,
+  successActionAlert
+} from '../../../services/action-alerts';
 
 @Component({
   selector: 'app-user-register',
@@ -51,15 +57,18 @@ export class UserRegister {
 
   /**  Enviar formulario */
   onSubmit() {
-    if (this.form.invalid) return;
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
 
     this.loading = true;
     this.userService.createUser(this.form.value, this.avatarFile).subscribe({
       next: (user) => {
         this.messageService.add({
           severity: 'success',
-          summary: 'Usuario registrado',
-          detail: `El usuario ${user.username} fue creado correctamente.`,
+          summary: ACTION_ALERT_SUCCESS_SUMMARY,
+          detail: successActionAlert('create', `usuario ${user.username}`),
           life: 3000
         });
         this.loading = false;
@@ -73,7 +82,7 @@ export class UserRegister {
         console.error('Error creando usuario:', err);
         this.messageService.add({
           severity: 'error',
-          summary: 'Error',
+          summary: ACTION_ALERT_ERROR_SUMMARY,
           detail: this.getCreateErrorMessage(err),
           life: 3000
         });
@@ -123,7 +132,7 @@ export class UserRegister {
       return backendError.detail;
     }
 
-    return 'No se pudo registrar el usuario.';
+    return errorActionAlert('register', 'usuario');
   }
 
   private getFieldLabel(field: string): string {

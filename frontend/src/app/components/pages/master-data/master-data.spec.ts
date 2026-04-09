@@ -16,7 +16,7 @@ describe('MasterDataComponent', () => {
           provide: MasterDataService,
           useValue: {
             listGroups: () => of([]),
-            listMasterData: () => of([]),
+            listMasterDataAll: () => of([]),
             createMasterData: () => of({}),
             updateMasterData: () => of({}),
             deleteMasterData: () => of({})

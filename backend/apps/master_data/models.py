@@ -30,6 +30,17 @@ class MasterData(models.Model):
         CHARGE_TYPE = "CHARGE_TYPE", "Charge type"
         
         INVOICE_STATUS = "INVOICE_STATUS", "Invoice status"
+        
+        CREDIT_NOTE_STATUS = "CREDIT_NOTE_STATUS", "Credit note status"
+        
+        PROMOTION_DISCOUNT_TYPE = "PROMOTION_DISCOUNT_TYPE", "Promotion discount type"
+        
+        ITEM_TYPE = "ITEM_TYPE", "Item type"
+        UNIT_MEASURE = "UNIT_MEASURE", "Unit measure"
+        
+        INVENTORY_MOVEMENT_TYPE = "INVENTORY_MOVEMENT_TYPE", "Inventory movement type"
+        
+        EXPENSE_CATEGORY = "EXPENSE_CATEGORY", "Expense category"
 
     group = models.CharField(max_length=60, choices=Group.choices, db_index=True)
     code = models.CharField(max_length=80)

@@ -5,6 +5,8 @@ from apps.reservations.models import (
     ReservationRoom,
     ReservationGuest,
     ReservationDeposit,
+    ReservationInventoryCheck,
+    ReservationInventoryCheckLine,
 )
 
 
@@ -24,6 +26,13 @@ class ReservationDepositInline(admin.TabularInline):
     model = ReservationDeposit
     extra = 0
     autocomplete_fields = ("payment_method", "status")
+
+
+class ReservationInventoryCheckLineInline(admin.TabularInline):
+    model = ReservationInventoryCheckLine
+    extra = 0
+    autocomplete_fields = ("reservation_room", "room", "item")
+    readonly_fields = ("difference_quantity", "created_at")
 
 
 @admin.register(Reservation)
@@ -196,4 +205,54 @@ class ReservationDepositAdmin(admin.ModelAdmin):
         "reservation",
         "payment_method",
         "status",
+    )
+
+
+@admin.register(ReservationInventoryCheck)
+class ReservationInventoryCheckAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "reservation",
+        "check_type",
+        "created_by",
+        "created_at",
+    )
+    list_filter = (
+        "check_type",
+        "created_at",
+    )
+    search_fields = (
+        "reservation__id",
+        "notes",
+    )
+    autocomplete_fields = (
+        "reservation",
+        "created_by",
+    )
+    readonly_fields = ("created_at",)
+    inlines = [ReservationInventoryCheckLineInline]
+
+
+@admin.register(ReservationInventoryCheckLine)
+class ReservationInventoryCheckLineAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "inventory_check",
+        "room",
+        "item",
+        "expected_quantity",
+        "reviewed_quantity",
+        "difference_quantity",
+        "created_at",
+    )
+    search_fields = (
+        "inventory_check__reservation__id",
+        "room__number",
+        "item__name",
+    )
+    autocomplete_fields = (
+        "inventory_check",
+        "reservation_room",
+        "room",
+        "item",
     )

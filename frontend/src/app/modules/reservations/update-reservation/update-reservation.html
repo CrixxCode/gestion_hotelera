@@ -21,22 +21,24 @@
         <div class="grid two">
           <label>
             <span>Cliente *</span>
-            <select formControlName="client">
+            <select formControlName="client" [class.input-error]="isControlInvalid('client')">
               <option [ngValue]="null">Selecciona cliente</option>
               <option *ngFor="let client of clients; trackBy: trackById" [ngValue]="client.id">
                 {{ client.full_name || (client.first_name + ' ' + client.last_name) }}
               </option>
             </select>
+            <small class="field-error" *ngIf="getControlError('client') as error">{{ error }}</small>
           </label>
 
           <label>
             <span>Origen *</span>
-            <select formControlName="origin">
+            <select formControlName="origin" [class.input-error]="isControlInvalid('origin')">
               <option [ngValue]="null">Selecciona origen</option>
               <option *ngFor="let origin of origins; trackBy: trackById" [ngValue]="origin.id">
                 {{ origin.name }}
               </option>
             </select>
+            <small class="field-error" *ngIf="getControlError('origin') as error">{{ error }}</small>
           </label>
 
           <label>
@@ -56,12 +58,14 @@
 
           <label>
             <span>Check-in esperado *</span>
-            <input type="date" formControlName="expected_check_in" />
+            <input type="date" formControlName="expected_check_in" [class.input-error]="isControlInvalid('expected_check_in')" />
+            <small class="field-error" *ngIf="getControlError('expected_check_in') as error">{{ error }}</small>
           </label>
 
           <label>
             <span>Check-out esperado *</span>
-            <input type="date" formControlName="expected_check_out" />
+            <input type="date" formControlName="expected_check_out" [class.input-error]="isControlInvalid('expected_check_out')" />
+            <small class="field-error" *ngIf="getControlError('expected_check_out') as error">{{ error }}</small>
           </label>
 
           <label>
@@ -71,7 +75,12 @@
 
           <label class="full">
             <span>Notas internas</span>
-            <textarea rows="4" formControlName="notes" placeholder="Observaciones para recepcion y operaciones..."></textarea>
+            <textarea
+              rows="4"
+              formControlName="notes"
+              placeholder="Observaciones para recepcion y operaciones..."
+              [class.input-error]="isControlInvalid('notes')"></textarea>
+            <small class="field-error" *ngIf="getControlError('notes') as error">{{ error }}</small>
           </label>
         </div>
       </section>
@@ -87,30 +96,21 @@
 
         <div formArrayName="room_lines" class="room-lines">
           <article class="room-line" *ngFor="let roomControl of roomLines.controls; let idx = index; trackBy: trackByRoomLine" [formGroupName]="idx">
-            <div class="line-grid">
+            <div class="line-grid room-grid">
               <label>
                 <span>Habitacion</span>
-                <select formControlName="room">
+                <select formControlName="room" [class.input-error]="isRoomFieldInvalid(idx, 'room')">
                   <option [ngValue]="null">Sin asignar</option>
                   <option *ngFor="let room of availableRooms; trackBy: trackById" [ngValue]="room.id">
                     Hab. {{ room.number }}
                   </option>
                 </select>
+                <small class="field-error" *ngIf="getRoomFieldError(idx, 'room') as error">{{ error }}</small>
               </label>
 
               <label>
-                <span>Tarifa noche</span>
-                <input type="number" formControlName="night_rate" min="0" step="0.01" placeholder="0" />
-              </label>
-
-              <label>
-                <span>Adultos</span>
-                <input type="number" formControlName="adults" min="1" step="1" />
-              </label>
-
-              <label>
-                <span>Ninos</span>
-                <input type="number" formControlName="children" min="0" step="1" />
+                <span>Capacidad</span>
+                <input type="text" [value]="getRoomCapacityLabel(idx)" readonly />
               </label>
             </div>
 
@@ -121,6 +121,9 @@
             </div>
           </article>
         </div>
+        <small class="field-help">
+          La tarifa se toma automaticamente del tipo de habitacion y la ocupacion (adultos/ninos) se calcula segun la fecha de nacimiento de los huespedes.
+        </small>
       </section>
 
       <section>
@@ -173,6 +176,7 @@
         <small class="field-help" *ngIf="selectedPoliciesCount === 0">Opcional. Agrega politicas si aplica.</small>
       </section>
 
+      <p class="feedback warning" *ngIf="warningMessage">{{ warningMessage }}</p>
       <p class="feedback error" *ngIf="errorMessage">{{ errorMessage }}</p>
 
       <footer class="drawer-footer">

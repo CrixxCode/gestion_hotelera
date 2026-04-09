@@ -1,5 +1,5 @@
 <p-toast></p-toast>
-<p-confirmDialog key="userDelete" styleClass="user-delete-confirm"></p-confirmDialog>
+<p-confirmDialog key="userDelete" styleClass="app-confirm-dialog"></p-confirmDialog>
 
 <p-dialog [(visible)]="visibleRegisterDialog" [modal]="true" [position]="'right'" [dismissableMask]="true"
   [showHeader]="false" [style]="{ width: '470px', maxWidth: '100vw', height: '100vh', margin: '0' }"
@@ -24,8 +24,15 @@
 
 <div class="users-page">
   <header class="page-header">
-    <h1>Usuarios</h1>
-    <p>Gestiona cuentas de acceso, roles y estado de disponibilidad</p>
+    <div>
+      <h1>Usuarios</h1>
+      <p>Gestiona cuentas de acceso, roles y estado de disponibilidad</p>
+    </div>
+
+    <button type="button" class="btn btn-dark" (click)="openRegisterDialog()">
+      <i class="fa-solid fa-plus"></i>
+      Nuevo usuario
+    </button>
   </header>
 
   <section class="stats-grid">
@@ -42,37 +49,51 @@
     </article>
   </section>
 
-  <section class="table-card">
-    <div class="table-toolbar">
-        <label class="search-field">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="text" placeholder="Buscar usuario, nombre o correo..." [(ngModel)]="globalFilter"
+  <section class="gh-filters-card">
+    <div class="gh-filters-grid">
+      <label class="search-field search-wrap gh-search-wrap">
+        <span>Buscar</span>
+        <div class="search-control gh-search-control">
+          <i class="fa-solid fa-magnifying-glass gh-search-icon"></i>
+          <input class="gh-search-input" type="text" placeholder="Buscar usuario, nombre o correo..." [(ngModel)]="globalFilter"
             (input)="onFilterChange()" />
-          <button *ngIf="globalFilter" type="button" class="icon-btn" (click)="globalFilter=''; onFilterChange()">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </label>
+        </div>
+      </label>
 
-        <select class="tool-select" [(ngModel)]="statusFilter" (change)="onFilterChange()">
+      <label class="gh-filter-field">
+        <span>Estado</span>
+        <select class="gh-filter-select" [(ngModel)]="statusFilter" (change)="onFilterChange()">
           <option value="ALL">Todos</option>
           <option value="ACTIVE">Activos</option>
           <option value="INACTIVE">Inactivos</option>
         </select>
+      </label>
 
-        <select class="tool-select" [(ngModel)]="roleFilter" (change)="onFilterChange()">
+      <label class="gh-filter-field">
+        <span>Rol</span>
+        <select class="gh-filter-select" [(ngModel)]="roleFilter" (change)="onFilterChange()">
           <option value="ALL">Todos</option>
           <option value="WITH_ROLE">Con rol</option>
           <option value="WITHOUT_ROLE">Sin rol</option>
         </select>
-        <button type="button" class="btn btn-light" (click)="loadUsers()">
+      </label>
+    </div>
+
+    <div class="gh-filters-actions gh-filters-actions-single">
+      <div class="gh-action-group">
+        <button type="button" class="gh-btn gh-btn-light" (click)="loadUsers()">
           <i class="fa-solid fa-rotate-right"></i>
           Actualizar
         </button>
-        <button type="button" class="btn btn-dark" (click)="openRegisterDialog()">
-          <i class="fa-solid fa-plus"></i>
-          Nuevo usuario
+        <button type="button" class="gh-btn gh-btn-light" (click)="exportCsv()">
+          <i class="fa-solid fa-file-export"></i>
+          Exportar
         </button>
+      </div>
     </div>
+  </section>
+
+  <section class="table-card">
 
     <div class="table-wrap">
       <table>

@@ -114,25 +114,6 @@
 
 .search-field {
   min-width: 0;
-  border: 1px solid #d8e2ef;
-  border-radius: 11px;
-  height: 42px;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 0 12px;
-  color: #64748b;
-  background: #f8fbff;
-}
-
-.search-field input {
-  border: 0;
-  outline: 0;
-  width: 100%;
-  min-width: 0;
-  color: #1e293b;
-  background: transparent;
-  font-size: 14px;
 }
 
 .tool-select {

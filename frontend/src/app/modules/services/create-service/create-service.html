@@ -19,30 +19,45 @@
         <div class="grid two">
           <label class="full">
             <span>Nombre del servicio *</span>
-            <input type="text" formControlName="name" placeholder="Ej: Desayuno americano" />
-            <small *ngIf="name?.touched && name?.invalid">El nombre es obligatorio.</small>
+            <input type="text" formControlName="name" placeholder="Ej: Desayuno americano" [class.input-error]="name?.touched && name?.invalid" />
+            <small class="field-error" *ngIf="name?.touched && name?.hasError('required')">El nombre es obligatorio.</small>
+            <small class="field-error" *ngIf="name?.touched && name?.hasError('maxlength')">El nombre no puede superar 150 caracteres.</small>
           </label>
 
           <label>
             <span>Tipo de servicio *</span>
-            <select formControlName="service_type">
+            <select formControlName="service_type" [class.input-error]="service_type?.touched && service_type?.invalid">
               <option [ngValue]="null">Selecciona tipo</option>
               <option *ngFor="let serviceType of serviceTypes; trackBy: trackById" [ngValue]="serviceType.id">
                 {{ serviceType.name }}
               </option>
             </select>
-            <small *ngIf="service_type?.touched && service_type?.invalid">Selecciona un tipo.</small>
+            <small class="field-error" *ngIf="service_type?.touched && service_type?.invalid">Selecciona un tipo.</small>
           </label>
 
           <label>
             <span>Precio base *</span>
-            <input type="number" min="0" step="1000" formControlName="base_price" placeholder="Ej: 45000" />
-            <small *ngIf="base_price?.touched && base_price?.invalid">El precio debe ser mayor o igual a 0.</small>
+            <input
+              type="number"
+              min="0"
+              step="1000"
+              formControlName="base_price"
+              placeholder="Ej: 45000"
+              [class.input-error]="base_price?.touched && base_price?.invalid" />
+            <small class="field-error" *ngIf="base_price?.touched && base_price?.hasError('required')">El precio base es obligatorio.</small>
+            <small class="field-error" *ngIf="base_price?.touched && base_price?.hasError('min')">El precio debe ser mayor o igual a 0.</small>
           </label>
 
           <label class="full">
             <span>Descripcion</span>
-            <textarea rows="4" formControlName="description" placeholder="Describe el alcance del servicio..."></textarea>
+            <textarea
+              rows="4"
+              formControlName="description"
+              placeholder="Describe el alcance del servicio..."
+              [class.input-error]="serviceForm.get('description')?.touched && serviceForm.get('description')?.invalid"></textarea>
+            <small class="field-error" *ngIf="serviceForm.get('description')?.touched && serviceForm.get('description')?.hasError('maxlength')">
+              La descripcion no puede superar 1500 caracteres.
+            </small>
           </label>
 
           <label class="full switch-row">

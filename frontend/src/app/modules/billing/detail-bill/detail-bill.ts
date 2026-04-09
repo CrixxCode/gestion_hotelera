@@ -1,16 +1,22 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import { catchError, forkJoin, of } from 'rxjs';
+import { ConfirmationService } from 'primeng/api';
 import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
 import { BillingService } from '../../../services/billing';
 import { MasterDataService } from '../../../services/master-data.service';
+import { PackagesService } from '../../../services/package';
 import { ReservationService } from '../../../services/reservation';
 import { ServicesService } from '../../../services/service';
+import { errorActionAlert, successActionAlert } from '../../../services/action-alerts';
+import { openActionConfirmation } from '../../../services/action-confirmations';
 import { ReservationDetailI } from '../../reservations/reservation-model';
+import { PackageI } from '../../packages/package-model';
 import { ServiceI } from '../../services/service-model';
 import { CreatePayment } from '../../payments/create-payment/create-payment';
-import { ChargeI, InvoiceI, PaymentI } from '../billing-model';
+import { ChargeI, CreditNoteI, InvoiceI, PaymentI } from '../billing-model';
 import { CreateBill } from '../create-bill/create-bill';
+import { CreditNoteList } from '../credit-note/credit-note-list/credit-note-list';
 
 type ChargeGroupTone = {
   icon: string;
@@ -161,7 +167,7 @@ const PAYMENT_METHOD_TONES: Record<string, PaymentMethodTone> = {
 @Component({
   selector: 'app-detail-bill',
   standalone: true,
-  imports: [CommonModule, CreateBill, CreatePayment],
+  imports: [CommonModule, CreateBill, CreatePayment, CreditNoteList],
   templateUrl: './detail-bill.html',
   styleUrls: ['./detail-bill.css']
 })
@@ -174,6 +180,7 @@ export class DetailBill implements OnChanges {
   loading = false;
   refreshing = false;
   issuing = false;
+  printing = false;
   removingChargeId: number | null = null;
 
   errorMessage = '';
@@ -181,16 +188,20 @@ export class DetailBill implements OnChanges {
 
   showCreateChargeForm = false;
   showCreatePaymentForm = false;
+  showCreditNotesModal = false;
 
   activeInvoice: InvoiceI | null = null;
   reservation: ReservationDetailI | null = null;
   charges: ChargeI[] = [];
   payments: PaymentI[] = [];
+  creditNotes: CreditNoteI[] = [];
   groupedCharges: ChargeGroupI[] = [];
   chargeTypes: MasterDataI[] = [];
   paymentMethods: MasterDataI[] = [];
   invoiceStatuses: MasterDataI[] = [];
+  creditNoteStatuses: MasterDataI[] = [];
   services: ServiceI[] = [];
+  packages: PackageI[] = [];
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['invoice']) {
@@ -202,7 +213,9 @@ export class DetailBill implements OnChanges {
     private billingService: BillingService,
     private reservationService: ReservationService,
     private masterDataService: MasterDataService,
-    private servicesService: ServicesService
+    private servicesService: ServicesService,
+    private packagesService: PackagesService,
+    private confirmationService: ConfirmationService
   ) {}
 
   get roomBadgeLabel(): string {
@@ -251,6 +264,16 @@ export class DetailBill implements OnChanges {
   get pendingAmount(): number {
     const pending = this.totalWithTaxAmount - this.totalPaidAmount;
     return pending > 0 ? pending : 0;
+  }
+
+  get creditNotesCount(): number {
+    return this.creditNotes.filter((note) => !!note.is_active).length;
+  }
+
+  get creditNotesTotal(): number {
+    return this.creditNotes
+      .filter((note) => !!note.is_active)
+      .reduce((sum, note) => sum + this.toNumber(note.amount), 0);
   }
 
   get canRegisterPayments(): boolean {
@@ -339,13 +362,28 @@ export class DetailBill implements OnChanges {
     this.errorMessage = '';
   }
 
+  openCreditNotesModal(): void {
+    if (!this.activeInvoice) return;
+    this.showCreditNotesModal = true;
+    this.errorMessage = '';
+  }
+
+  closeCreditNotesModal(): void {
+    this.showCreditNotesModal = false;
+  }
+
+  onCreditNotesChanged(): void {
+    this.infoMessage = successActionAlert('update', 'notas de credito');
+    this.refreshInvoiceData();
+  }
+
   onChargeCreated(): void {
-    this.infoMessage = 'Cargo registrado y factura actualizada.';
+    this.infoMessage = successActionAlert('register', 'cargo');
     this.refreshInvoiceData();
   }
 
   onPaymentCreated(): void {
-    this.infoMessage = 'Pago registrado y factura actualizada.';
+    this.infoMessage = successActionAlert('register', 'pago');
     this.showCreatePaymentForm = false;
     this.refreshInvoiceData();
   }
@@ -360,22 +398,26 @@ export class DetailBill implements OnChanges {
 
   deactivateCharge(charge: ChargeI): void {
     if (charge.is_automatic) return;
-    const confirmed = window.confirm('Deseas retirar este cargo de la factura?');
-    if (!confirmed) return;
 
-    this.removingChargeId = charge.id;
-    this.errorMessage = '';
-    this.infoMessage = '';
+    openActionConfirmation(this.confirmationService, {
+      action: 'remove',
+      target: 'cargo de la factura',
+      onAccept: () => {
+        this.removingChargeId = charge.id;
+        this.errorMessage = '';
+        this.infoMessage = '';
 
-    this.billingService.updateCharge(charge.id, { is_active: false }).subscribe({
-      next: () => {
-        this.removingChargeId = null;
-        this.infoMessage = 'Cargo retirado correctamente.';
-        this.refreshInvoiceData();
-      },
-      error: (error) => {
-        this.removingChargeId = null;
-        this.errorMessage = this.extractErrorMessage(error, 'No fue posible retirar el cargo seleccionado.');
+        this.billingService.updateCharge(charge.id, { is_active: false }).subscribe({
+          next: () => {
+            this.removingChargeId = null;
+            this.infoMessage = successActionAlert('remove', 'cargo');
+            this.refreshInvoiceData();
+          },
+          error: (error) => {
+            this.removingChargeId = null;
+            this.errorMessage = this.extractErrorMessage(error, errorActionAlert('remove', 'cargo'));
+          }
+        });
       }
     });
   }
@@ -408,7 +450,32 @@ export class DetailBill implements OnChanges {
   }
 
   printInvoice(): void {
-    window.print();
+    if (!this.activeInvoice || this.printing) return;
+    const invoice = this.activeInvoice;
+
+    this.printing = true;
+    this.errorMessage = '';
+    this.infoMessage = '';
+
+    this.billingService.downloadInvoicePdf(invoice.id).subscribe({
+      next: (blob) => {
+        this.printing = false;
+
+        const fileName = this.buildPdfFileName(invoice);
+        const objectUrl = window.URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = objectUrl;
+        anchor.download = fileName;
+        anchor.click();
+        window.URL.revokeObjectURL(objectUrl);
+
+        this.infoMessage = 'Factura PDF generada correctamente.';
+      },
+      error: (error) => {
+        this.printing = false;
+        this.errorMessage = this.extractErrorMessage(error, 'No fue posible generar el PDF de la factura.');
+      }
+    });
   }
 
   getGroupTone(group: ChargeGroupI): ChargeGroupTone {
@@ -480,7 +547,9 @@ export class DetailBill implements OnChanges {
       this.reservation = null;
       this.charges = [];
       this.payments = [];
+      this.creditNotes = [];
       this.groupedCharges = [];
+      this.packages = [];
       return;
     }
 
@@ -493,6 +562,7 @@ export class DetailBill implements OnChanges {
     this.infoMessage = '';
     this.showCreateChargeForm = false;
     this.showCreatePaymentForm = false;
+    this.showCreditNotesModal = false;
 
     forkJoin({
       invoice: this.billingService.getInvoiceById(invoiceId).pipe(catchError(() => of(this.invoice as InvoiceI))),
@@ -509,23 +579,47 @@ export class DetailBill implements OnChanges {
       paymentMethods: this.masterDataService
         .listMasterData({ group: 'PAYMENT_METHOD', is_active: 'true', ordering: 'sort_order,name' })
         .pipe(catchError(() => of([] as MasterDataI[]))),
+      creditNoteStatuses: this.masterDataService
+        .listMasterData({ group: 'CREDIT_NOTE_STATUS', is_active: 'true', ordering: 'sort_order,name' })
+        .pipe(catchError(() => of([] as MasterDataI[]))),
       payments: this.billingService
         .listPayments({ invoice: invoiceId, ordering: '-payment_date,-id', is_active: true })
         .pipe(catchError(() => of([] as PaymentI[]))),
+      creditNotes: this.billingService
+        .listCreditNotes({ invoice: invoiceId, ordering: '-issue_date,-id' })
+        .pipe(catchError(() => of([] as CreditNoteI[]))),
       services: this.servicesService
         .listServices({ ordering: 'name' })
-        .pipe(catchError(() => of([] as ServiceI[])))
+        .pipe(catchError(() => of([] as ServiceI[]))),
+      packages: this.packagesService
+        .listPackages({ ordering: 'name' })
+        .pipe(catchError(() => of([] as PackageI[])))
     }).subscribe({
-      next: ({ invoice, reservation, charges, chargeTypes, invoiceStatuses, paymentMethods, payments, services }) => {
+      next: ({
+        invoice,
+        reservation,
+        charges,
+        chargeTypes,
+        invoiceStatuses,
+        paymentMethods,
+        creditNoteStatuses,
+        payments,
+        creditNotes,
+        services,
+        packages
+      }) => {
         this.loading = false;
         this.activeInvoice = invoice;
         this.reservation = reservation;
         this.chargeTypes = chargeTypes;
         this.invoiceStatuses = invoiceStatuses;
         this.paymentMethods = paymentMethods;
+        this.creditNoteStatuses = creditNoteStatuses;
         this.services = services.filter((service) => !!service.is_active);
+        this.packages = packages.filter((pkg) => !!pkg.is_active);
         this.setChargeRows(charges);
         this.setPaymentRows(payments);
+        this.setCreditNoteRows(creditNotes);
       },
       error: () => {
         this.loading = false;
@@ -555,14 +649,21 @@ export class DetailBill implements OnChanges {
           ordering: '-payment_date,-id',
           is_active: true
         })
-        .pipe(catchError(() => of([] as PaymentI[])))
+        .pipe(catchError(() => of([] as PaymentI[]))),
+      creditNotes: this.billingService
+        .listCreditNotes({
+          invoice: this.activeInvoice.id,
+          ordering: '-issue_date,-id'
+        })
+        .pipe(catchError(() => of([] as CreditNoteI[])))
     }).subscribe({
-      next: ({ invoice, charges, payments }) => {
+      next: ({ invoice, charges, payments, creditNotes }) => {
         this.refreshing = false;
         this.activeInvoice = invoice;
         this.invoiceUpdated.emit(invoice);
         this.setChargeRows(charges);
         this.setPaymentRows(payments);
+        this.setCreditNoteRows(creditNotes);
       },
       error: () => {
         this.refreshing = false;
@@ -588,6 +689,12 @@ export class DetailBill implements OnChanges {
       .filter((payment) => !!payment.is_active);
 
     this.payments = filtered.sort((a, b) => b.id - a.id);
+  }
+
+  private setCreditNoteRows(creditNotes: CreditNoteI[]): void {
+    const invoiceId = Number(this.activeInvoice?.id || 0);
+    const filtered = creditNotes.filter((creditNote) => Number(creditNote.invoice) === invoiceId);
+    this.creditNotes = filtered.sort((a, b) => b.id - a.id);
   }
 
   private buildChargeGroups(charges: ChargeI[]): ChargeGroupI[] {
@@ -703,6 +810,12 @@ export class DetailBill implements OnChanges {
   private toNumber(value: unknown): number {
     const parsed = Number(value || 0);
     return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  private buildPdfFileName(invoice: InvoiceI): string {
+    const base = String(invoice.invoice_number || `FAC-${invoice.id}` || 'factura').trim();
+    const safe = base.replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
+    return `${safe || `FAC-${invoice.id}`}.pdf`;
   }
 
   private normalizeCode(value: unknown): string {

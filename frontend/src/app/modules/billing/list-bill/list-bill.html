@@ -4,11 +4,6 @@
       <h1>Facturacion</h1>
       <p>Control de facturas por reserva, consumos y cierre de cuenta.</p>
     </div>
-
-    <button type="button" class="btn btn-light" (click)="refreshBillingData()" [disabled]="loading">
-      <i class="fa-solid fa-rotate-right"></i>
-      Actualizar
-    </button>
   </header>
 
   <section class="stats-grid">
@@ -49,25 +44,49 @@
     </article>
   </section>
 
-  <section class="toolbar-card">
-    <label class="search-field">
-      <i class="fa-solid fa-magnifying-glass"></i>
-      <input
-        type="text"
-        [(ngModel)]="search"
-        (input)="applyFilters()"
-        placeholder="Buscar por factura, reserva, huesped o documento..." />
-    </label>
+  <section class="gh-filters-card">
+    <div class="gh-filters-grid">
+      <label class="search-field search-wrap gh-search-wrap">
+        <span>Buscar</span>
+        <div class="search-control gh-search-control">
+          <i class="fa-solid fa-magnifying-glass gh-search-icon"></i>
+          <input
+            class="gh-search-input"
+            type="text"
+            [(ngModel)]="search"
+            (input)="applyFilters()"
+            placeholder="Buscar por factura, reserva, huesped o documento..." />
+        </div>
+      </label>
 
-    <select class="tool-select" [(ngModel)]="statusFilter" (change)="applyFilters()">
-      <option *ngFor="let option of statusOptions" [ngValue]="option.value">{{ option.label }}</option>
-    </select>
+      <label class="gh-filter-field">
+        <span>Estado</span>
+        <select class="gh-filter-select" [(ngModel)]="statusFilter" (change)="applyFilters()">
+          <option *ngFor="let option of statusOptions" [ngValue]="option.value">{{ option.label }}</option>
+        </select>
+      </label>
 
-    <select class="tool-select" [(ngModel)]="activityFilter" (change)="applyFilters()">
-      <option *ngFor="let option of activityOptions" [ngValue]="option.value">{{ option.label }}</option>
-    </select>
+      <label class="gh-filter-field">
+        <span>Actividad</span>
+        <select class="gh-filter-select" [(ngModel)]="activityFilter" (change)="applyFilters()">
+          <option *ngFor="let option of activityOptions" [ngValue]="option.value">{{ option.label }}</option>
+        </select>
+      </label>
+    </div>
 
-    <span class="total-chip">{{ filteredInvoices.length }} visibles</span>
+    <div class="gh-filters-actions gh-filters-actions-single">
+      <div class="gh-action-group">
+        <button type="button" class="gh-btn gh-btn-light" (click)="refreshBillingData()" [disabled]="loading">
+          <i class="fa-solid fa-rotate-right"></i>
+          Actualizar
+        </button>
+
+        <button type="button" class="gh-btn gh-btn-light" (click)="exportCsv()">
+          <i class="fa-solid fa-file-export"></i>
+          Exportar
+        </button>
+      </div>
+    </div>
   </section>
 
   <section class="state-message" *ngIf="loading || errorMessage || infoMessage || filteredInvoices.length === 0">

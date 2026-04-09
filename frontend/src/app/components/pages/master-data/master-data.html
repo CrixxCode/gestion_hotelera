@@ -60,16 +60,11 @@
   </section>
 
   <div class="card filters">
-    <label class="field search-field">
+    <label class="search-field search-wrap gh-search-wrap">
       <span>Buscar</span>
-      <div class="search">
-        <i class="fa-solid fa-magnifying-glass"></i>
-        <input [(ngModel)]="search" (input)="applyFilters()" placeholder="Codigo, nombre o descripcion..." />
-        @if (search) {
-          <button class="icon-btn" (click)="search=''; applyFilters()">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        }
+      <div class="search-control gh-search-control">
+        <i class="fa-solid fa-magnifying-glass gh-search-icon"></i>
+        <input class="gh-search-input" type="text" [(ngModel)]="search" (input)="applyFilters()" placeholder="Codigo, nombre o descripcion..." />
       </div>
     </label>
 
@@ -254,20 +249,6 @@
         <button class="btn primary" [disabled]="saving" (click)="save()">
           {{ saving ? 'Guardando...' : (isEditing ? 'Guardar cambios' : 'Crear valor') }}
         </button>
-      </div>
-    </div>
-  }
-
-  @if (showDeleteConfirm) {
-    <div class="overlay" (click)="showDeleteConfirm=false; deleteTarget=null"></div>
-    <div class="confirm" (click)="$event.stopPropagation()">
-      <div class="c-title">Eliminar valor</div>
-      <div class="c-sub">
-        Se eliminara <b>{{ deleteTarget?.code }}</b> del grupo <b>{{ deleteTarget?.group }}</b>. Si esta en uso, el sistema bloqueara la accion.
-      </div>
-      <div class="c-actions">
-        <button class="btn ghost" (click)="showDeleteConfirm=false; deleteTarget=null">Cancelar</button>
-        <button class="btn danger" (click)="confirmDelete()">Eliminar</button>
       </div>
     </div>
   }

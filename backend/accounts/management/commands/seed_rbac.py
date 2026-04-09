@@ -12,7 +12,7 @@ Usage:
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
-from accounts.models import Resource, Role
+from accounts.models import Resource, Role, RoleResource
 
 User = get_user_model()
 
@@ -150,6 +150,46 @@ RESOURCES = [
         None,
     ),
     (
+        "expenses.read",
+        "Egresos",
+        "pi pi-wallet",
+        "/egresos",
+        "/api/expenses/",
+        True,
+        8,
+        None,
+    ),
+    (
+        "expenses.write",
+        "Gestionar egresos",
+        "",
+        "",
+        "/api/expenses/",
+        False,
+        0,
+        None,
+    ),
+    (
+        "financial_control.read",
+        "Control financiero",
+        "pi pi-chart-line",
+        "/control-financiero",
+        "/api/financial-control/",
+        True,
+        9,
+        None,
+    ),
+    (
+        "financial_control.write",
+        "Gestionar control financiero",
+        "",
+        "",
+        "/api/financial-control/",
+        False,
+        0,
+        None,
+    ),
+    (
         "auth.password.change",
         "Cambiar contrasena",
         "pi pi-key",
@@ -180,6 +220,10 @@ ROLES = {
             "master_data.write",
             "amenities.read",
             "amenities.write",
+            "expenses.read",
+            "expenses.write",
+            "financial_control.read",
+            "financial_control.write",
             "auth.password.change",
         ],
     },
@@ -194,6 +238,8 @@ ROLES = {
             "resources.read",
             "master_data.read",
             "amenities.read",
+            "expenses.read",
+            "financial_control.read",
             "auth.password.change",
         ],
     },
@@ -256,6 +302,7 @@ class Command(BaseCommand):
                     "is_menu": is_menu,
                     "order": order,
                     "parent": parent,
+                    "is_active": True,
                 },
             )
             created_map[key] = obj
@@ -271,10 +318,21 @@ class Command(BaseCommand):
                 defaults={
                     "name": data["name"],
                     "description": data["description"],
+                    "is_active": True,
                 },
             )
-            resources = list(Resource.objects.filter(key__in=data["keys"]))
-            role.resources.set(resources)
+            resources = list(Resource.objects.filter(key__in=data["keys"], is_active=True))
+
+            RoleResource.objects.filter(role=role).update(is_active=False)
+            for resource in resources:
+                link, link_created = RoleResource.objects.get_or_create(
+                    role=role,
+                    resource=resource,
+                    defaults={"is_active": True},
+                )
+                if not link_created and not link.is_active:
+                    link.is_active = True
+                    link.save(update_fields=["is_active"])
 
             verb = "CREATED" if created else "updated"
             self.stdout.write(f"      {verb} -> {slug} ({len(resources)} resources)")

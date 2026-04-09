@@ -5,6 +5,7 @@ import { provideAnimationsAsync } from '@angular/platform-browser/animations/asy
 import { providePrimeNG } from 'primeng/config';
 import Lara from '@primeuix/themes/lara';
 import { provideHttpClient, withXsrfConfiguration } from '@angular/common/http';
+import { ConfirmationService } from 'primeng/api';
 
 // ✅ PrimeNG modules para notificaciones y confirmaciones
 import { ToastModule } from 'primeng/toast';
@@ -27,6 +28,7 @@ export const appConfig: ApplicationConfig = {
         headerName: 'X-CSRFToken'
       })
     ),
+    ConfirmationService,
 
     // Tema PrimeNG (Aura)
     providePrimeNG({

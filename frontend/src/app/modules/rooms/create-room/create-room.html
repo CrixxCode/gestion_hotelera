@@ -19,19 +19,20 @@
         <div class="grid two">
           <label>
             <span>Número *</span>
-            <input type="text" formControlName="number" placeholder="Ej: 101" />
-            <small *ngIf="number?.touched && number?.invalid">El número es obligatorio.</small>
+            <input type="text" formControlName="number" placeholder="Ej: 101" [class.input-error]="number?.touched && number?.invalid" />
+            <small class="field-error" *ngIf="number?.touched && number?.hasError('required')">El numero es obligatorio.</small>
+            <small class="field-error" *ngIf="number?.touched && number?.hasError('maxlength')">El numero no puede superar 20 caracteres.</small>
           </label>
 
           <label>
             <span>Piso *</span>
-            <select formControlName="floor">
+            <select formControlName="floor" [class.input-error]="floor?.touched && floor?.invalid">
               <option [ngValue]="null">Selecciona piso</option>
               <option *ngFor="let floorItem of floors; trackBy: trackById" [ngValue]="floorItem.id">
                 {{ floorItem.name }} (Piso {{ floorItem.floor_number }})
               </option>
             </select>
-            <small *ngIf="floor?.touched && floor?.invalid">Selecciona un piso.</small>
+            <small class="field-error" *ngIf="floor?.touched && floor?.invalid">Selecciona un piso.</small>
           </label>
 
           <label>
@@ -53,7 +54,14 @@
 
           <label class="full">
             <span>Notas internas</span>
-            <textarea rows="4" formControlName="notes" placeholder="Observaciones operativas de la habitación..."></textarea>
+            <textarea
+              rows="4"
+              formControlName="notes"
+              placeholder="Observaciones operativas de la habitacion..."
+              [class.input-error]="roomForm.get('notes')?.touched && roomForm.get('notes')?.invalid"></textarea>
+            <small class="field-error" *ngIf="roomForm.get('notes')?.touched && roomForm.get('notes')?.hasError('maxlength')">
+              Las notas no pueden superar 800 caracteres.
+            </small>
           </label>
         </div>
       </section>
@@ -86,3 +94,4 @@
     </form>
   </article>
 </div>
+

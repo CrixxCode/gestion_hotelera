@@ -154,6 +154,47 @@ export class ListPayments implements OnInit {
     this.loadPaymentsData();
   }
 
+  exportCsv(): void {
+    if (!this.filteredPayments.length) return;
+
+    const headers = [
+      'factura',
+      'reserva',
+      'huesped',
+      'documento',
+      'metodo',
+      'referencia',
+      'fecha_pago',
+      'monto',
+      'estado'
+    ];
+
+    const rows = this.filteredPayments.map((payment) => {
+      const row = [
+        this.getInvoiceNumber(payment),
+        this.getReservationCode(payment),
+        this.getGuestLabel(payment),
+        this.getGuestDocument(payment),
+        this.getMethodLabel(payment),
+        payment.reference || '',
+        this.getPaymentDateLabel(payment),
+        this.toNumber(payment.amount),
+        payment.is_active ? 'Activo' : 'Inactivo'
+      ];
+
+      return row.map((cell) => this.escapeCsvCell(cell)).join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `pagos-${this.formatFileDate(new Date())}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   applyFilters(): void {
     const query = String(this.search || '').trim().toLowerCase();
 
@@ -328,5 +369,18 @@ export class ListPayments implements OnInit {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^A-Z0-9]/g, '');
+  }
+
+  private formatFileDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+    return `${year}${month}${day}`;
+  }
+
+  private escapeCsvCell(value: unknown): string {
+    const normalized = String(value ?? '');
+    const escaped = normalized.replace(/"/g, '""');
+    return `"${escaped}"`;
   }
 }

@@ -202,29 +202,6 @@
   font-size: 13px;
 }
 
-.search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 10px;
-  border: 1px solid #d7deea;
-  border-radius: 12px;
-  background: #f9fbff;
-}
-
-.search i {
-  color: #8a94a6;
-}
-
-.search input {
-  border: 0;
-  outline: 0;
-  width: 100%;
-  font-size: 14px;
-  color: #334155;
-  background: transparent;
-}
-
 .input {
   width: 100%;
   padding: 10px 12px;

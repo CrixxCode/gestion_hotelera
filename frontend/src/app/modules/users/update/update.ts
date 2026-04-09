@@ -3,6 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { UserI } from '../user-model';
 import { UserService } from '../../../services/user';
+import { MessageService } from 'primeng/api';
+import {
+  ACTION_ALERT_ERROR_SUMMARY,
+  errorActionAlert
+} from '../../../services/action-alerts';
 
 @Component({
   selector: 'app-user-update',
@@ -20,7 +25,11 @@ export class UserUpdate implements OnChanges {
   avatarPreview: string | ArrayBuffer | null = null;
   avatarFile: File | null = null;
 
-  constructor(private fb: FormBuilder, private userService: UserService) {
+  constructor(
+    private fb: FormBuilder,
+    private userService: UserService,
+    private messageService: MessageService
+  ) {
     this.form = this.fb.group({
       first_name: ['', Validators.required],
       last_name: ['', Validators.required],
@@ -52,7 +61,12 @@ export class UserUpdate implements OnChanges {
   }
 
   onSubmit(): void {
-    if (this.form.invalid || !this.user?.id) return;
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    if (!this.user?.id) return;
 
     const statusValue = this.form.value.status === 'ACTIVE';
     const updatedUser: UserI = {
@@ -67,7 +81,12 @@ export class UserUpdate implements OnChanges {
         this.close.emit();
       },
       error: () => {
-        alert('Error al actualizar el usuario.');
+        this.messageService.add({
+          severity: 'error',
+          summary: ACTION_ALERT_ERROR_SUMMARY,
+          detail: errorActionAlert('update', 'usuario'),
+          life: 3000
+        });
       }
     });
   }

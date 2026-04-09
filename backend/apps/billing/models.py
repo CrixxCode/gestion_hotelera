@@ -214,3 +214,56 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"Payment #{self.id} - Invoice {self.invoice.invoice_number}"
+
+class CreditNote(models.Model):
+    invoice = models.ForeignKey(
+        "billing.Invoice",
+        on_delete=models.CASCADE,
+        related_name="credit_notes",
+    )
+    status = models.ForeignKey(
+        MasterData,
+        on_delete=models.PROTECT,
+        related_name="credit_notes_by_status",
+        limit_choices_to={"group": MasterData.Group.CREDIT_NOTE_STATUS},
+    )
+    credit_note_number = models.CharField(max_length=50, unique=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    reason = models.TextField()
+    issue_date = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "credit_note"
+        ordering = ["-id"]
+
+    @property
+    def status_code(self):
+        return self.status.code if self.status else None
+
+    def clean(self):
+        errors = {}
+
+        if self.amount is not None and self.amount <= 0:
+            errors["amount"] = "Credit note amount must be greater than 0."
+
+        if self.invoice and self.amount:
+            total_active_credit_notes = sum(
+                note.amount
+                for note in self.invoice.credit_notes.filter(is_active=True).exclude(pk=self.pk)
+            )
+
+            max_credit_available = self.invoice.total_amount - total_active_credit_notes
+
+            if self.amount > max_credit_available:
+                errors["amount"] = "Credit note amount cannot be greater than the available invoice balance."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"Credit Note {self.credit_note_number} - Invoice {self.invoice.invoice_number}"

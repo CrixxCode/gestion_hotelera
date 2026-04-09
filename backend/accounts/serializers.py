@@ -40,11 +40,23 @@ class ResourceSerializer(serializers.ModelSerializer):
 
 
 class RoleSerializer(serializers.ModelSerializer):
-    resources = ResourceSerializer(many=True, read_only=True)
+    resources = serializers.SerializerMethodField()
 
     class Meta:
         model = Role
         fields = ["id", "name", "slug", "description", "resources"]
+
+    def get_resources(self, obj):
+        qs = (
+            Resource.objects.filter(
+                is_active=True,
+                roleresource__role=obj,
+                roleresource__is_active=True,
+            )
+            .distinct()
+            .order_by("order", "name", "key")
+        )
+        return ResourceSerializer(qs, many=True).data
 
 
 class UserMiniSerializer(serializers.ModelSerializer):
@@ -57,7 +69,7 @@ class UserMiniSerializer(serializers.ModelSerializer):
 # -----------------------------
 
 class UserSerializer(serializers.ModelSerializer):
-    roles = RoleSerializer(many=True, read_only=True)
+    roles = serializers.SerializerMethodField()
     resource_keys = serializers.SerializerMethodField()
     menu = serializers.SerializerMethodField()
 
@@ -80,6 +92,18 @@ class UserSerializer(serializers.ModelSerializer):
     def get_resource_keys(self, obj):
         return sorted(list(obj.resource_keys()))
 
+    def get_roles(self, obj):
+        qs = (
+            Role.objects.filter(
+                is_active=True,
+                userrole__user=obj,
+                userrole__is_active=True,
+            )
+            .distinct()
+            .order_by("name")
+        )
+        return RoleSerializer(qs, many=True).data
+
     def get_menu(self, obj):
         """
         Devuelve el menú dinámico basado en los Resources del usuario.
@@ -92,7 +116,14 @@ class UserSerializer(serializers.ModelSerializer):
         # 1) Recursos asignados al usuario (solo los que se muestran en menú)
         assigned_qs = (
             Resource.objects
-            .filter(roles__users=obj, is_menu=True)
+            .filter(
+                is_active=True,
+                is_menu=True,
+                roleresource__is_active=True,
+                roleresource__role__is_active=True,
+                roleresource__role__userrole__user=obj,
+                roleresource__role__userrole__is_active=True,
+            )
             .distinct()
             .select_related("parent")
         )
@@ -112,7 +143,7 @@ class UserSerializer(serializers.ModelSerializer):
             if not missing:
                 break
             parents = list(
-                Resource.objects.filter(id__in=missing, is_menu=True)
+                Resource.objects.filter(id__in=missing, is_menu=True, is_active=True)
                 .select_related("parent")
             )
             if not parents:
@@ -125,7 +156,7 @@ class UserSerializer(serializers.ModelSerializer):
         # 3) Traer todos los recursos del menú (asignados + padres)
         resources = list(
             Resource.objects
-            .filter(id__in=ids, is_menu=True)
+            .filter(id__in=ids, is_menu=True, is_active=True)
             .select_related("parent")
             .order_by("order", "name")
         )

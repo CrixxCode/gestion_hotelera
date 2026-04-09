@@ -2,10 +2,12 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { catchError, forkJoin, of } from 'rxjs';
+import { ConfirmationService } from 'primeng/api';
 import { HotelSettingsService } from '../../../services/hotel-settings';
 import { MasterDataService } from '../../../services/master-data.service';
 import { ServicesService } from '../../../services/service';
 import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
+import { openActionConfirmation } from '../../../services/action-confirmations';
 import { CreateService } from '../create-service/create-service';
 import { DetailService } from '../detail-service/detail-service';
 import { ServiceI } from '../service-model';
@@ -156,7 +158,8 @@ export class ListServices implements OnInit {
   constructor(
     private servicesService: ServicesService,
     private masterDataService: MasterDataService,
-    private hotelSettingsService: HotelSettingsService
+    private hotelSettingsService: HotelSettingsService,
+    private confirmationService: ConfirmationService
   ) {}
 
   ngOnInit(): void {
@@ -265,6 +268,34 @@ export class ListServices implements OnInit {
     });
   }
 
+  exportCsv(): void {
+    if (!this.filteredServices.length) return;
+
+    const headers = ['nombre', 'descripcion', 'tipo', 'precio_base', 'unidad', 'estado'];
+
+    const rows = this.filteredServices.map((service) => {
+      const row = [
+        service.name || '',
+        this.getServiceDescription(service),
+        this.getServiceTypeLabel(service),
+        this.toPriceNumber(service.base_price),
+        this.getUnitLabel(service),
+        service.is_active ? 'Activo' : 'Inactivo'
+      ];
+
+      return row.map((cell) => this.escapeCsvCell(cell)).join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `servicios-${this.formatFileDate(new Date())}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   applyFilters(): void {
     const searchValue = this.normalizeSearch(this.search);
 
@@ -364,22 +395,25 @@ export class ListServices implements OnInit {
   }
 
   confirmDelete(service: ServiceI): void {
-    const confirmed = window.confirm(`Deseas eliminar "${service.name}" del catalogo?`);
-    if (!confirmed) return;
-
-    this.errorMessage = '';
-    this.servicesService.deleteService(service.id).subscribe({
-      next: () => {
-        if (this.selectedService?.id === service.id) {
-          this.closeDetail();
-        }
-        if (this.serviceToEdit?.id === service.id) {
-          this.closeUpdateDrawer();
-        }
-        this.refreshServices();
-      },
-      error: () => {
-        this.errorMessage = 'No fue posible eliminar el servicio seleccionado.';
+    openActionConfirmation(this.confirmationService, {
+      action: 'delete',
+      target: service.name || 'servicio',
+      onAccept: () => {
+        this.errorMessage = '';
+        this.servicesService.deleteService(service.id).subscribe({
+          next: () => {
+            if (this.selectedService?.id === service.id) {
+              this.closeDetail();
+            }
+            if (this.serviceToEdit?.id === service.id) {
+              this.closeUpdateDrawer();
+            }
+            this.refreshServices();
+          },
+          error: () => {
+            this.errorMessage = 'No fue posible eliminar el servicio seleccionado.';
+          }
+        });
       }
     });
   }
@@ -614,5 +648,18 @@ export class ListServices implements OnInit {
 
   private normalizeSearch(value: string): string {
     return String(value || '').trim().toLowerCase();
+  }
+
+  private formatFileDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+    return `${year}${month}${day}`;
+  }
+
+  private escapeCsvCell(value: unknown): string {
+    const normalized = String(value ?? '');
+    const escaped = normalized.replace(/"/g, '""');
+    return `"${escaped}"`;
   }
 }

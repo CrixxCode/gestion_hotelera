@@ -60,6 +60,12 @@ select:focus {
   gap: 10px;
 }
 
+.row-auto {
+  display: grid;
+  grid-template-columns: 180px;
+  justify-content: end;
+}
+
 .btn {
   height: 40px;
   border-radius: 11px;
@@ -117,8 +123,12 @@ select:focus {
     grid-template-columns: 1fr;
   }
 
+  .row-auto {
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
   .btn-close {
     width: 100%;
   }
 }
-

@@ -1,0 +1,152 @@
+:host {
+  display: block;
+}
+
+.credit-note-form-card {
+  border: 1px solid #d7dfeb;
+  border-radius: 14px;
+  background: #f7f9fd;
+  padding: 14px;
+}
+
+.form-head {
+  margin-bottom: 10px;
+}
+
+.form-head h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.form-head p {
+  margin: 4px 0 0;
+  color: #6b7e98;
+  font-size: 12px;
+}
+
+.credit-note-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row-main {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr) 160px;
+  gap: 10px;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+label span {
+  color: #5b6f8e;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+select,
+input,
+textarea {
+  border: 1px solid #ced9e8;
+  border-radius: 11px;
+  color: #1e293b;
+  background: #ffffff;
+  outline: 0;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+select,
+input {
+  height: 40px;
+  padding: 0 10px;
+}
+
+textarea {
+  padding: 10px;
+  resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn {
+  min-height: 40px;
+  border-radius: 11px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+}
+
+.btn-dark {
+  background: #0f1f41;
+  color: #f0c660;
+}
+
+.btn-light {
+  background: #ffffff;
+  border-color: #d7dfeb;
+  color: #334155;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.feedback {
+  margin: 10px 0 0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.feedback.error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.feedback.hint {
+  background: #ecfdf5;
+  color: #0f766e;
+}
+
+@media (max-width: 920px) {
+  .row-main {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    justify-content: stretch;
+    gap: 10px;
+  }
+
+  .form-actions .btn {
+    flex: 1;
+  }
+}

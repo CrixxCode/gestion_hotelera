@@ -1,4 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { CreatePayment } from './create-payment';
 
@@ -8,7 +10,11 @@ describe('CreatePayment', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [CreatePayment]
+      imports: [CreatePayment],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting()
+      ]
     })
     .compileComponents();
 

@@ -3,8 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.permissions import HasResourcePermission
-from apps.master_data.models import MasterData
-from .models import Rate, Amenity, Room, MaintenanceOrder, CleaningTask
+from accounts.soft_delete import LogicalDeleteViewSetMixin
+from .models import Rate, Amenity, Room, MaintenanceOrder, CleaningTask, RoomType
 from .serializers import (
     RoomTypeSerializer,
     RateSerializer,
@@ -16,16 +16,16 @@ from .serializers import (
 )
 
 
-class RoomTypeViewSet(viewsets.ModelViewSet):
-    queryset = MasterData.objects.filter(group=MasterData.Group.ROOM_TYPE).order_by("name")
+class RoomTypeViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+    queryset = RoomType.objects.all().order_by("sort_order", "name")
     serializer_class = RoomTypeSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
     required_scopes = ["room_type.read"]
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["code", "name", "description"]
-    ordering_fields = ["id", "code", "name", "sort_order", "created_at"]
+    search_fields = ["code", "name", "description", "bed_type"]
+    ordering_fields = ["id", "code", "name", "sort_order", "capacity", "bed_count", "created_at"]
     ordering = ["sort_order", "name"]
 
     def get_required_scopes(self):
@@ -37,17 +37,7 @@ class RoomTypeViewSet(viewsets.ModelViewSet):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
-    def get_queryset(self):
-        return super().get_queryset().filter(group=MasterData.Group.ROOM_TYPE)
-
-    def perform_create(self, serializer):
-        serializer.save()
-
-    def perform_update(self, serializer):
-        serializer.save()
-
-
-class RateViewSet(viewsets.ModelViewSet):
+class RateViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = Rate.objects.select_related("room_type").all().order_by("-created_at")
     serializer_class = RateSerializer
     pagination_class = None
@@ -69,7 +59,7 @@ class RateViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
 
-class AmenityViewSet(viewsets.ModelViewSet):
+class AmenityViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = Amenity.objects.all().order_by("name")
     serializer_class = AmenitySerializer
     pagination_class = None
@@ -91,7 +81,7 @@ class AmenityViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
 
-class RoomViewSet(viewsets.ModelViewSet):
+class RoomViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         Room.objects.select_related("room_type", "floor", "status")
         .prefetch_related(
@@ -155,7 +145,7 @@ class RoomViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-class MaintenanceOrderViewSet(viewsets.ModelViewSet):
+class MaintenanceOrderViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = MaintenanceOrder.objects.select_related("room", "priority", "status").all().order_by("-reported_at")
     serializer_class = MaintenanceOrderSerializer
     pagination_class = None
@@ -185,7 +175,7 @@ class MaintenanceOrderViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
 
-class CleaningTaskViewSet(viewsets.ModelViewSet):
+class CleaningTaskViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = CleaningTask.objects.select_related("room", "task_type", "status").all().order_by("-created_at")
     serializer_class = CleaningTaskSerializer
     pagination_class = None

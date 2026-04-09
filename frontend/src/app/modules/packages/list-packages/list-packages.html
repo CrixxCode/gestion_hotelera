@@ -49,46 +49,51 @@
     </article>
   </section>
 
-  <section class="toolbar-card">
-    <label class="search-field">
-      <i class="fa-solid fa-magnifying-glass"></i>
-      <input
-        type="text"
-        [(ngModel)]="search"
-        (input)="applyFilters()"
-        placeholder="Buscar paquete, descripcion o servicio..."
-      />
-    </label>
+  <section class="gh-filters-card">
+    <div class="gh-filters-grid">
+      <label class="search-field search-wrap gh-search-wrap">
+        <span>Buscar</span>
+        <div class="search-control gh-search-control">
+          <i class="fa-solid fa-magnifying-glass gh-search-icon"></i>
+          <input
+            class="gh-search-input"
+            type="text"
+            [(ngModel)]="search"
+            (input)="applyFilters()"
+            placeholder="Buscar paquete, descripcion o servicio..."
+          />
+        </div>
+      </label>
 
-    <div class="status-filters">
-      <button
-        *ngFor="let statusOption of statusOptions"
-        type="button"
-        [class.active]="statusFilter === statusOption.value"
-        (click)="statusFilter = statusOption.value; applyFilters()">
-        {{ statusOption.label }}
-      </button>
+      <label class="gh-filter-field">
+        <span>Estado</span>
+        <select class="gh-filter-select" [(ngModel)]="statusFilter" (change)="applyFilters()">
+          <option *ngFor="let statusOption of statusOptions" [ngValue]="statusOption.value">{{ statusOption.label }}</option>
+        </select>
+      </label>
+
+      <label class="gh-filter-field">
+        <span>Categoria</span>
+        <select class="gh-filter-select" [(ngModel)]="selectedCategoryFilter" (change)="applyFilters()">
+          <option *ngFor="let tab of categoryTabs; trackBy: trackByTab" [value]="tab.key">{{ tab.label }}</option>
+        </select>
+      </label>
     </div>
 
-    <button type="button" class="btn btn-light" (click)="refreshPackages()" [disabled]="loading">
-      <i class="fa-solid fa-rotate-right"></i>
-      Actualizar
-    </button>
+    <div class="gh-filters-actions gh-filters-actions-single">
+      <div class="gh-action-group">
+        <button type="button" class="gh-btn gh-btn-light" (click)="refreshPackages()" [disabled]="loading">
+          <i class="fa-solid fa-rotate-right"></i>
+          Actualizar
+        </button>
 
-    <span class="total-chip">{{ filteredPackages.length }} visibles</span>
+        <button type="button" class="gh-btn gh-btn-light" (click)="exportCsv()">
+          <i class="fa-solid fa-file-export"></i>
+          Exportar
+        </button>
+      </div>
+    </div>
   </section>
-
-  <div class="category-filters">
-    <button
-      *ngFor="let tab of categoryTabs; trackBy: trackByTab"
-      type="button"
-      [class.active]="selectedCategoryFilter === tab.key"
-      (click)="selectCategoryFilter(tab.key)">
-      <span class="dot" [ngStyle]="{ 'background-color': tab.tone.accent }"></span>
-      {{ tab.label }}
-      <small>{{ tab.count }}</small>
-    </button>
-  </div>
 
   <section class="state-message" *ngIf="loading || errorMessage || infoMessage || groupedPackages.length === 0">
     <p *ngIf="loading">Cargando catalogo de paquetes...</p>

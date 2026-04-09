@@ -19,19 +19,34 @@
         <div class="grid two">
           <label class="full">
             <span>Nombre del paquete *</span>
-            <input type="text" formControlName="name" placeholder="Ej: Escapada romantica premium" />
-            <small *ngIf="name?.touched && name?.invalid">El nombre es obligatorio.</small>
+            <input type="text" formControlName="name" placeholder="Ej: Escapada romantica premium" [class.input-error]="name?.touched && name?.invalid" />
+            <small class="field-error" *ngIf="name?.touched && name?.hasError('required')">El nombre es obligatorio.</small>
+            <small class="field-error" *ngIf="name?.touched && name?.hasError('maxlength')">El nombre no puede superar 150 caracteres.</small>
           </label>
 
           <label class="full">
             <span>Descripcion</span>
-            <textarea rows="4" formControlName="description" placeholder="Describe beneficios y enfoque del paquete..."></textarea>
+            <textarea
+              rows="4"
+              formControlName="description"
+              placeholder="Describe beneficios y enfoque del paquete..."
+              [class.input-error]="packageForm.get('description')?.touched && packageForm.get('description')?.invalid"></textarea>
+            <small class="field-error" *ngIf="packageForm.get('description')?.touched && packageForm.get('description')?.hasError('maxlength')">
+              La descripcion no puede superar 2000 caracteres.
+            </small>
           </label>
 
           <label>
             <span>Precio base *</span>
-            <input type="number" min="0" step="1000" formControlName="base_price" placeholder="Ej: 390000" />
-            <small *ngIf="base_price?.touched && base_price?.invalid">El precio debe ser mayor o igual a 0.</small>
+            <input
+              type="number"
+              min="0"
+              step="1000"
+              formControlName="base_price"
+              placeholder="Ej: 390000"
+              [class.input-error]="base_price?.touched && base_price?.invalid" />
+            <small class="field-error" *ngIf="base_price?.touched && base_price?.hasError('required')">El precio base es obligatorio.</small>
+            <small class="field-error" *ngIf="base_price?.touched && base_price?.hasError('min')">El precio debe ser mayor o igual a 0.</small>
           </label>
 
           <label class="switch-row">
@@ -60,11 +75,16 @@
         <div class="grid two">
           <label>
             <span>Valido desde</span>
-            <input type="date" formControlName="start_date" />
+            <input type="date" formControlName="start_date" [class.input-error]="packageForm.get('start_date')?.touched && packageForm.get('start_date')?.value && packageForm.get('end_date')?.value && packageForm.get('end_date')?.value < packageForm.get('start_date')?.value" />
           </label>
           <label>
             <span>Valido hasta</span>
-            <input type="date" formControlName="end_date" />
+            <input type="date" formControlName="end_date" [class.input-error]="packageForm.get('end_date')?.touched && packageForm.get('start_date')?.value && packageForm.get('end_date')?.value && packageForm.get('end_date')?.value < packageForm.get('start_date')?.value" />
+            <small
+              class="field-error"
+              *ngIf="packageForm.get('end_date')?.touched && packageForm.get('start_date')?.value && packageForm.get('end_date')?.value && packageForm.get('end_date')?.value < packageForm.get('start_date')?.value">
+              La fecha final no puede ser menor que la fecha inicial.
+            </small>
           </label>
         </div>
       </section>
@@ -72,14 +92,18 @@
       <section>
         <h2>Servicios incluidos ({{ selectedServiceIds.length }} seleccionados)</h2>
 
-        <label class="search-field">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <input
-            type="text"
-            [(ngModel)]="serviceSearch"
-            [ngModelOptions]="{ standalone: true }"
-            placeholder="Buscar servicio..."
-          />
+        <label class="search-field search-wrap gh-search-wrap">
+          <span>Buscar</span>
+          <div class="search-control gh-search-control">
+            <i class="fa-solid fa-magnifying-glass gh-search-icon"></i>
+            <input
+              class="gh-search-input"
+              type="text"
+              [(ngModel)]="serviceSearch"
+              [ngModelOptions]="{ standalone: true }"
+              placeholder="Buscar servicio..."
+            />
+          </div>
         </label>
 
         <div class="services-grid" *ngIf="availableServices.length > 0">

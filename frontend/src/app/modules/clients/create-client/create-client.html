@@ -19,20 +19,23 @@
         <div class="grid two">
           <label>
             <span>Nombres *</span>
-            <input type="text" formControlName="first_name" placeholder="Ej: Sofia" />
-            <small *ngIf="first_name?.touched && first_name?.invalid">El nombre es obligatorio.</small>
+            <input type="text" formControlName="first_name" placeholder="Ej: Sofia" [class.input-error]="first_name?.touched && first_name?.invalid" />
+            <small class="field-error" *ngIf="first_name?.touched && first_name?.hasError('required')">El nombre es obligatorio.</small>
+            <small class="field-error" *ngIf="first_name?.touched && first_name?.hasError('maxlength')">El nombre no puede superar 80 caracteres.</small>
           </label>
 
           <label>
             <span>Apellidos *</span>
-            <input type="text" formControlName="last_name" placeholder="Ej: Ramirez" />
-            <small *ngIf="last_name?.touched && last_name?.invalid">El apellido es obligatorio.</small>
+            <input type="text" formControlName="last_name" placeholder="Ej: Ramirez" [class.input-error]="last_name?.touched && last_name?.invalid" />
+            <small class="field-error" *ngIf="last_name?.touched && last_name?.hasError('required')">El apellido es obligatorio.</small>
+            <small class="field-error" *ngIf="last_name?.touched && last_name?.hasError('maxlength')">El apellido no puede superar 80 caracteres.</small>
           </label>
 
           <label>
             <span>Correo *</span>
-            <input type="email" formControlName="email" placeholder="cliente@correo.com" />
-            <small *ngIf="email?.touched && email?.invalid">Ingresa un correo valido.</small>
+            <input type="email" formControlName="email" placeholder="cliente@correo.com" [class.input-error]="email?.touched && email?.invalid" />
+            <small class="field-error" *ngIf="email?.touched && email?.hasError('required')">El correo es obligatorio.</small>
+            <small class="field-error" *ngIf="email?.touched && email?.hasError('email')">Ingresa un correo valido.</small>
           </label>
 
           <label>
@@ -62,8 +65,9 @@
 
           <label>
             <span>Numero de documento *</span>
-            <input type="text" formControlName="document_number" placeholder="123456789" />
-            <small *ngIf="document_number?.touched && document_number?.invalid">Este campo es obligatorio.</small>
+            <input type="text" formControlName="document_number" placeholder="123456789" [class.input-error]="document_number?.touched && document_number?.invalid" />
+            <small class="field-error" *ngIf="document_number?.touched && document_number?.hasError('required')">Este campo es obligatorio.</small>
+            <small class="field-error" *ngIf="document_number?.touched && document_number?.hasError('maxlength')">Maximo 40 caracteres.</small>
           </label>
         </div>
       </section>

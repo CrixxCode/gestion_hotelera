@@ -1,4 +1,4 @@
-﻿<p-confirmDialog key="reservationDelete" styleClass="reservation-delete-confirm"></p-confirmDialog>
+<p-confirmDialog key="reservationDelete" styleClass="app-confirm-dialog"></p-confirmDialog>
 
 <div class="reservations-page">
   <header class="page-header">
@@ -62,11 +62,11 @@
 
   <section class="filters-card">
     <div class="filters-grid">
-      <label class="search-wrap">
+      <label class="search-field search-wrap gh-search-wrap">
         <span>Buscar</span>
-        <div class="search-control">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="text" [(ngModel)]="search" (input)="onSearchInput()" placeholder="Reserva, cliente o documento..." />
+        <div class="search-control gh-search-control">
+          <i class="fa-solid fa-magnifying-glass gh-search-icon"></i>
+          <input class="gh-search-input" type="text" [(ngModel)]="search" (input)="onSearchInput()" placeholder="Reserva, cliente o documento..." />
         </div>
       </label>
 
@@ -335,7 +335,7 @@
     </button>
 
     <p>
-      Pagina {{ currentPage }} de {{ totalPages }} · {{ totalReservations }} reserva(s)
+      Pagina {{ currentPage }} de {{ totalPages }} � {{ totalReservations }} reserva(s)
     </p>
 
     <button type="button" class="btn btn-light" (click)="nextPage()" [disabled]="!hasNextPage">
@@ -351,6 +351,7 @@
     [documentTypes]="documentTypes"
     [reservationPolicies]="reservationPolicies"
     [rooms]="rooms"
+    [rates]="rates"
     [packages]="packages"
     [initialRoomId]="createPrefillRoomId"
     [initialCheckInMode]="createPrefillCheckInMode"
@@ -365,6 +366,7 @@
     [origins]="origins"
     [reservationPolicies]="reservationPolicies"
     [rooms]="rooms"
+    [rates]="rates"
     [packages]="packages"
     (closed)="closeUpdateOverlay()"
     (updated)="onReservationUpdated()">
@@ -381,3 +383,4 @@
     (flowChanged)="onReservationFlowChanged($event)">
   </app-detail-reservation>
 </div>
+

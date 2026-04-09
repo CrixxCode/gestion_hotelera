@@ -149,36 +149,13 @@ input {
 }
 
 select:focus,
-input:focus {
+input:focus:not(.gh-search-input) {
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.13);
 }
 
 .search-wrap {
   min-width: 0;
-}
-
-.search-control {
-  height: 40px;
-  border: 1px solid #d7deea;
-  border-radius: 11px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-}
-
-.search-control i {
-  color: #95a2b5;
-  width: 16px;
-  text-align: center;
-}
-
-.search-control input {
-  border: 0;
-  box-shadow: none;
-  width: 100%;
-  padding: 0;
 }
 
 .filters-actions {

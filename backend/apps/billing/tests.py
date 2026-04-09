@@ -1,10 +1,13 @@
 from datetime import timedelta
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework.test import APIClient
 
-from apps.billing.models import Charge, Invoice, Payment
+from accounts.models import Resource, Role
+from apps.billing.models import Charge, CreditNote, Invoice, Payment
 from apps.billing.serializers import ChargeSerializer
 from apps.billing.services import get_or_create_default_charge_type
 from apps.clients.models import Client
@@ -13,8 +16,10 @@ from apps.master_data.models import MasterData
 from apps.packages.models import Package
 from apps.reservations.models import Reservation, ReservationRoom
 from apps.reservations.services import get_reservation_financials
-from apps.rooms.models import Room
+from apps.rooms.models import Room, RoomType
 from apps.services.models import Service
+
+User = get_user_model()
 
 
 class BillingAutomationTestCase(TestCase):
@@ -34,7 +39,18 @@ class BillingAutomationTestCase(TestCase):
         self.client_type = self._md(MasterData.Group.CLIENT_TYPE, "REGULAR", "Regular", 1)
         self.client_status = self._md(MasterData.Group.CLIENT_STATUS, "ACTIVO", "Activo", 1)
 
-        self.room_type = self._md(MasterData.Group.ROOM_TYPE, "STD", "Standard", 1)
+        self.room_type = RoomType.objects.update_or_create(
+            code="STD",
+            defaults={
+                "name": "Standard",
+                "description": "",
+                "capacity": 1,
+                "bed_count": 1,
+                "bed_type": "Sencilla",
+                "is_active": True,
+                "sort_order": 1,
+            },
+        )[0]
         self.room_status = self._md(MasterData.Group.ROOM_STATUS, "DISPONIBLE", "Disponible", 1)
 
         self.reservation_status = self._md(
@@ -302,3 +318,272 @@ class BillingAutomationTestCase(TestCase):
         self.assertEqual(charge.description, "Servicio: Minibar")
         self.assertEqual(charge.unit_price, Decimal("15000.00"))
         self.assertEqual(charge.total_amount, Decimal("30000.00"))
+
+
+class BillingApiFilterAndPaginationTestCase(TestCase):
+    def _md(self, group, code, name=None, sort_order=1):
+        return MasterData.objects.update_or_create(
+            group=group,
+            code=code,
+            defaults={
+                "name": name or code.title(),
+                "sort_order": sort_order,
+                "is_active": True,
+            },
+        )[0]
+
+    def setUp(self):
+        self.document_type = self._md(MasterData.Group.DOCUMENT_TYPE, "CC", "Cedula", 1)
+        self.client_type = self._md(MasterData.Group.CLIENT_TYPE, "REGULAR", "Regular", 1)
+        self.client_status = self._md(MasterData.Group.CLIENT_STATUS, "ACTIVO", "Activo", 1)
+        self.reservation_status = self._md(
+            MasterData.Group.RESERVATION_STATUS,
+            "CONFIRMADA",
+            "Confirmada",
+            1,
+        )
+        self.reservation_origin = self._md(
+            MasterData.Group.RESERVATION_ORIGIN,
+            "WEB",
+            "Web",
+            1,
+        )
+        self.charge_type = self._md(MasterData.Group.CHARGE_TYPE, "OTRO", "Otro", 1)
+        self.payment_method = self._md(MasterData.Group.PAYMENT_METHOD, "EFECTIVO", "Efectivo", 1)
+        self.invoice_status = self._md(MasterData.Group.INVOICE_STATUS, "BORRADOR", "Borrador", 1)
+        self.credit_note_status = self._md(
+            MasterData.Group.CREDIT_NOTE_STATUS,
+            "EMITIDA",
+            "Emitida",
+            1,
+        )
+
+        role = Role.objects.create(name="Billing Reader", slug="billing-reader")
+        read_keys = ["charges.read", "invoices.read", "payments.read", "credit-notes.read"]
+        resources = [
+            Resource.objects.create(
+                key=key,
+                name=f"Read {key}",
+                link_backend="/api/",
+            )
+            for key in read_keys
+        ]
+        role.resources.add(*resources)
+
+        self.user = User.objects.create_user(
+            username="billing_user",
+            email="billing_user@example.com",
+            password="pass12345",
+        )
+        self.user.roles.add(role)
+
+        self.client_api = APIClient()
+        self.client_api.force_login(self.user)
+
+        self.client_one = Client.objects.create(
+            document_type=self.document_type,
+            document_number="111",
+            first_name="Ana",
+            last_name="Lopez",
+            email="ana.api@example.com",
+            phone="300000001",
+            country="CO",
+            client_type=self.client_type,
+            status=self.client_status,
+        )
+        self.client_two = Client.objects.create(
+            document_type=self.document_type,
+            document_number="222",
+            first_name="Luis",
+            last_name="Perez",
+            email="luis.api@example.com",
+            phone="300000002",
+            country="CO",
+            client_type=self.client_type,
+            status=self.client_status,
+        )
+
+        today = timezone.now().date()
+        self.reservation_one = Reservation.objects.create(
+            client=self.client_one,
+            status=self.reservation_status,
+            origin=self.reservation_origin,
+            expected_check_in=today + timedelta(days=2),
+            expected_check_out=today + timedelta(days=5),
+        )
+        self.reservation_two = Reservation.objects.create(
+            client=self.client_two,
+            status=self.reservation_status,
+            origin=self.reservation_origin,
+            expected_check_in=today + timedelta(days=3),
+            expected_check_out=today + timedelta(days=6),
+        )
+
+        self.invoice_one = Invoice.objects.create(
+            reservation=self.reservation_one,
+            status=self.invoice_status,
+            invoice_number="FAC-FILTER-001",
+            subtotal=Decimal("100.00"),
+            tax_amount=Decimal("0.00"),
+            is_active=True,
+        )
+        self.invoice_two = Invoice.objects.create(
+            reservation=self.reservation_two,
+            status=self.invoice_status,
+            invoice_number="FAC-FILTER-002",
+            subtotal=Decimal("200.00"),
+            tax_amount=Decimal("0.00"),
+            is_active=False,
+        )
+
+        self.charge_one = Charge.objects.create(
+            reservation=self.reservation_one,
+            charge_type=self.charge_type,
+            description="Cargo activo reserva 1",
+            quantity=1,
+            unit_price=Decimal("50.00"),
+            is_active=True,
+        )
+        self.charge_two = Charge.objects.create(
+            reservation=self.reservation_two,
+            charge_type=self.charge_type,
+            description="Cargo inactivo reserva 2",
+            quantity=1,
+            unit_price=Decimal("80.00"),
+            is_active=False,
+        )
+
+        self.payment_one = Payment.objects.create(
+            invoice=self.invoice_one,
+            payment_method=self.payment_method,
+            amount=Decimal("25.00"),
+            is_active=True,
+        )
+        self.payment_two = Payment.objects.create(
+            invoice=self.invoice_one,
+            payment_method=self.payment_method,
+            amount=Decimal("15.00"),
+            is_active=False,
+        )
+
+        self.credit_note_one = CreditNote.objects.create(
+            invoice=self.invoice_one,
+            status=self.credit_note_status,
+            credit_note_number="NC-FILTER-001",
+            amount=Decimal("10.00"),
+            reason="Ajuste activo",
+            is_active=True,
+        )
+        self.credit_note_two = CreditNote.objects.create(
+            invoice=self.invoice_two,
+            status=self.credit_note_status,
+            credit_note_number="NC-FILTER-002",
+            amount=Decimal("5.00"),
+            reason="Ajuste inactivo",
+            is_active=False,
+        )
+
+    def _as_list(self, response):
+        data = response.data
+        if isinstance(data, dict) and "results" in data:
+            return data["results"]
+        return data
+
+    def test_invoices_list_uses_pagination(self):
+        for idx in range(35):
+            Invoice.objects.create(
+                reservation=self.reservation_one,
+                status=self.invoice_status,
+                invoice_number=f"FAC-PAGE-{idx:03d}",
+                subtotal=Decimal("1.00"),
+                tax_amount=Decimal("0.00"),
+                is_active=True,
+            )
+
+        response = self.client_api.get("/api/invoices/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.data, dict)
+        self.assertIn("count", response.data)
+        self.assertIn("results", response.data)
+        self.assertLessEqual(len(response.data["results"]), 20)
+        self.assertGreaterEqual(response.data["count"], 37)
+
+    def test_charge_filters_by_reservation_and_is_active(self):
+        response = self.client_api.get(
+            "/api/charges/",
+            {
+                "reservation": self.reservation_one.id,
+                "is_active": "true",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+
+        payload = self._as_list(response)
+        charge_ids = {item["id"] for item in payload}
+        self.assertIn(self.charge_one.id, charge_ids)
+        self.assertNotIn(self.charge_two.id, charge_ids)
+
+    def test_invoice_filters_by_reservation_and_is_active(self):
+        response = self.client_api.get(
+            "/api/invoices/",
+            {
+                "reservation": self.reservation_one.id,
+                "is_active": "true",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+
+        payload = self._as_list(response)
+        invoice_ids = {item["id"] for item in payload}
+        self.assertIn(self.invoice_one.id, invoice_ids)
+        self.assertNotIn(self.invoice_two.id, invoice_ids)
+
+    def test_payment_filters_by_invoice_and_is_active(self):
+        response = self.client_api.get(
+            "/api/payments/",
+            {
+                "invoice": self.invoice_one.id,
+                "is_active": "true",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+
+        payload = self._as_list(response)
+        payment_ids = {item["id"] for item in payload}
+        self.assertIn(self.payment_one.id, payment_ids)
+        self.assertNotIn(self.payment_two.id, payment_ids)
+
+    def test_credit_note_filters_by_invoice_and_is_active(self):
+        response = self.client_api.get(
+            "/api/credit-notes/",
+            {
+                "invoice": self.invoice_one.id,
+                "is_active": "true",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+
+        payload = self._as_list(response)
+        credit_note_ids = {item["id"] for item in payload}
+        self.assertIn(self.credit_note_one.id, credit_note_ids)
+        self.assertNotIn(self.credit_note_two.id, credit_note_ids)
+
+    def test_invoice_pdf_endpoint_returns_pdf_document(self):
+        response = self.client_api.get(f"/api/invoices/{self.invoice_one.id}/pdf/")
+
+        try:
+            import reportlab  # noqa: F401
+
+            reportlab_available = True
+        except Exception:
+            reportlab_available = False
+
+        if not reportlab_available:
+            self.assertEqual(response.status_code, 503)
+            self.assertIn("detail", response.data)
+            return
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn(".pdf", response["Content-Disposition"])
+        self.assertTrue(response.content.startswith(b"%PDF"))

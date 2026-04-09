@@ -150,6 +150,35 @@ export class ListRooms implements OnInit {
     });
   }
 
+  exportCsv(): void {
+    if (!this.filteredRooms.length) return;
+
+    const headers = ['habitacion', 'estado', 'piso', 'tipo', 'huesped', 'checkout', 'precio'];
+
+    const rows = this.filteredRooms.map((room) => {
+      const row = [
+        room.number || `Hab-${room.id}`,
+        this.getStatusLabel(room),
+        room.floor_name || '',
+        this.getRoomTypeName(room),
+        this.getGuestLabel(room),
+        this.getCheckoutLabel(room),
+        this.getPriceLabel(room)
+      ];
+
+      return row.map((cell) => this.escapeCsvCell(cell)).join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `habitaciones-${this.formatFileDate(new Date())}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   applyFilters(): void {
     const searchValue = this.search.toLowerCase().trim();
 
@@ -186,6 +215,14 @@ export class ListRooms implements OnInit {
 
   goToAmenities(): void {
     void this.router.navigate(['/amenidades']);
+  }
+
+  goToRoomTypes(): void {
+    void this.router.navigate(['/tipos-habitacion']);
+  }
+
+  goToRates(): void {
+    void this.router.navigate(['/tarifas-habitacion']);
   }
 
   openCreateDrawer(): void {
@@ -542,6 +579,19 @@ export class ListRooms implements OnInit {
 
   private normalizeCode(value: string | undefined): string {
     return String(value || '').trim().toUpperCase();
+  }
+
+  private formatFileDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+    return `${year}${month}${day}`;
+  }
+
+  private escapeCsvCell(value: unknown): string {
+    const normalized = String(value ?? '');
+    const escaped = normalized.replace(/"/g, '""');
+    return `"${escaped}"`;
   }
 }
 

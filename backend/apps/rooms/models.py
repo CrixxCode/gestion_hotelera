@@ -1,16 +1,36 @@
 from django.db import models
 
 from apps.hotel_settings.models import HotelFloor
-from apps.master_data.models import MasterData, RoomType  # Re-export RoomType proxy for admin/API imports.
+from apps.master_data.models import MasterData
+
+
+class RoomType(models.Model):
+    code = models.CharField(max_length=80, unique=True)
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True, null=True)
+    capacity = models.PositiveIntegerField(default=1)
+    bed_count = models.PositiveIntegerField(default=1)
+    bed_type = models.CharField(max_length=50, blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "room_type"
+        ordering = ["sort_order", "name"]
+
+    def save(self, *args, **kwargs):
+        if self.code:
+            self.code = str(self.code).strip().upper()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
 
 
 class Rate(models.Model):
-    room_type = models.ForeignKey(
-        MasterData,
-        on_delete=models.CASCADE,
-        related_name="rates",
-        limit_choices_to={"group": MasterData.Group.ROOM_TYPE},
-    )
+    room_type = models.ForeignKey(RoomType, on_delete=models.CASCADE, related_name="rates")
     name = models.CharField(max_length=100)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     start_date = models.DateField(blank=True, null=True)
@@ -44,12 +64,11 @@ class Amenity(models.Model):
 class Room(models.Model):
     number = models.CharField(max_length=20, unique=True)
     room_type = models.ForeignKey(
-        MasterData,
+        RoomType,
         on_delete=models.SET_NULL,
         related_name="rooms",
         null=True,
         blank=True,
-        limit_choices_to={"group": MasterData.Group.ROOM_TYPE},
     )
     floor = models.ForeignKey(
         HotelFloor,

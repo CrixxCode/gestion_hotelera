@@ -1,13 +1,20 @@
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 
-import { HotelSettings } from './hotel-settings';
+import { HotelSettingsService } from './hotel-settings';
 
-describe('HotelSettings', () => {
-  let service: HotelSettings;
+describe('HotelSettingsService', () => {
+  let service: HotelSettingsService;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
-    service = TestBed.inject(HotelSettings);
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting()
+      ]
+    });
+    service = TestBed.inject(HotelSettingsService);
   });
 
   it('should be created', () => {

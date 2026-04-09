@@ -1,0 +1,94 @@
+<div class="room-inventory-overlay" (click)="closeDrawer()">
+  <aside class="room-inventory-drawer" (click)="$event.stopPropagation()">
+    <header class="drawer-head">
+      <div class="drawer-title-block">
+        <p class="drawer-type">{{ getRoomLabel() }}</p>
+        <h2>{{ getItemLabel() }}</h2>
+        <span class="status-chip" [class.is-inactive]="!roomInventoryData?.is_active">{{ getStatusLabel() }}</span>
+      </div>
+
+      <button type="button" class="drawer-close" (click)="closeDrawer()" title="Cerrar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </svg>
+      </button>
+    </header>
+
+    <div class="drawer-body">
+      <section class="hero-card">
+        <div>
+          <span>Cantidad en habitacion</span>
+          <strong>{{ roomInventoryData?.quantity || 0 }}</strong>
+        </div>
+        <div>
+          <span>Cantidad minima</span>
+          <strong>{{ roomInventoryData?.minimum_quantity || 0 }}</strong>
+        </div>
+      </section>
+
+      <section>
+        <h3>Resumen</h3>
+        <div class="info-list">
+          <div>
+            <span>Habitacion</span>
+            <strong>{{ getRoomLabel() }}</strong>
+          </div>
+          <div>
+            <span>Item</span>
+            <strong>{{ getItemLabel() }}</strong>
+          </div>
+          <div>
+            <span>SKU</span>
+            <strong>{{ roomInventoryData?.item_sku || 'Sin SKU' }}</strong>
+          </div>
+          <div>
+            <span>Cobertura</span>
+            <strong
+              class="coverage-pill"
+              [ngStyle]="{
+                'background-color': getCoverageTone().bg,
+                color: getCoverageTone().color
+              }">
+              {{ getCoverageLabel() }}
+            </strong>
+          </div>
+          <div>
+            <span>Estado</span>
+            <strong>{{ getStatusLabel() }}</strong>
+          </div>
+          <div>
+            <span>ID</span>
+            <strong>#{{ roomInventoryData?.id || '--' }}</strong>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h3>Notas</h3>
+        <p class="description">{{ roomInventoryData?.notes || 'Sin notas registradas.' }}</p>
+      </section>
+
+      <section>
+        <h3>Trazabilidad</h3>
+        <div class="info-list">
+          <div>
+            <span>Creado</span>
+            <strong>{{ formatDate(roomInventoryData?.created_at) }}</strong>
+          </div>
+          <div>
+            <span>Ultima actualizacion</span>
+            <strong>{{ formatDate(roomInventoryData?.updated_at) }}</strong>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer class="drawer-footer">
+      <button type="button" class="btn btn-light" (click)="requestStatusToggle()">
+        {{ roomInventoryData?.is_active ? 'Marcar inactivo' : 'Marcar activo' }}
+      </button>
+      <button type="button" class="btn btn-danger" (click)="requestDelete()">Eliminar</button>
+    </footer>
+  </aside>
+</div>

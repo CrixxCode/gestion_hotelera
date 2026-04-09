@@ -3,6 +3,9 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RolesService, Role, UserMini } from '../../../services/roles.service';
 import { catchError, forkJoin, map, of } from 'rxjs';
+import { ConfirmationService } from 'primeng/api';
+import { errorActionAlert, successActionAlert } from '../../../services/action-alerts';
+import { openActionConfirmation } from '../../../services/action-confirmations';
 
 type ToastKind = 'success' | 'danger' | 'info';
 
@@ -39,9 +42,6 @@ export class RolesComponent implements OnInit {
   isEditing = false;
   roleForm: Partial<Role> = { name: '', slug: '', description: '' };
 
-  // Delete confirm
-  showDeleteConfirm = false;
-
   // Toast
   toastVisible = false;
   toastText = '';
@@ -53,7 +53,10 @@ export class RolesComponent implements OnInit {
   private roleUserCounts = new Map<string, number>();
   private roleCountsRequestId = 0;
 
-  constructor(private rolesSvc: RolesService) {}
+  constructor(
+    private rolesSvc: RolesService,
+    private confirmationService: ConfirmationService
+  ) {}
 
   ngOnInit(): void {
     this.loadRoles();
@@ -204,28 +207,33 @@ export class RolesComponent implements OnInit {
       this.rolesSvc.updateRole(this.selectedRole.id, payload).subscribe({
         next: (updated) => {
           this.showRoleDrawer = false;
-          this.toast('Rol actualizado.', 'success');
+          this.toast(successActionAlert('update', 'rol'), 'success');
           this.loadRoles();
           this.selectedRole = updated;
         },
-        error: () => this.toast('No se pudo actualizar el rol.', 'danger'),
+        error: () => this.toast(errorActionAlert('update', 'rol'), 'danger'),
       });
     } else {
       this.rolesSvc.createRole(payload).subscribe({
         next: (created) => {
           this.showRoleDrawer = false;
-          this.toast('Rol creado.', 'success');
+          this.toast(successActionAlert('create', 'rol'), 'success');
           this.loadRoles();
           this.selectRole(created);
         },
-        error: () => this.toast('No se pudo crear el rol.', 'danger'),
+        error: () => this.toast(errorActionAlert('create', 'rol'), 'danger'),
       });
     }
   }
 
   askDeleteRole(): void {
     if (!this.selectedRole) return;
-    this.showDeleteConfirm = true;
+
+    openActionConfirmation(this.confirmationService, {
+      action: 'delete',
+      target: this.selectedRole.name || 'rol',
+      onAccept: () => this.deleteRoleConfirmed()
+    });
   }
 
   deleteRoleConfirmed(): void {
@@ -234,8 +242,7 @@ export class RolesComponent implements OnInit {
 
     this.rolesSvc.deleteRole(id).subscribe({
       next: () => {
-        this.toast('Rol eliminado.', 'success');
-        this.showDeleteConfirm = false;
+        this.toast(successActionAlert('delete', 'rol'), 'success');
         this.selectedRole = null;
         this.assignedUsers = [];
         this.catalogUsers = [];
@@ -243,7 +250,7 @@ export class RolesComponent implements OnInit {
         this.selectedAssignedIds.clear();
         this.loadRoles();
       },
-      error: () => this.toast('No se pudo eliminar el rol.', 'danger'),
+      error: () => this.toast(errorActionAlert('delete', 'rol'), 'danger'),
     });
   }
 
@@ -338,13 +345,13 @@ export class RolesComponent implements OnInit {
 
     this.rolesSvc.assignUsers(this.selectedRole.id, ids).subscribe({
       next: () => {
-        this.toast('Usuarios asignados.', 'success');
+        this.toast(successActionAlert('assign', 'usuarios al rol'), 'success');
         this.selectedAvailableIds.clear();
         this.loadAssignedUsers();
         // refresca catálogo para que “desaparezcan” los ya asignados
         this.searchCatalogUsers(this.qAvailable);
       },
-      error: () => this.toast('No se pudo asignar usuarios.', 'danger'),
+      error: () => this.toast(errorActionAlert('assign', 'usuarios al rol'), 'danger'),
     });
   }
 
@@ -355,12 +362,12 @@ export class RolesComponent implements OnInit {
 
     this.rolesSvc.removeUsers(this.selectedRole.id, ids).subscribe({
       next: () => {
-        this.toast('Usuarios removidos del rol.', 'success');
+        this.toast(successActionAlert('remove', 'usuarios del rol'), 'success');
         this.selectedAssignedIds.clear();
         this.loadAssignedUsers();
         this.searchCatalogUsers(this.qAvailable);
       },
-      error: () => this.toast('No se pudo remover usuarios.', 'danger'),
+      error: () => this.toast(errorActionAlert('remove', 'usuarios del rol'), 'danger'),
     });
   }
 

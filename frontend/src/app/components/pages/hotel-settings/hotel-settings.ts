@@ -3,12 +3,16 @@ import { HttpClient } from '@angular/common/http';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { catchError, forkJoin, map, Observable, of, switchMap } from 'rxjs';
+import { ConfirmationService } from 'primeng/api';
 import { environment } from '../../../../enviorements/environment';
 import { MasterDataI } from '../master-data/master-data-model';
 import { AuthService } from '../../../services/auth/auth';
+import { errorActionAlert, successActionAlert } from '../../../services/action-alerts';
+import { openActionConfirmation } from '../../../services/action-confirmations';
 import { HotelSettingsService } from '../../../services/hotel-settings';
 import { MasterDataService } from '../../../services/master-data.service';
 import { ReservationService } from '../../../services/reservation';
+import { FinancialControlConfigPayload, FinancialControlService } from '../../../services/financial-control';
 import { ReservationPolicyI, ReservationPolicyPayloadI } from '../../../modules/reservations/reservation-model';
 import { HotelFloor, HotelSettings as HotelSettingsModel } from './hotel-setting-model';
 
@@ -52,6 +56,19 @@ type ReservationPolicyForm = {
   is_active: boolean;
 };
 
+type FinancialConfigForm = {
+  district_name: string;
+  tourism_law_enabled: boolean;
+  tourism_law_preferential_rate: number | null;
+  standard_income_tax_rate: number | null;
+  has_iva_exemption: boolean;
+  iva_rate: number | null;
+  ica_rate_per_thousand: number | null;
+  fontur_rate_per_thousand: number | null;
+  break_even_warning_pct: number | null;
+  break_even_optimal_pct: number | null;
+};
+
 @Component({
   selector: 'app-hotel-settings',
   standalone: true,
@@ -70,6 +87,8 @@ export class HotelSettings implements OnInit {
   canEdit = false;
   canReadPolicies = false;
   canEditPolicies = false;
+  canReadFinancialConfig = false;
+  canEditFinancialConfig = false;
 
   activeTab: SettingsTab = 'general';
   settingsId: number | null = null;
@@ -86,7 +105,15 @@ export class HotelSettings implements OnInit {
   policySaving = false;
   policyDeletingId: number | null = null;
 
+  financialConfigId: number | null = null;
+  financialConfigForm: FinancialConfigForm = this.buildDefaultFinancialConfigForm();
+  financialConfigLoading = false;
+  financialConfigSaving = false;
+  financialConfigErrorMessage = '';
+  financialConfigSuccessMessage = '';
+
   private initialSnapshot = '';
+  private readonly defaultDistrictName = 'Riohacha';
 
   readonly tabs: Array<{ key: SettingsTab; label: string; icon: string }> = [
     { key: 'general', label: 'Información General', icon: 'fa-solid fa-building' },
@@ -121,7 +148,9 @@ export class HotelSettings implements OnInit {
     private http: HttpClient,
     private auth: AuthService,
     private masterDataService: MasterDataService,
-    private reservationService: ReservationService
+    private reservationService: ReservationService,
+    private financialControlService: FinancialControlService,
+    private confirmationService: ConfirmationService
   ) {}
 
   ngOnInit(): void {
@@ -182,6 +211,10 @@ export class HotelSettings implements OnInit {
 
   get isPercentagePenaltySelected(): boolean {
     return this.getPenaltyTypeCode(this.policyForm.penalty_type) === 'PERCENTAGE';
+  }
+
+  get hasFinancialConfig(): boolean {
+    return !!this.financialConfigId;
   }
 
   setStars(value: number): void {
@@ -308,14 +341,14 @@ export class HotelSettings implements OnInit {
         this.applyPolicyCatalogDefaults();
         this.loadReservationPolicies();
         this.successMessage = wasEditing
-          ? 'Politica de reserva actualizada correctamente.'
-          : 'Politica de reserva creada correctamente.';
+          ? successActionAlert('update', 'politica de reserva')
+          : successActionAlert('create', 'politica de reserva');
       },
       error: (error) => {
         this.policySaving = false;
         this.errorMessage = this.extractApiErrorMessage(
           error,
-          'No se pudo guardar la politica de reserva.'
+          errorActionAlert('save', 'politica de reserva')
         );
       }
     });
@@ -324,30 +357,34 @@ export class HotelSettings implements OnInit {
   deletePolicy(policy: ReservationPolicyI): void {
     if (!this.canEditPolicies) return;
     const policyName = (policy.name || '').trim() || `#${policy.id}`;
-    const confirmed = window.confirm(`Deseas eliminar la politica "${policyName}"?`);
-    if (!confirmed) return;
 
-    this.policyDeletingId = policy.id;
-    this.errorMessage = '';
-    this.successMessage = '';
+    openActionConfirmation(this.confirmationService, {
+      action: 'delete',
+      target: `politica ${policyName}`,
+      onAccept: () => {
+        this.policyDeletingId = policy.id;
+        this.errorMessage = '';
+        this.successMessage = '';
 
-    this.reservationService.deleteReservationPolicy(policy.id).subscribe({
-      next: () => {
-        if (this.policyForm.id === policy.id) {
-          this.policyForm = this.buildDefaultPolicyForm();
-          this.applyPolicyCatalogDefaults();
-        }
+        this.reservationService.deleteReservationPolicy(policy.id).subscribe({
+          next: () => {
+            if (this.policyForm.id === policy.id) {
+              this.policyForm = this.buildDefaultPolicyForm();
+              this.applyPolicyCatalogDefaults();
+            }
 
-        this.loadReservationPolicies();
-        this.policyDeletingId = null;
-        this.successMessage = 'Politica de reserva eliminada correctamente.';
-      },
-      error: (error) => {
-        this.policyDeletingId = null;
-        this.errorMessage = this.extractApiErrorMessage(
-          error,
-          'No se pudo eliminar la politica de reserva.'
-        );
+            this.loadReservationPolicies();
+            this.policyDeletingId = null;
+            this.successMessage = successActionAlert('delete', 'politica de reserva');
+          },
+          error: (error) => {
+            this.policyDeletingId = null;
+            this.errorMessage = this.extractApiErrorMessage(
+              error,
+              errorActionAlert('delete', 'politica de reserva')
+            );
+          }
+        });
       }
     });
   }
@@ -404,11 +441,11 @@ export class HotelSettings implements OnInit {
           this.saving = false;
           this.applySettings(fresh);
           this.initialSnapshot = this.currentSnapshot();
-          this.successMessage = 'Configuración guardada correctamente.';
+          this.successMessage = successActionAlert('save', 'configuracion del hotel');
         },
         error: () => {
           this.saving = false;
-          this.errorMessage = 'No se pudo guardar la configuración. Verifica los datos e inténtalo de nuevo.';
+          this.errorMessage = errorActionAlert('save', 'configuracion del hotel');
         },
       });
   }
@@ -428,36 +465,37 @@ export class HotelSettings implements OnInit {
       return;
     }
 
-    const confirmed = window.confirm(
-      'Esta accion eliminara toda la configuracion del hotel. Deseas continuar?'
-    );
-    if (!confirmed) return;
+    openActionConfirmation(this.confirmationService, {
+      action: 'delete',
+      target: 'configuracion del hotel',
+      onAccept: () => {
+        this.saving = true;
+        this.errorMessage = '';
+        this.successMessage = '';
 
-    this.saving = true;
-    this.errorMessage = '';
-    this.successMessage = '';
-
-    this.settingsSvc
-      .clearSettings()
-      .pipe(switchMap(() => this.settingsSvc.getCurrentSettings()))
-      .subscribe({
-        next: (fresh) => {
-          this.saving = false;
-          this.applySettings(fresh);
-          this.initialSnapshot = this.currentSnapshot();
-          this.successMessage = 'Configuracion eliminada correctamente.';
-        },
-        error: (error) => {
-          this.saving = false;
-          if (error?.status === 404) {
-            this.applySettings(null);
-            this.initialSnapshot = this.currentSnapshot();
-            this.successMessage = 'No habia configuracion activa.';
-            return;
-          }
-          this.errorMessage = 'No se pudo eliminar la configuracion del hotel.';
-        },
-      });
+        this.settingsSvc
+          .clearSettings()
+          .pipe(switchMap(() => this.settingsSvc.getCurrentSettings()))
+          .subscribe({
+            next: (fresh) => {
+              this.saving = false;
+              this.applySettings(fresh);
+              this.initialSnapshot = this.currentSnapshot();
+              this.successMessage = successActionAlert('delete', 'configuracion del hotel');
+            },
+            error: (error) => {
+              this.saving = false;
+              if (error?.status === 404) {
+                this.applySettings(null);
+                this.initialSnapshot = this.currentSnapshot();
+                this.successMessage = 'No habia configuracion activa.';
+                return;
+              }
+              this.errorMessage = errorActionAlert('delete', 'configuracion del hotel');
+            },
+          });
+      }
+    });
   }
 
   resetOperationDefaults(): void {
@@ -469,6 +507,66 @@ export class HotelSettings implements OnInit {
     this.form.tax_rate = 19;
     this.form.system_language = 'es';
     this.form.timezone = 'America/Bogota';
+  }
+
+  resetFinancialConfigForm(): void {
+    this.financialConfigErrorMessage = '';
+    this.financialConfigSuccessMessage = '';
+
+    if (!this.settingsId) {
+      this.financialConfigForm = this.buildDefaultFinancialConfigForm();
+      return;
+    }
+
+    this.loadFinancialConfigForCurrentHotel();
+  }
+
+  saveFinancialConfig(): void {
+    this.financialConfigErrorMessage = '';
+    this.financialConfigSuccessMessage = '';
+
+    if (!this.canEditFinancialConfig) {
+      this.financialConfigErrorMessage = 'No tienes permisos para modificar la configuracion financiera.';
+      return;
+    }
+
+    const hotelSettingsId = this.settingsId;
+    if (!hotelSettingsId) {
+      this.financialConfigErrorMessage = 'Guarda primero la configuracion del hotel para asociar estos parametros.';
+      return;
+    }
+
+    const payloadResult = this.buildFinancialConfigPayload(hotelSettingsId);
+    if (payloadResult.error) {
+      this.financialConfigErrorMessage = payloadResult.error;
+      return;
+    }
+
+    this.financialConfigSaving = true;
+    const updatePayload: Partial<FinancialControlConfigPayload> = { ...payloadResult.payload };
+    delete updatePayload.hotel_settings;
+
+    const request$ = this.financialConfigId
+      ? this.financialControlService.updateConfig(this.financialConfigId, updatePayload)
+      : this.financialControlService.createConfig(payloadResult.payload);
+
+    request$.subscribe({
+      next: (saved) => {
+        this.financialConfigSaving = false;
+        this.financialConfigId = this.toOptionalPositiveInt(saved['id']);
+        this.applyFinancialConfigRecord(saved);
+        this.financialConfigSuccessMessage = this.financialConfigId
+          ? successActionAlert('save', 'configuracion financiera')
+          : 'Configuracion financiera creada correctamente.';
+      },
+      error: (error) => {
+        this.financialConfigSaving = false;
+        this.financialConfigErrorMessage = this.extractApiErrorMessage(
+          error,
+          errorActionAlert('save', 'configuracion financiera')
+        );
+      },
+    });
   }
 
   trackFloor(_: number, floor: HotelFloor): number | string {
@@ -499,6 +597,8 @@ export class HotelSettings implements OnInit {
         this.canEdit = this.hasSettingsWritePermission(keys);
         this.canReadPolicies = this.hasPoliciesReadPermission(keys);
         this.canEditPolicies = this.hasPoliciesWritePermission(keys);
+        this.canReadFinancialConfig = this.hasFinancialControlReadPermission(keys);
+        this.canEditFinancialConfig = this.hasFinancialControlWritePermission(keys);
 
         if (this.canReadPolicies) {
           this.loadPolicyCatalogs();
@@ -508,12 +608,21 @@ export class HotelSettings implements OnInit {
         } else {
           this.resetPolicyState();
         }
+
+        if (this.canReadFinancialConfig && this.settingsId) {
+          this.loadFinancialConfigForCurrentHotel();
+        } else {
+          this.resetFinancialConfigState();
+        }
       },
       error: () => {
         this.canEdit = false;
         this.canReadPolicies = false;
         this.canEditPolicies = false;
+        this.canReadFinancialConfig = false;
+        this.canEditFinancialConfig = false;
         this.resetPolicyState();
+        this.resetFinancialConfigState();
       }
     });
   }
@@ -555,6 +664,30 @@ export class HotelSettings implements OnInit {
     );
   }
 
+  private hasFinancialControlReadPermission(resourceKeys: string[]): boolean {
+    const normalized = new Set(resourceKeys.map((k) => (k || '').trim().toLowerCase()));
+    return (
+      normalized.has('*') ||
+      normalized.has('financial_control.read') ||
+      normalized.has('financial-control.read') ||
+      normalized.has('financial_control.write') ||
+      normalized.has('financial-control.write') ||
+      normalized.has('financial_control.*') ||
+      normalized.has('financial-control.*')
+    );
+  }
+
+  private hasFinancialControlWritePermission(resourceKeys: string[]): boolean {
+    const normalized = new Set(resourceKeys.map((k) => (k || '').trim().toLowerCase()));
+    return (
+      normalized.has('*') ||
+      normalized.has('financial_control.write') ||
+      normalized.has('financial-control.write') ||
+      normalized.has('financial_control.*') ||
+      normalized.has('financial-control.*')
+    );
+  }
+
   private applySettings(settings: HotelSettingsModel | null): void {
     if (!settings) {
       this.settingsId = null;
@@ -563,6 +696,7 @@ export class HotelSettings implements OnInit {
       this.floors = [];
       this.deletedFloorIds = [];
       this.clearPoliciesCollection();
+      this.resetFinancialConfigState();
       return;
     }
 
@@ -588,6 +722,12 @@ export class HotelSettings implements OnInit {
       this.loadReservationPolicies();
     } else {
       this.clearPoliciesCollection();
+    }
+
+    if (this.canReadFinancialConfig) {
+      this.loadFinancialConfigForCurrentHotel();
+    } else {
+      this.resetFinancialConfigState();
     }
   }
 
@@ -677,6 +817,197 @@ export class HotelSettings implements OnInit {
     if (!this.policyForm.penalty_type && this.penaltyTypes.length > 0) {
       this.policyForm.penalty_type = this.penaltyTypes[0].id;
     }
+  }
+
+  private loadFinancialConfigForCurrentHotel(): void {
+    const hotelSettingsId = this.settingsId;
+    if (!this.canReadFinancialConfig || !hotelSettingsId) {
+      this.resetFinancialConfigState();
+      return;
+    }
+
+    this.financialConfigLoading = true;
+    this.financialConfigErrorMessage = '';
+    this.financialConfigSuccessMessage = '';
+
+    this.financialControlService.listConfigs({ hotel_settings: hotelSettingsId }).subscribe({
+      next: (configs) => {
+        this.financialConfigLoading = false;
+        const selected = configs.find((item) => this.toOptionalPositiveInt(item['hotel_settings']) === hotelSettingsId);
+        if (!selected) {
+          this.financialConfigId = null;
+          this.financialConfigForm = this.buildDefaultFinancialConfigForm();
+          return;
+        }
+
+        this.financialConfigId = this.toOptionalPositiveInt(selected['id']);
+        this.applyFinancialConfigRecord(selected);
+      },
+      error: (error) => {
+        this.financialConfigLoading = false;
+
+        if (error?.status === 403) {
+          this.canReadFinancialConfig = false;
+          this.canEditFinancialConfig = false;
+          this.resetFinancialConfigState();
+          this.financialConfigErrorMessage = 'No tienes permisos para consultar configuracion financiera.';
+          return;
+        }
+
+        this.financialConfigErrorMessage = this.extractApiErrorMessage(
+          error,
+          'No se pudo cargar la configuracion financiera.'
+        );
+      },
+    });
+  }
+
+  private resetFinancialConfigState(): void {
+    this.financialConfigId = null;
+    this.financialConfigForm = this.buildDefaultFinancialConfigForm();
+    this.financialConfigLoading = false;
+    this.financialConfigSaving = false;
+    this.financialConfigErrorMessage = '';
+    this.financialConfigSuccessMessage = '';
+  }
+
+  private applyFinancialConfigRecord(payload: Record<string, unknown>): void {
+    this.financialConfigForm = {
+      district_name: this.getTrimmedString(payload['district_name']) || this.defaultDistrictName,
+      tourism_law_enabled: this.toBoolean(payload['tourism_law_enabled'], true),
+      tourism_law_preferential_rate: this.toOptionalNumber(payload['tourism_law_preferential_rate']),
+      standard_income_tax_rate: this.toOptionalNumber(payload['standard_income_tax_rate']),
+      has_iva_exemption: this.toBoolean(payload['has_iva_exemption'], false),
+      iva_rate: this.toOptionalNumber(payload['iva_rate']),
+      ica_rate_per_thousand: this.toOptionalNumber(payload['ica_rate_per_thousand']),
+      fontur_rate_per_thousand: this.toOptionalNumber(payload['fontur_rate_per_thousand']),
+      break_even_warning_pct: this.toOptionalNumber(payload['break_even_warning_pct']),
+      break_even_optimal_pct: this.toOptionalNumber(payload['break_even_optimal_pct']),
+    };
+  }
+
+  private buildFinancialConfigPayload(hotelSettingsId: number): {
+    payload: FinancialControlConfigPayload;
+    error: string | null;
+  } {
+    const districtName = this.getTrimmedString(this.financialConfigForm.district_name);
+    if (!districtName) {
+      return {
+        payload: {
+          hotel_settings: hotelSettingsId,
+          district_name: '',
+          tourism_law_enabled: !!this.financialConfigForm.tourism_law_enabled,
+          has_iva_exemption: !!this.financialConfigForm.has_iva_exemption,
+        },
+        error: 'El nombre del distrito es obligatorio.',
+      };
+    }
+
+    const payload: FinancialControlConfigPayload = {
+      hotel_settings: hotelSettingsId,
+      district_name: districtName,
+      tourism_law_enabled: !!this.financialConfigForm.tourism_law_enabled,
+      has_iva_exemption: !!this.financialConfigForm.has_iva_exemption,
+    };
+
+    const tourismRateError = this.appendOptionalFinancialNumber(
+      payload,
+      'tourism_law_preferential_rate',
+      this.financialConfigForm.tourism_law_preferential_rate,
+      'Tarifa preferencial de ley de turismo'
+    );
+    if (tourismRateError) return { payload, error: tourismRateError };
+
+    const standardTaxError = this.appendOptionalFinancialNumber(
+      payload,
+      'standard_income_tax_rate',
+      this.financialConfigForm.standard_income_tax_rate,
+      'Tarifa estandar de renta'
+    );
+    if (standardTaxError) return { payload, error: standardTaxError };
+
+    const ivaRateError = this.appendOptionalFinancialNumber(
+      payload,
+      'iva_rate',
+      this.financialConfigForm.iva_rate,
+      'Tarifa de IVA'
+    );
+    if (ivaRateError) return { payload, error: ivaRateError };
+
+    const icaRateError = this.appendOptionalFinancialNumber(
+      payload,
+      'ica_rate_per_thousand',
+      this.financialConfigForm.ica_rate_per_thousand,
+      'Tarifa ICA por mil'
+    );
+    if (icaRateError) return { payload, error: icaRateError };
+
+    const fonturRateError = this.appendOptionalFinancialNumber(
+      payload,
+      'fontur_rate_per_thousand',
+      this.financialConfigForm.fontur_rate_per_thousand,
+      'Tarifa FONTUR por mil'
+    );
+    if (fonturRateError) return { payload, error: fonturRateError };
+
+    const warningRateError = this.appendOptionalFinancialNumber(
+      payload,
+      'break_even_warning_pct',
+      this.financialConfigForm.break_even_warning_pct,
+      'Umbral break-even de alerta'
+    );
+    if (warningRateError) return { payload, error: warningRateError };
+
+    const optimalRateError = this.appendOptionalFinancialNumber(
+      payload,
+      'break_even_optimal_pct',
+      this.financialConfigForm.break_even_optimal_pct,
+      'Umbral break-even optimo'
+    );
+    if (optimalRateError) return { payload, error: optimalRateError };
+
+    const warningPct = payload.break_even_warning_pct;
+    const optimalPct = payload.break_even_optimal_pct;
+    if (
+      warningPct !== undefined &&
+      warningPct !== null &&
+      optimalPct !== undefined &&
+      optimalPct !== null &&
+      optimalPct < warningPct
+    ) {
+      return {
+        payload,
+        error: 'El umbral optimo debe ser mayor o igual al umbral de alerta.',
+      };
+    }
+
+    return { payload, error: null };
+  }
+
+  private appendOptionalFinancialNumber(
+    payload: FinancialControlConfigPayload,
+    key:
+      | 'tourism_law_preferential_rate'
+      | 'standard_income_tax_rate'
+      | 'iva_rate'
+      | 'ica_rate_per_thousand'
+      | 'fontur_rate_per_thousand'
+      | 'break_even_warning_pct'
+      | 'break_even_optimal_pct',
+    value: number | null,
+    label: string
+  ): string | null {
+    if (value === null || value === undefined) return null;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      return `${label} debe ser numerica.`;
+    }
+    if (parsed < 0) {
+      return `${label} no puede ser negativa.`;
+    }
+
+    payload[key] = parsed;
+    return null;
   }
 
   private syncFloors(settingsId: number): Observable<void> {
@@ -859,6 +1190,34 @@ export class HotelSettings implements OnInit {
     });
   }
 
+  private toOptionalPositiveInt(value: unknown): number | null {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return null;
+    const normalized = Math.floor(parsed);
+    return normalized > 0 ? normalized : null;
+  }
+
+  private toOptionalNumber(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private toBoolean(value: unknown, fallback: boolean): boolean {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === 'true') return true;
+      if (normalized === 'false') return false;
+    }
+    if (value === null || value === undefined) return fallback;
+    return Boolean(value);
+  }
+
+  private getTrimmedString(value: unknown): string {
+    return String(value || '').trim();
+  }
+
   private normalizeTime(value?: string | null, fallback = '00:00'): string {
     if (!value) return fallback;
     return value.slice(0, 5);
@@ -933,6 +1292,21 @@ export class HotelSettings implements OnInit {
       tax_rate: 19,
       system_language: 'es',
       timezone: 'America/Bogota',
+    };
+  }
+
+  private buildDefaultFinancialConfigForm(): FinancialConfigForm {
+    return {
+      district_name: this.getTrimmedString(this.form.city) || this.defaultDistrictName,
+      tourism_law_enabled: true,
+      tourism_law_preferential_rate: 9,
+      standard_income_tax_rate: 35,
+      has_iva_exemption: false,
+      iva_rate: 19,
+      ica_rate_per_thousand: 9.66,
+      fontur_rate_per_thousand: 2.5,
+      break_even_warning_pct: 90,
+      break_even_optimal_pct: 110,
     };
   }
 

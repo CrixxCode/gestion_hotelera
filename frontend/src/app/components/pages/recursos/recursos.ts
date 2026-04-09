@@ -1,8 +1,12 @@
 ﻿import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
+import { ConfirmationService } from 'primeng/api';
 import { ResourcesService } from '../../../services/resources.service';
 import { RoleLite, Resource } from '../../../services/resources.service';
+import { errorActionAlert, successActionAlert } from '../../../services/action-alerts';
+import { openActionConfirmation } from '../../../services/action-confirmations';
 
 type ToastKind = 'success' | 'danger' | 'info';
 
@@ -38,9 +42,6 @@ export class RecursosComponent implements OnInit {
   isEditing = false;
   editingId: string | null = null;
   form: Partial<Resource> = this.emptyForm();
-
-  // Confirm delete
-  showDeleteConfirm = false;
   deleteTarget: Resource | null = null;
 
   // Toast
@@ -52,11 +53,14 @@ export class RecursosComponent implements OnInit {
   // debounce
   private resourcesDebounce?: any;
 
-  constructor(private svc: ResourcesService) {}
+  constructor(
+    private svc: ResourcesService,
+    private confirmationService: ConfirmationService
+  ) {}
 
   ngOnInit(): void {
     this.loadRoles();
-    this.loadResources('');
+    this.loadResources();
   }
 
   get totalResources(): number {
@@ -127,23 +131,20 @@ export class RecursosComponent implements OnInit {
   onResourcesSearchInput(): void {
     if (this.resourcesDebounce) clearTimeout(this.resourcesDebounce);
     this.resourcesDebounce = setTimeout(() => {
-      this.loadResources(this.qResources);
+      this.syncSelectedAvailableWithFilter();
+      this.syncSelectedAssignedWithFilter();
     }, 280);
   }
 
-  loadResources(q: string): void {
+  loadResources(): void {
     this.loadingResources = true;
-    this.svc.listResources(q || '').subscribe({
+    this.svc.listResources().subscribe({
       next: (data) => {
         this.resources = Array.isArray(data) ? data : [];
         this.upsertResourceCatalog(this.resources);
         this.loadingResources = false;
 
-        // limpia selección disponible inválida
-        const avail = new Set(this.availableResources().map(r => r.id));
-        for (const id of Array.from(this.selectedAvailableIds)) {
-          if (!avail.has(id)) this.selectedAvailableIds.delete(id);
-        }
+        this.syncSelectedAvailableWithFilter();
       },
       error: () => {
         this.resources = [];
@@ -163,11 +164,7 @@ export class RecursosComponent implements OnInit {
         this.upsertResourceCatalog(this.assigned);
         this.loadingAssigned = false;
 
-        // limpia selección asignados inválida
-        const ids = new Set(this.assigned.map(r => r.id));
-        for (const id of Array.from(this.selectedAssignedIds)) {
-          if (!ids.has(id)) this.selectedAssignedIds.delete(id);
-        }
+        this.syncSelectedAssignedWithFilter();
       },
       error: () => {
         this.assigned = [];
@@ -184,6 +181,18 @@ export class RecursosComponent implements OnInit {
   availableResources(): Resource[] {
     const assigned = this.assignedIds;
     return (this.resources || []).filter(r => !assigned.has(r.id));
+  }
+
+  availableResourcesFiltered(): Resource[] {
+    const q = (this.qResources || '').trim().toLowerCase();
+    if (!q) return this.availableResources();
+    return this.availableResources().filter((resource) => this.resourceMatchesQuery(resource, q));
+  }
+
+  assignedResourcesFiltered(): Resource[] {
+    const q = (this.qResources || '').trim().toLowerCase();
+    if (!q) return [...(this.assigned || [])];
+    return (this.assigned || []).filter((resource) => this.resourceMatchesQuery(resource, q));
   }
 
   resolveResourceIcon(resource: Resource): string {
@@ -226,11 +235,11 @@ export class RecursosComponent implements OnInit {
 
     this.svc.assignResources(this.selectedRole.id, ids).subscribe({
       next: () => {
-        this.toast('Recursos asignados al rol.', 'success');
+        this.toast(successActionAlert('assign', 'recursos al rol'), 'success');
         this.selectedAvailableIds.clear();
         this.loadAssignedForRole();
       },
-      error: () => this.toast('No se pudo asignar recursos.', 'danger'),
+      error: (error) => this.toastActionError('assign', 'recursos al rol', error),
     });
   }
 
@@ -241,11 +250,11 @@ export class RecursosComponent implements OnInit {
 
     this.svc.removeResources(this.selectedRole.id, ids).subscribe({
       next: () => {
-        this.toast('Recursos removidos del rol.', 'success');
+        this.toast(successActionAlert('remove', 'recursos del rol'), 'success');
         this.selectedAssignedIds.clear();
         this.loadAssignedForRole();
       },
-      error: () => this.toast('No se pudo remover recursos.', 'danger'),
+      error: (error) => this.toastActionError('remove', 'recursos del rol', error),
     });
   }
 
@@ -306,31 +315,42 @@ export class RecursosComponent implements OnInit {
       return;
     }
 
+    if (!this.isEditing && this.isDuplicateKey(payload.key)) {
+      this.toast('Ya existe un recurso con esa key. Posiblemente ya fue creado antes.', 'danger');
+      return;
+    }
+
     if (this.isEditing && this.editingId) {
       this.svc.updateResource(this.editingId, payload).subscribe({
         next: () => {
-          this.toast('Recurso actualizado.', 'success');
+          this.toast(successActionAlert('update', 'recurso'), 'success');
           this.showDrawer = false;
-          this.loadResources(this.qResources);
+          this.loadResources();
           if (this.selectedRole) this.loadAssignedForRole();
         },
-        error: () => this.toast('No se pudo actualizar el recurso.', 'danger'),
+        error: (error) => this.toastActionError('update', 'recurso', error),
       });
     } else {
       this.svc.createResource(payload).subscribe({
         next: () => {
-          this.toast('Recurso creado.', 'success');
+          this.toast(successActionAlert('create', 'recurso'), 'success');
           this.showDrawer = false;
-          this.loadResources(this.qResources);
+          this.qResources = '';
+          this.loadResources();
+          if (this.selectedRole) this.loadAssignedForRole();
         },
-        error: () => this.toast('No se pudo crear el recurso.', 'danger'),
+        error: (error) => this.toastActionError('create', 'recurso', error),
       });
     }
   }
 
   askDelete(r: Resource): void {
     this.deleteTarget = r;
-    this.showDeleteConfirm = true;
+    openActionConfirmation(this.confirmationService, {
+      action: 'delete',
+      target: r.key || r.name || 'recurso',
+      onAccept: () => this.confirmDelete()
+    });
   }
 
   confirmDelete(): void {
@@ -340,13 +360,12 @@ export class RecursosComponent implements OnInit {
     this.svc.deleteResource(id).subscribe({
       next: () => {
         this.resourceCatalog.delete(id);
-        this.toast('Recurso eliminado.', 'success');
-        this.showDeleteConfirm = false;
+        this.toast(successActionAlert('delete', 'recurso'), 'success');
         this.deleteTarget = null;
-        this.loadResources(this.qResources);
+        this.loadResources();
         if (this.selectedRole) this.loadAssignedForRole();
       },
-      error: () => this.toast('No se pudo eliminar el recurso.', 'danger'),
+      error: (error) => this.toastActionError('delete', 'recurso', error),
     });
   }
 
@@ -358,7 +377,7 @@ export class RecursosComponent implements OnInit {
 
   refreshView(): void {
     this.loadRoles();
-    this.loadResources(this.qResources || '');
+    this.loadResources();
     if (this.selectedRole) this.loadAssignedForRole();
   }
 
@@ -367,5 +386,145 @@ export class RecursosComponent implements OnInit {
       if (!item?.id) continue;
       this.resourceCatalog.set(item.id, item);
     }
+  }
+
+  private syncSelectedAvailableWithFilter(): void {
+    const availableIds = new Set(this.availableResourcesFiltered().map((resource) => resource.id));
+    for (const id of Array.from(this.selectedAvailableIds)) {
+      if (!availableIds.has(id)) this.selectedAvailableIds.delete(id);
+    }
+  }
+
+  private syncSelectedAssignedWithFilter(): void {
+    const assignedIds = new Set(this.assignedResourcesFiltered().map((resource) => resource.id));
+    for (const id of Array.from(this.selectedAssignedIds)) {
+      if (!assignedIds.has(id)) this.selectedAssignedIds.delete(id);
+    }
+  }
+
+  private resourceMatchesQuery(resource: Resource, query: string): boolean {
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) return true;
+
+    const parentName = this.getParentName(resource);
+    const haystack = [
+      resource.key || '',
+      resource.name || '',
+      resource.description || '',
+      resource.link || '',
+      resource.link_backend || '',
+      parentName || '',
+    ]
+      .join(' ')
+      .toLowerCase();
+
+    return haystack.includes(q);
+  }
+
+  private toastActionError(action: 'create' | 'update' | 'delete' | 'assign' | 'remove', target: string, error: unknown): void {
+    const base = errorActionAlert(action, target);
+    const detail = this.extractHttpErrorDetail(error);
+    this.toast(detail ? `${base} ${detail}` : base, 'danger');
+  }
+
+  private extractHttpErrorDetail(error: unknown): string {
+    if (!(error instanceof HttpErrorResponse)) return '';
+
+    if (error.status === 403) {
+      return 'Detalle: no tienes permisos para esta accion (resources.write).';
+    }
+
+    const payload = error.error;
+    if (typeof payload === 'string') {
+      const text = payload.trim();
+      return text ? `Detalle: ${text}` : '';
+    }
+
+    if (!payload || typeof payload !== 'object') return '';
+
+    const wrappedErrors = (payload as { errors?: unknown }).errors;
+    if (wrappedErrors && typeof wrappedErrors === 'object') {
+      const wrappedMessage = this.extractFieldValidationMessage(wrappedErrors as Record<string, unknown>);
+      if (wrappedMessage) return `Detalle: ${wrappedMessage}`;
+    }
+
+    const keyError = (payload as { key?: unknown }).key;
+    if (Array.isArray(keyError) && keyError.length && typeof keyError[0] === 'string') {
+      const message = keyError[0].trim();
+      if (/already exists|ya existe/i.test(message)) {
+        return 'Detalle: la key ya existe. Ese recurso probablemente ya fue creado.';
+      }
+      return `Detalle: ${message}`;
+    }
+
+    const parentError = (payload as { parent?: unknown }).parent;
+    if (Array.isArray(parentError) && parentError.length && typeof parentError[0] === 'string') {
+      const message = parentError[0].trim();
+      if (/invalid pk|does not exist/i.test(message)) {
+        return 'Detalle: el recurso padre seleccionado no existe.';
+      }
+      return `Detalle: ${message}`;
+    }
+
+    const directMessage = this.extractFieldValidationMessage(payload as Record<string, unknown>);
+    if (directMessage) return `Detalle: ${directMessage}`;
+
+    const detail = (payload as { detail?: unknown }).detail;
+    if (typeof detail === 'string' && detail.trim()) {
+      return `Detalle: ${detail.trim()}`;
+    }
+
+    for (const value of Object.values(payload as Record<string, unknown>)) {
+      if (Array.isArray(value) && value.length && typeof value[0] === 'string') {
+        return `Detalle: ${value[0]}`;
+      }
+      if (typeof value === 'string' && value.trim()) {
+        return `Detalle: ${value.trim()}`;
+      }
+    }
+
+    return '';
+  }
+
+  private isDuplicateKey(key?: string): boolean {
+    const normalized = String(key || '').trim().toLowerCase();
+    if (!normalized) return false;
+    return this.resources.some(r => String(r.key || '').trim().toLowerCase() === normalized);
+  }
+
+  private extractFieldValidationMessage(errors: Record<string, unknown>): string {
+    const keyError = errors['key'];
+    if (Array.isArray(keyError) && keyError.length && typeof keyError[0] === 'string') {
+      const message = keyError[0].trim();
+      if (/already exists|ya existe/i.test(message)) {
+        return 'la key ya existe. Ese recurso probablemente ya fue creado.';
+      }
+      return message;
+    }
+
+    const parentError = errors['parent'];
+    if (Array.isArray(parentError) && parentError.length && typeof parentError[0] === 'string') {
+      const message = parentError[0].trim();
+      if (/invalid pk|does not exist/i.test(message)) {
+        return 'el recurso padre seleccionado no existe.';
+      }
+      return message;
+    }
+
+    const nonField = errors['non_field_errors'];
+    if (Array.isArray(nonField) && nonField.length && typeof nonField[0] === 'string') {
+      return nonField[0].trim();
+    }
+
+    for (const value of Object.values(errors)) {
+      if (Array.isArray(value) && value.length && typeof value[0] === 'string') {
+        return value[0].trim();
+      }
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+    }
+
+    return '';
   }
 }

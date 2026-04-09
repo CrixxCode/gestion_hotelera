@@ -65,15 +65,13 @@
       </div>
 
       <div class="card-body">
-        <div class="search">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <input [(ngModel)]="roleFilter" placeholder="Buscar rol..." />
-          @if (roleFilter) {
-            <button class="icon-btn" (click)="roleFilter=''">
-              <i class="fa-solid fa-xmark"></i>
-            </button>
-          }
-        </div>
+        <label class="search-field search-wrap gh-search-wrap">
+          <span>Buscar</span>
+          <div class="search-control gh-search-control">
+            <i class="fa-solid fa-magnifying-glass gh-search-icon"></i>
+            <input class="gh-search-input" type="text" [(ngModel)]="roleFilter" placeholder="Buscar rol..." />
+          </div>
+        </label>
 
         @if (loadingRoles) {
           <div class="skeletons">
@@ -155,21 +153,19 @@
                 </div>
               </div>
 
-              <div class="search mini">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input
-                  [(ngModel)]="qAvailable"
-                  (input)="onCatalogSearchInput()"
-                  placeholder="Buscar usuarios..."
-                />
-                @if (loadingCatalog) {
-                  <span class="spinner"></span>
-                } @else if (qAvailable) {
-                  <button class="icon-btn" (click)="qAvailable=''; searchCatalogUsers('')">
-                    <i class="fa-solid fa-xmark"></i>
-                  </button>
-                }
-              </div>
+              <label class="search-field search-wrap gh-search-wrap">
+                <span>Buscar</span>
+                <div class="search-control gh-search-control">
+                  <i class="fa-solid fa-magnifying-glass gh-search-icon"></i>
+                  <input
+                    class="gh-search-input"
+                    type="text"
+                    [(ngModel)]="qAvailable"
+                    (input)="onCatalogSearchInput()"
+                    placeholder="Buscar usuarios..."
+                  />
+                </div>
+              </label>
 
               <div class="panel-actions">
                 <button class="btn xs ghost" (click)="selectAllAvailable()">Seleccionar todo</button>
@@ -232,15 +228,13 @@
                 </div>
               </div>
 
-              <div class="search mini">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input [(ngModel)]="qAssigned" placeholder="Filtrar asignados..." />
-                @if (qAssigned) {
-                  <button class="icon-btn" (click)="qAssigned=''">
-                    <i class="fa-solid fa-xmark"></i>
-                  </button>
-                }
-              </div>
+              <label class="search-field search-wrap gh-search-wrap">
+                <span>Buscar</span>
+                <div class="search-control gh-search-control">
+                  <i class="fa-solid fa-magnifying-glass gh-search-icon"></i>
+                  <input class="gh-search-input" type="text" [(ngModel)]="qAssigned" placeholder="Filtrar asignados..." />
+                </div>
+              </label>
 
               <div class="panel-actions">
                 <button class="btn xs ghost" (click)="selectAllAssigned()">Seleccionar todo</button>
@@ -325,24 +319,9 @@
       </div>
     </div>
   }
-
-  <!-- Confirm delete -->
-  @if (showDeleteConfirm) {
-    <div class="overlay" (click)="showDeleteConfirm=false"></div>
-    <div class="confirm" (click)="$event.stopPropagation()">
-      <div class="c-title">Eliminar rol</div>
-      <div class="c-sub">
-        Se eliminará el rol <b>{{ selectedRole?.name }}</b>. Esta acción no se puede deshacer.
-      </div>
-      <div class="c-actions">
-        <button class="btn ghost" (click)="showDeleteConfirm=false">Cancelar</button>
-        <button class="btn danger" (click)="deleteRoleConfirmed()">Eliminar</button>
-      </div>
-    </div>
-  }
-
   <!-- Toast -->
   <div class="toast" [class.show]="toastVisible" [class.ok]="toastKind==='success'" [class.bad]="toastKind==='danger'">
     {{ toastText }}
   </div>
 </div>
+

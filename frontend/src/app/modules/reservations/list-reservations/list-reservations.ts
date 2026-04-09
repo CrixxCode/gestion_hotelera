@@ -5,9 +5,10 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { catchError, forkJoin, of } from 'rxjs';
 import { ConfirmationService } from 'primeng/api';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { openActionConfirmation } from '../../../services/action-confirmations';
 import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
 import { ClientI } from '../../clients/client-model';
-import { RoomI } from '../../rooms/room-model';
+import { RateI, RoomI } from '../../rooms/room-model';
 import { MasterDataService } from '../../../services/master-data.service';
 import { ClientsService } from '../../../services/client';
 import { RoomService } from '../../../services/room';
@@ -86,6 +87,7 @@ export class ListReservations implements OnInit {
   depositStatuses: MasterDataI[] = [];
   clients: ClientI[] = [];
   rooms: RoomI[] = [];
+  rates: RateI[] = [];
   reservationPolicies: ReservationPolicyI[] = [];
   packages: PackageI[] = [];
 
@@ -230,6 +232,7 @@ export class ListReservations implements OnInit {
         .pipe(catchError(() => of([] as MasterDataI[]))),
       clients: this.clientsService.listClients().pipe(catchError(() => of([] as ClientI[]))),
       rooms: this.roomService.listRooms().pipe(catchError(() => of([] as RoomI[]))),
+      rates: this.roomService.listRates().pipe(catchError(() => of([] as RateI[]))),
       packages: this.packagesService
         .listPackages({ ordering: 'name' })
         .pipe(catchError(() => of([] as PackageI[]))),
@@ -246,6 +249,7 @@ export class ListReservations implements OnInit {
         depositStatuses,
         clients,
         rooms,
+        rates,
         packages,
         reservationPolicies
       }) => {
@@ -259,6 +263,7 @@ export class ListReservations implements OnInit {
         this.depositStatuses = this.dedupeMasterDataByCode(depositStatuses);
         this.clients = clients;
         this.rooms = rooms;
+        this.rates = rates;
         this.packages = packages.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es-CO'));
         this.reservationPolicies = reservationPolicies.sort((a, b) =>
           (a.name || '').localeCompare(b.name || '', 'es-CO')
@@ -435,17 +440,11 @@ export class ListReservations implements OnInit {
   confirmDelete(reservation: ReservationI): void {
     const reservationCode = this.getReservationCode(reservation);
 
-    this.confirmationService.confirm({
-      message: `Deseas eliminar la reserva ${reservationCode}?`,
-      header: 'Confirmar eliminacion',
-      icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Si, eliminar',
-      rejectLabel: 'Cancelar',
+    openActionConfirmation(this.confirmationService, {
+      action: 'delete',
+      target: reservationCode,
       key: 'reservationDelete',
-      acceptButtonStyleClass: 'p-button-danger',
-      rejectButtonStyleClass: 'p-button-secondary p-button-outlined',
-      defaultFocus: 'reject',
-      accept: () => {
+      onAccept: () => {
         this.reservationService.deleteReservation(reservation.id).subscribe({
           next: () => {
             this.detailsCache.delete(reservation.id);
@@ -547,10 +546,16 @@ export class ListReservations implements OnInit {
       return `${reservation.total_guests || 0} huesped(es)`;
     }
 
-    const firstRoom = detail.rooms_detail[0];
-    if (!firstRoom) return `${reservation.total_guests || 0} huesped(es)`;
+    const adults = detail.rooms_detail.reduce((sum, room) => sum + Number(room.adults || 0), 0);
+    const children = detail.rooms_detail.reduce((sum, room) => sum + Number(room.children || 0), 0);
+    const capacity = detail.rooms_detail.reduce((sum, room) => sum + this.getRoomCapacity(room), 0);
 
-    return `${firstRoom.adults || 1} adulto(s) - ${firstRoom.children || 0} nino(s)`;
+    const occupancyLabel = `${adults || 0} adulto(s) - ${children || 0} nino(s)`;
+    if (capacity > 0) {
+      return `Cap. ${capacity} - ${occupancyLabel}`;
+    }
+
+    return occupancyLabel;
   }
 
   getStayLabel(reservation: ReservationI): string {
@@ -1046,6 +1051,20 @@ export class ListReservations implements OnInit {
       leftPercent: (startIndex / totalDays) * 100,
       widthPercent: Math.max((span / totalDays) * 100, 6)
     };
+  }
+
+  private getRoomCapacity(roomDetail: { room?: number; room_type_capacity?: number | null }): number {
+    const detailCapacity = Number(roomDetail.room_type_capacity || 0);
+    if (Number.isFinite(detailCapacity) && detailCapacity > 0) return detailCapacity;
+
+    const roomId = Number(roomDetail.room || 0);
+    if (!roomId || Number.isNaN(roomId)) return 0;
+
+    const room = this.roomMap.get(roomId);
+    const roomCapacity = Number(room?.room_type_capacity || 0);
+    if (!Number.isFinite(roomCapacity) || roomCapacity <= 0) return 0;
+
+    return roomCapacity;
   }
 
   private getVisualStatus(reservation: ReservationI): ReservationVisualStatus {

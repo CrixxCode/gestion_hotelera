@@ -160,6 +160,17 @@ textarea {
   font-size: 12px;
 }
 
+.field-error {
+  color: #b91c1c;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.input-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12) !important;
+}
+
 input:focus,
 select:focus,
 textarea:focus {
@@ -198,7 +209,7 @@ textarea:focus {
 }
 
 .room-grid {
-  grid-template-columns: minmax(170px, 1.2fr) repeat(3, minmax(115px, 1fr));
+  grid-template-columns: minmax(220px, 1.4fr) minmax(140px, 1fr);
 }
 
 .policy-grid {
@@ -223,6 +234,11 @@ textarea:focus {
 .feedback.error {
   background: #fef2f2;
   color: #991b1b;
+}
+
+.feedback.warning {
+  background: #fff7ed;
+  color: #9a3412;
 }
 
 .drawer-footer {

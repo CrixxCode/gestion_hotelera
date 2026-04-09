@@ -49,40 +49,51 @@
     </article>
   </section>
 
-  <section class="toolbar-card">
-    <label class="search-field">
-      <i class="fa-solid fa-magnifying-glass"></i>
-      <input
-        type="text"
-        [(ngModel)]="search"
-        (input)="applyFilters()"
-        placeholder="Buscar por nombre, descripcion o tipo..."
-      />
-    </label>
+  <section class="gh-filters-card">
+    <div class="gh-filters-grid">
+      <label class="search-field search-wrap gh-search-wrap">
+        <span>Buscar</span>
+        <div class="search-control gh-search-control">
+          <i class="fa-solid fa-magnifying-glass gh-search-icon"></i>
+          <input
+            class="gh-search-input"
+            type="text"
+            [(ngModel)]="search"
+            (input)="applyFilters()"
+            placeholder="Buscar por nombre, descripcion o tipo..."
+          />
+        </div>
+      </label>
 
-    <select class="tool-select" [(ngModel)]="statusFilter" (change)="applyFilters()">
-      <option *ngFor="let statusOption of statusOptions" [ngValue]="statusOption.value">{{ statusOption.label }}</option>
-    </select>
+      <label class="gh-filter-field">
+        <span>Estado</span>
+        <select class="gh-filter-select" [(ngModel)]="statusFilter" (change)="applyFilters()">
+          <option *ngFor="let statusOption of statusOptions" [ngValue]="statusOption.value">{{ statusOption.label }}</option>
+        </select>
+      </label>
 
-    <button type="button" class="btn btn-light" (click)="refreshServices()" [disabled]="loading">
-      <i class="fa-solid fa-rotate-right"></i>
-      Actualizar
-    </button>
+      <label class="gh-filter-field">
+        <span>Tipo</span>
+        <select class="gh-filter-select" [(ngModel)]="selectedTypeFilter" (change)="applyFilters()">
+          <option *ngFor="let tab of typeTabs; trackBy: trackByTab" [value]="tab.key">{{ tab.label }}</option>
+        </select>
+      </label>
+    </div>
 
-    <span class="total-chip">{{ filteredServices.length }} visibles</span>
+    <div class="gh-filters-actions gh-filters-actions-single">
+      <div class="gh-action-group">
+        <button type="button" class="gh-btn gh-btn-light" (click)="refreshServices()" [disabled]="loading">
+          <i class="fa-solid fa-rotate-right"></i>
+          Actualizar
+        </button>
+
+        <button type="button" class="gh-btn gh-btn-light" (click)="exportCsv()">
+          <i class="fa-solid fa-file-export"></i>
+          Exportar
+        </button>
+      </div>
+    </div>
   </section>
-
-  <div class="type-filters">
-    <button
-      *ngFor="let tab of typeTabs; trackBy: trackByTab"
-      type="button"
-      [class.active]="selectedTypeFilter === tab.key"
-      (click)="selectTypeFilter(tab.key)">
-      <span class="dot" [ngStyle]="{ 'background-color': tab.tone.accent }"></span>
-      {{ tab.label }}
-      <small>{{ tab.count }}</small>
-    </button>
-  </div>
 
   <section class="state-message" *ngIf="loading || errorMessage || infoMessage || groupedServices.length === 0">
     <p *ngIf="loading">Cargando catalogo de servicios...</p>

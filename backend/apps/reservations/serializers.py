@@ -10,13 +10,17 @@ from apps.reservations.models import (
     ReservationDeposit,
 )
 from apps.reservations.services import (
-    RESERVATION_STATUS_PENDING,
+    RESERVATION_STATUS_PENDING_CODES,
     can_add_payment_to_reservation,
+    find_active_rate_for_room_type_dates,
     find_overlapping_reservation_room,
+    get_pending_reservation_status,
     get_reservation_financials,
     get_reservation_flow_permissions,
     get_reservation_payment_status,
-    get_reservation_status_by_code,
+    has_active_rate_for_room_type,
+    is_room_status_blocked_for_reservation,
+    sync_reservation_room_pricing_and_occupancy,
     validate_reservation_deposit_rules,
 )
 from apps.hotel_settings.models import ReservationPolicy
@@ -48,8 +52,24 @@ class ReservationPolicySummarySerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+def _as_serializer_error(error: Exception) -> dict:
+    message_dict = getattr(error, "message_dict", None)
+    if isinstance(message_dict, dict) and message_dict:
+        return message_dict
+
+    messages = getattr(error, "messages", None)
+    if isinstance(messages, list) and messages:
+        if len(messages) == 1:
+            return {"detail": messages[0]}
+        return {"detail": messages}
+
+    return {"detail": str(error)}
+
+
 class ReservationRoomSerializer(serializers.ModelSerializer):
     room_number = serializers.CharField(source="room.number", read_only=True)
+    room_type_name = serializers.CharField(source="room.room_type.name", read_only=True)
+    room_type_capacity = serializers.IntegerField(source="room.room_type.capacity", read_only=True)
     meal_plan_name = serializers.CharField(source="meal_plan.name", read_only=True)
     meal_plan_code = serializers.CharField(source="meal_plan.code", read_only=True)
     subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
@@ -61,6 +81,8 @@ class ReservationRoomSerializer(serializers.ModelSerializer):
             "reservation",
             "room",
             "room_number",
+            "room_type_name",
+            "room_type_capacity",
             "night_rate",
             "adults",
             "children",
@@ -71,6 +93,11 @@ class ReservationRoomSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ("id", "created_at", "subtotal")
+        extra_kwargs = {
+            "night_rate": {"required": False},
+            "adults": {"required": False},
+            "children": {"required": False},
+        }
 
     def validate_night_rate(self, value):
         if value < 0:
@@ -92,6 +119,32 @@ class ReservationRoomSerializer(serializers.ModelSerializer):
 
         reservation = attrs.get("reservation", getattr(self.instance, "reservation", None))
         room = attrs.get("room", getattr(self.instance, "room", None))
+        provided_night_rate = attrs.get("night_rate", None)
+
+        should_validate_room_status = self.instance is None
+        if self.instance is not None:
+            if "room" in attrs and room and room.id != self.instance.room_id:
+                should_validate_room_status = True
+            if (
+                "reservation" in attrs
+                and reservation
+                and reservation.id != self.instance.reservation_id
+            ):
+                should_validate_room_status = True
+
+        if (
+            should_validate_room_status
+            and room
+            and is_room_status_blocked_for_reservation(getattr(room, "status_code", None))
+        ):
+            status_label = room.get_status_display() or room.status_code or "estado actual"
+            raise serializers.ValidationError(
+                {
+                    "room": (
+                        f"La habitacion {room.number} no puede reservarse porque esta en {status_label.lower()}."
+                    )
+                }
+            )
 
         if reservation and room:
             conflict = find_overlapping_reservation_room(
@@ -139,7 +192,73 @@ class ReservationRoomSerializer(serializers.ModelSerializer):
                     {"room": "The room type is not compatible with the selected package."}
                 )
 
+        if reservation and room:
+            room_type_id = getattr(room, "room_type_id", None)
+            if not room_type_id:
+                raise serializers.ValidationError(
+                    {"room": f"La habitacion {room.number} no tiene tipo de habitacion configurado."}
+                )
+
+            expected_rate = find_active_rate_for_room_type_dates(
+                room_type_id=room_type_id,
+                expected_check_in=reservation.expected_check_in,
+                expected_check_out=reservation.expected_check_out,
+            )
+            has_active_rates = has_active_rate_for_room_type(room_type_id)
+
+            if not expected_rate:
+                if has_active_rates:
+                    raise serializers.ValidationError(
+                        {
+                            "night_rate": (
+                                "No existe una tarifa activa para el tipo de habitacion "
+                                "en el rango de fechas de la reserva."
+                            )
+                        }
+                    )
+                raise serializers.ValidationError(
+                    {
+                        "night_rate": (
+                            "La habitacion seleccionada no tiene una tarifa activa configurada "
+                            "para su tipo de habitacion."
+                        )
+                    }
+                )
+
+            if provided_night_rate is not None and provided_night_rate != expected_rate.price:
+                raise serializers.ValidationError(
+                    {
+                        "night_rate": (
+                            f"La tarifa por noche debe coincidir con la tarifa activa "
+                            f"({expected_rate.price}) para este tipo de habitacion."
+                        )
+                    }
+                )
+
+            # Siempre normalizamos la tarifa segun la configuracion activa del tipo de habitacion.
+            attrs["night_rate"] = expected_rate.price
+
         return attrs
+
+    def create(self, validated_data):
+        with transaction.atomic():
+            instance = super().create(validated_data)
+            try:
+                sync_reservation_room_pricing_and_occupancy(instance.reservation)
+            except Exception as exc:
+                raise serializers.ValidationError(_as_serializer_error(exc))
+            instance.refresh_from_db()
+            return instance
+
+    def update(self, instance, validated_data):
+        with transaction.atomic():
+            updated = super().update(instance, validated_data)
+            try:
+                sync_reservation_room_pricing_and_occupancy(updated.reservation)
+            except Exception as exc:
+                raise serializers.ValidationError(_as_serializer_error(exc))
+            updated.refresh_from_db()
+            return updated
 
 
 class ReservationGuestSerializer(serializers.ModelSerializer):
@@ -167,6 +286,24 @@ class ReservationGuestSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ("id", "created_at", "full_name")
+
+    def create(self, validated_data):
+        with transaction.atomic():
+            instance = super().create(validated_data)
+            try:
+                sync_reservation_room_pricing_and_occupancy(instance.reservation)
+            except Exception as exc:
+                raise serializers.ValidationError(_as_serializer_error(exc))
+            return instance
+
+    def update(self, instance, validated_data):
+        with transaction.atomic():
+            updated = super().update(instance, validated_data)
+            try:
+                sync_reservation_room_pricing_and_occupancy(updated.reservation)
+            except Exception as exc:
+                raise serializers.ValidationError(_as_serializer_error(exc))
+            return updated
 
 
 class ReservationDepositSerializer(serializers.ModelSerializer):
@@ -735,12 +872,13 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
         validated_data["real_check_out"] = None
         validated_data.update(self._build_package_snapshot(package))
 
-        pending_status = get_reservation_status_by_code(RESERVATION_STATUS_PENDING)
+        pending_status = get_pending_reservation_status()
         if not pending_status:
+            expected_codes = ", ".join(RESERVATION_STATUS_PENDING_CODES)
             raise serializers.ValidationError(
                 {
                     "status": (
-                        f"No existe un estado activo '{RESERVATION_STATUS_PENDING}' "
+                        f"No existe un estado activo de pendiente ({expected_codes}) "
                         f"en {MasterData.Group.RESERVATION_STATUS}."
                     )
                 }

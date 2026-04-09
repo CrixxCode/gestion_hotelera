@@ -55,3 +55,293 @@
 .aside-scroll:hover {
   scrollbar-color: rgba(251,191,36,0.25) transparent;  /* dorado sutil al hover */
 }
+
+/* ===== Unified Search (Reference: Reservations view) ===== */
+:root {
+  --gh-search-height: 40px;
+  --gh-search-radius: 11px;
+  --gh-search-border: #d7deea;
+  --gh-search-focus: #3b82f6;
+  --gh-search-text: #334155;
+  --gh-search-muted: #95a2b5;
+  --gh-search-placeholder: #94a3b8;
+}
+
+.gh-search-wrap {
+  min-width: 0;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 7px !important;
+  box-sizing: border-box !important;
+}
+
+.gh-search-wrap.search-field,
+.search-field.gh-search-wrap,
+.gh-search-wrap.search {
+  height: auto !important;
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  align-items: stretch !important;
+}
+
+.gh-search-wrap > span,
+.gh-search-label {
+  margin: 0 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  color: #95a2b5 !important;
+  font-weight: 600 !important;
+}
+
+.gh-search-control {
+  height: var(--gh-search-height) !important;
+  border: 1px solid var(--gh-search-border) !important;
+  border-radius: var(--gh-search-radius) !important;
+  background: #fff !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 0 10px !important;
+  box-sizing: border-box !important;
+  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease !important;
+}
+
+.gh-search-control:focus-within {
+  border-color: var(--gh-search-focus) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.13) !important;
+}
+
+.gh-search-control i,
+.gh-search-control svg {
+  color: var(--gh-search-muted) !important;
+  width: 16px !important;
+  min-width: 16px !important;
+  text-align: center !important;
+  flex: 0 0 auto !important;
+}
+
+.gh-search-control svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+.gh-search-input {
+  width: 100% !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  color: var(--gh-search-text) !important;
+  font-size: 14px !important;
+  line-height: 1.2 !important;
+  font-weight: 500 !important;
+  box-sizing: border-box !important;
+  appearance: none !important;
+}
+
+.gh-search-input::placeholder {
+  color: var(--gh-search-placeholder) !important;
+}
+
+.gh-search-clear {
+  width: 24px !important;
+  height: 24px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: #64748b !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  cursor: pointer !important;
+  transition: background-color .15s ease, color .15s ease !important;
+}
+
+.gh-search-clear:hover {
+  background: #edf2f9 !important;
+}
+
+/* ===== Unified Filters Card (Reference: Reservations view) ===== */
+.gh-filters-card {
+  margin-top: 16px !important;
+  border: 1px solid #dfe6f0 !important;
+  border-radius: 16px !important;
+  background: #fff !important;
+  padding: 14px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+}
+
+.gh-filters-grid {
+  display: grid !important;
+  gap: 10px !important;
+  grid-template-columns: minmax(360px, 1fr) 220px 220px !important;
+}
+
+.gh-filter-field {
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 7px !important;
+}
+
+.gh-filter-field > span {
+  margin: 0 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  color: #95a2b5 !important;
+  font-weight: 600 !important;
+}
+
+.gh-filter-select {
+  width: 100% !important;
+  border: 1px solid #d7deea !important;
+  border-radius: 11px !important;
+  background: #fff !important;
+  height: 40px !important;
+  padding: 0 12px !important;
+  font-size: 14px !important;
+  color: #334155 !important;
+  outline: 0 !important;
+}
+
+.gh-filter-select:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.13) !important;
+}
+
+.gh-filters-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+}
+
+.gh-filters-actions-single {
+  justify-content: flex-end !important;
+}
+
+.gh-view-toggle {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.gh-view-toggle button {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 10px !important;
+  border: 1px solid #d7deea !important;
+  background: #fff !important;
+  color: #94a3b8 !important;
+  display: grid !important;
+  place-items: center !important;
+  cursor: pointer !important;
+}
+
+.gh-view-toggle button.active {
+  background: #0f1f41 !important;
+  border-color: #0f1f41 !important;
+  color: #fff !important;
+}
+
+.gh-action-group {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+}
+
+.gh-btn {
+  border-radius: 11px !important;
+  border: 1px solid transparent !important;
+  min-height: 40px !important;
+  padding: 0 14px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  cursor: pointer !important;
+}
+
+.gh-btn-light {
+  background: #fff !important;
+  color: #334155 !important;
+  border-color: #d7deea !important;
+}
+
+.gh-btn-dark {
+  background: #0f1f41 !important;
+  color: #fff !important;
+  border-color: #0f1f41 !important;
+}
+
+.gh-btn:disabled {
+  opacity: 0.65 !important;
+  cursor: not-allowed !important;
+}
+
+@media (max-width: 1100px) {
+  .gh-filters-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .gh-filters-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .gh-filters-actions {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .gh-view-toggle,
+  .gh-action-group {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+}
+/* Shared field-level validation styles for forms */
+.field-error {
+  color: #b91c1c;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.input-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12) !important;
+}
+
+/* Unified confirm dialog */
+.app-confirm-dialog .p-dialog {
+  border-radius: 14px !important;
+  overflow: hidden !important;
+}
+
+.app-confirm-dialog .p-dialog-header {
+  padding: 0.95rem 1.2rem !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.app-confirm-dialog .p-dialog-content {
+  padding: 1.1rem 1.2rem 0.8rem !important;
+  color: #334155 !important;
+}
+
+.app-confirm-dialog .p-dialog-footer {
+  padding: 0.85rem 1.2rem 1rem !important;
+  border-top: 1px solid #e2e8f0 !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 0.6rem !important;
+}

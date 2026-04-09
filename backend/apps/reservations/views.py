@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import filters, status, viewsets
@@ -9,6 +10,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 from accounts.permissions import HasResourcePermission
+from accounts.soft_delete import LogicalDeleteViewSetMixin
 from apps.reservations.models import (
     Reservation,
     ReservationRoom,
@@ -24,12 +26,30 @@ from apps.reservations.serializers import (
     ReservationDepositSerializer,
 )
 from apps.reservations.services import (
+    RESERVATION_STATUS_CANCELLED_CODES,
     RESERVATION_STATUS_CANCELLED,
+    RESERVATION_STATUS_CONFIRMED_CODES,
     RESERVATION_STATUS_CONFIRMED,
+    RESERVATION_STATUS_FINISHED_CODES,
     RESERVATION_STATUS_FINISHED,
+    RESERVATION_STATUS_IN_PROGRESS_CODES,
     RESERVATION_STATUS_IN_PROGRESS,
+    RESERVATION_STATUS_PENDING_CODES,
     RESERVATION_STATUS_PENDING,
+    create_check_in_inventory_snapshot,
+    create_checkout_inventory_comparison,
+    create_post_checkout_cleaning_tasks,
+    get_cancelled_reservation_status,
+    get_confirmed_reservation_status,
+    get_finished_reservation_status,
+    get_in_progress_reservation_status,
+    get_pending_reservation_status,
     get_reservation_status_by_code,
+    is_reservation_status_cancelled,
+    is_reservation_status_confirmed,
+    is_reservation_status_finished,
+    is_reservation_status_pending,
+    validate_checkout_inventory_review_payload,
 )
 
 
@@ -39,7 +59,7 @@ class ReservationPagination(PageNumberPagination):
     max_page_size = 100
 
 
-class ReservationViewSet(viewsets.ModelViewSet):
+class ReservationViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = Reservation.objects.all()
     serializer_class = ReservationWriteSerializer
     pagination_class = ReservationPagination
@@ -132,7 +152,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
         cutoff = timezone.now() - timedelta(days=retention_days)
 
         return queryset.exclude(
-            status__code=RESERVATION_STATUS_FINISHED,
+            status__code__in=RESERVATION_STATUS_FINISHED_CODES,
             real_check_out__lt=cutoff,
         )
 
@@ -161,9 +181,44 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
     def _get_status_obj(self, code: str):
         status_obj = get_reservation_status_by_code(code)
-        if not status_obj:
-            raise ValueError(f"No existe un estado activo '{code}' para reservas.")
-        return status_obj
+        if status_obj:
+            return status_obj
+
+        resolver_map = {
+            RESERVATION_STATUS_PENDING: (
+                get_pending_reservation_status,
+                RESERVATION_STATUS_PENDING_CODES,
+            ),
+            RESERVATION_STATUS_CONFIRMED: (
+                get_confirmed_reservation_status,
+                RESERVATION_STATUS_CONFIRMED_CODES,
+            ),
+            RESERVATION_STATUS_IN_PROGRESS: (
+                get_in_progress_reservation_status,
+                RESERVATION_STATUS_IN_PROGRESS_CODES,
+            ),
+            RESERVATION_STATUS_FINISHED: (
+                get_finished_reservation_status,
+                RESERVATION_STATUS_FINISHED_CODES,
+            ),
+            RESERVATION_STATUS_CANCELLED: (
+                get_cancelled_reservation_status,
+                RESERVATION_STATUS_CANCELLED_CODES,
+            ),
+        }
+
+        resolver, aliases = resolver_map.get(code, (None, None))
+        if resolver:
+            status_obj = resolver()
+            if status_obj:
+                return status_obj
+            aliases_text = ", ".join(aliases or ())
+            raise ValueError(
+                "No existe un estado activo para reservas "
+                f"con ninguno de estos codigos: {aliases_text}."
+            )
+
+        raise ValueError(f"No existe un estado activo '{code}' para reservas.")
 
     def _set_status(
         self,
@@ -201,6 +256,21 @@ class ReservationViewSet(viewsets.ModelViewSet):
     def _error(self, message: str) -> Response:
         return Response({"detail": message}, status=status.HTTP_400_BAD_REQUEST)
 
+    @staticmethod
+    def _validation_error_message(error: ValidationError) -> str:
+        message_dict = getattr(error, "message_dict", None)
+        if isinstance(message_dict, dict) and message_dict:
+            first_value = next(iter(message_dict.values()))
+            if isinstance(first_value, (list, tuple)) and first_value:
+                return str(first_value[0])
+            return str(first_value)
+
+        messages = getattr(error, "messages", None)
+        if isinstance(messages, list) and messages:
+            return str(messages[0])
+
+        return str(error)
+
     def _get_locked_reservation(self, reservation_id: int | str):
         return self.get_queryset().select_for_update().get(pk=reservation_id)
 
@@ -216,17 +286,17 @@ class ReservationViewSet(viewsets.ModelViewSet):
             if reservation.real_check_in:
                 return self._error("La reserva ya tiene check-in registrado.")
 
-            if code == RESERVATION_STATUS_CANCELLED:
+            if is_reservation_status_cancelled(code):
                 return self._error("No puedes confirmar una reserva cancelada.")
 
-            if code == RESERVATION_STATUS_FINISHED:
+            if is_reservation_status_finished(code):
                 return self._error("No puedes confirmar una reserva finalizada.")
 
-            if code == RESERVATION_STATUS_CONFIRMED:
+            if is_reservation_status_confirmed(code):
                 serializer = ReservationDetailSerializer(reservation, context=self.get_serializer_context())
                 return Response(serializer.data, status=status.HTTP_200_OK)
 
-            if code != RESERVATION_STATUS_PENDING:
+            if not is_reservation_status_pending(code):
                 return self._error("Solo se pueden confirmar reservas en estado pendiente.")
 
             try:
@@ -249,10 +319,10 @@ class ReservationViewSet(viewsets.ModelViewSet):
             if reservation.real_check_in:
                 return self._error("La reserva ya tiene check-in registrado.")
 
-            if code == RESERVATION_STATUS_CANCELLED:
+            if is_reservation_status_cancelled(code):
                 return self._error("No puedes hacer check-in en una reserva cancelada.")
 
-            if code != RESERVATION_STATUS_CONFIRMED:
+            if not is_reservation_status_confirmed(code):
                 return self._error("Debes confirmar la reserva antes de hacer check-in.")
 
             try:
@@ -260,6 +330,10 @@ class ReservationViewSet(viewsets.ModelViewSet):
                     reservation,
                     status_code=RESERVATION_STATUS_IN_PROGRESS,
                     set_real_check_in=True,
+                )
+                create_check_in_inventory_snapshot(
+                    reservation,
+                    created_by=request.user,
                 )
             except ValueError as exc:
                 return self._error(str(exc))
@@ -269,6 +343,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="check-out")
     def check_out(self, request, pk=None):
+        inventory_comparison = None
         with transaction.atomic():
             reservation = self._get_locked_reservation(pk)
             code = self._normalize_code(reservation.status_code)
@@ -280,8 +355,20 @@ class ReservationViewSet(viewsets.ModelViewSet):
             if reservation.real_check_in is None:
                 return self._error("No puedes hacer check-out sin haber registrado check-in.")
 
-            if code == RESERVATION_STATUS_CANCELLED:
+            if is_reservation_status_cancelled(code):
                 return self._error("No puedes hacer check-out en una reserva cancelada.")
+
+            inventory_review_payload = request.data.get(
+                "inventory_review",
+                request.data.get("inventory"),
+            )
+            try:
+                inventory_review_lines = validate_checkout_inventory_review_payload(
+                    reservation,
+                    inventory_review_payload,
+                )
+            except ValidationError as exc:
+                return self._error(self._validation_error_message(exc))
 
             try:
                 reservation = self._set_status(
@@ -289,11 +376,28 @@ class ReservationViewSet(viewsets.ModelViewSet):
                     status_code=RESERVATION_STATUS_FINISHED,
                     set_real_check_out=True,
                 )
+                create_post_checkout_cleaning_tasks(reservation)
+                inventory_comparison = create_checkout_inventory_comparison(
+                    reservation,
+                    inventory_review_lines=inventory_review_lines,
+                    created_by=request.user,
+                )
+                from apps.billing.services import create_inventory_missing_charges_for_checkout
+
+                create_inventory_missing_charges_for_checkout(
+                    reservation,
+                    inventory_comparison=inventory_comparison,
+                )
+            except ValidationError as exc:
+                return self._error(self._validation_error_message(exc))
             except ValueError as exc:
                 return self._error(str(exc))
 
         serializer = ReservationDetailSerializer(reservation, context=self.get_serializer_context())
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        response_data = dict(serializer.data)
+        if inventory_comparison is not None:
+            response_data["inventory_comparison"] = inventory_comparison
+        return Response(response_data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="cancel")
     def cancel(self, request, pk=None):
@@ -307,11 +411,11 @@ class ReservationViewSet(viewsets.ModelViewSet):
             if reservation.real_check_out:
                 return self._error("No puedes cancelar una reserva finalizada.")
 
-            if code == RESERVATION_STATUS_CANCELLED:
+            if is_reservation_status_cancelled(code):
                 serializer = ReservationDetailSerializer(reservation, context=self.get_serializer_context())
                 return Response(serializer.data, status=status.HTTP_200_OK)
 
-            if code == RESERVATION_STATUS_FINISHED:
+            if is_reservation_status_finished(code):
                 return self._error("No puedes cancelar una reserva finalizada.")
 
             try:
@@ -323,7 +427,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class ReservationRoomViewSet(viewsets.ModelViewSet):
+class ReservationRoomViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         ReservationRoom.objects.select_related(
             "reservation",
@@ -361,7 +465,7 @@ class ReservationRoomViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
 
-class ReservationGuestViewSet(viewsets.ModelViewSet):
+class ReservationGuestViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         ReservationGuest.objects.select_related(
             "reservation",
@@ -401,7 +505,7 @@ class ReservationGuestViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
 
-class ReservationDepositViewSet(viewsets.ModelViewSet):
+class ReservationDepositViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         ReservationDeposit.objects.select_related(
             "reservation",

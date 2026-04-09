@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.billing.models import Invoice, InvoiceCharge, Charge, Payment
+from apps.billing.models import Invoice, InvoiceCharge, Charge, Payment, CreditNote
 from apps.billing.services import get_or_create_default_charge_type
 
 class ChargeSerializer(serializers.ModelSerializer):
@@ -236,6 +236,63 @@ class PaymentSerializer(serializers.ModelSerializer):
             if amount > pending_balance:
                 raise serializers.ValidationError(
                     {"amount": "Payment amount cannot be greater than the pending balance."}
+                )
+
+        return attrs
+    
+class CreditNoteSerializer(serializers.ModelSerializer):
+    status_name = serializers.CharField(source="status.name", read_only=True)
+    status_code = serializers.CharField(source="status.code", read_only=True)
+    invoice_number = serializers.CharField(source="invoice.invoice_number", read_only=True)
+
+    class Meta:
+        model = CreditNote
+        fields = [
+            "id",
+            "invoice",
+            "invoice_number",
+            "status",
+            "status_name",
+            "status_code",
+            "credit_note_number",
+            "amount",
+            "reason",
+            "issue_date",
+            "notes",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = (
+            "id",
+            "issue_date",
+            "created_at",
+            "updated_at",
+        )
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Credit note amount must be greater than 0.")
+        return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        invoice = attrs.get("invoice", getattr(self.instance, "invoice", None))
+        amount = attrs.get("amount", getattr(self.instance, "amount", None))
+
+        if invoice and amount:
+            total_active_credit_notes = sum(
+                note.amount
+                for note in invoice.credit_notes.filter(is_active=True).exclude(
+                    pk=getattr(self.instance, "pk", None)
+                )
+            )
+            max_credit_available = invoice.total_amount - total_active_credit_notes
+
+            if amount > max_credit_available:
+                raise serializers.ValidationError(
+                    {"amount": "Credit note amount cannot be greater than the available invoice balance."}
                 )
 
         return attrs

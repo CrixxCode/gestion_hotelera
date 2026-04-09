@@ -90,3 +90,30 @@ export interface PaymentCreatePayloadI {
   notes?: string | null;
   is_active?: boolean;
 }
+
+export interface CreditNoteI {
+  id: number;
+  invoice: number;
+  invoice_number?: string;
+  status: number;
+  status_name?: string;
+  status_code?: string;
+  credit_note_number: string;
+  amount: string | number;
+  reason: string;
+  issue_date?: string;
+  notes?: string | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreditNoteCreatePayloadI {
+  invoice: number;
+  status: number;
+  credit_note_number: string;
+  amount: number;
+  reason: string;
+  notes?: string | null;
+  is_active?: boolean;
+}

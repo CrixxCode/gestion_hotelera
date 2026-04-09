@@ -2,11 +2,13 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { catchError, forkJoin, of } from 'rxjs';
+import { ConfirmationService } from 'primeng/api';
 import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
 import { HotelSettingsService } from '../../../services/hotel-settings';
 import { MasterDataService } from '../../../services/master-data.service';
 import { PackagesService } from '../../../services/package';
 import { ServicesService } from '../../../services/service';
+import { openActionConfirmation } from '../../../services/action-confirmations';
 import { ServiceI } from '../../services/service-model';
 import { CreatePackage } from '../create-package/create-package';
 import { DetailPackage } from '../detail-package/detail-package';
@@ -161,7 +163,8 @@ export class ListPackages implements OnInit {
     private packagesService: PackagesService,
     private servicesService: ServicesService,
     private masterDataService: MasterDataService,
-    private hotelSettingsService: HotelSettingsService
+    private hotelSettingsService: HotelSettingsService,
+    private confirmationService: ConfirmationService
   ) {}
 
   ngOnInit(): void {
@@ -268,6 +271,49 @@ export class ListPackages implements OnInit {
     });
   }
 
+  exportCsv(): void {
+    if (!this.filteredPackages.length) return;
+
+    const headers = [
+      'nombre',
+      'descripcion',
+      'categoria',
+      'servicios',
+      'precio_base',
+      'fecha_inicio',
+      'fecha_fin',
+      'estado'
+    ];
+
+    const rows = this.filteredPackages.map((pkg) => {
+      const services = this.getPackageServices(pkg)
+        .map((service) => service.service_name || `Servicio #${service.service}`)
+        .join(' | ');
+
+      const row = [
+        pkg.name || '',
+        pkg.description || '',
+        this.getCategoryLabel(pkg),
+        services,
+        this.toPriceNumber(pkg.base_price),
+        pkg.start_date || '',
+        pkg.end_date || '',
+        pkg.is_active ? 'Activo' : 'Inactivo'
+      ];
+
+      return row.map((cell) => this.escapeCsvCell(cell)).join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `paquetes-${this.formatFileDate(new Date())}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   applyFilters(): void {
     const searchValue = this.normalizeSearch(this.search);
 
@@ -370,18 +416,21 @@ export class ListPackages implements OnInit {
   }
 
   confirmDelete(pkg: PackageI): void {
-    const confirmed = window.confirm(`Deseas eliminar "${pkg.name}" del catalogo?`);
-    if (!confirmed) return;
-
-    this.errorMessage = '';
-    this.packagesService.deletePackage(pkg.id).subscribe({
-      next: () => {
-        if (this.selectedPackage?.id === pkg.id) this.closeDetail();
-        if (this.packageToEdit?.id === pkg.id) this.closeUpdateDrawer();
-        this.refreshPackages();
-      },
-      error: () => {
-        this.errorMessage = 'No fue posible eliminar el paquete seleccionado.';
+    openActionConfirmation(this.confirmationService, {
+      action: 'delete',
+      target: pkg.name || 'paquete',
+      onAccept: () => {
+        this.errorMessage = '';
+        this.packagesService.deletePackage(pkg.id).subscribe({
+          next: () => {
+            if (this.selectedPackage?.id === pkg.id) this.closeDetail();
+            if (this.packageToEdit?.id === pkg.id) this.closeUpdateDrawer();
+            this.refreshPackages();
+          },
+          error: () => {
+            this.errorMessage = 'No fue posible eliminar el paquete seleccionado.';
+          }
+        });
       }
     });
   }
@@ -728,5 +777,18 @@ export class ListPackages implements OnInit {
 
   private normalizeSearch(value: string): string {
     return String(value || '').trim().toLowerCase();
+  }
+
+  private formatFileDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+    return `${year}${month}${day}`;
+  }
+
+  private escapeCsvCell(value: unknown): string {
+    const normalized = String(value ?? '');
+    const escaped = normalized.replace(/"/g, '""');
+    return `"${escaped}"`;
   }
 }

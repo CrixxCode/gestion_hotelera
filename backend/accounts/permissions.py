@@ -41,7 +41,13 @@ class HasResourcePermission(BasePermission):
         if not path.endswith("/"):
             path += "/"
 
-        user_resources = Resource.objects.filter(roles__users=user).distinct()
+        user_resources = Resource.objects.filter(
+            is_active=True,
+            roleresource__is_active=True,
+            roleresource__role__is_active=True,
+            roleresource__role__userrole__user=user,
+            roleresource__role__userrole__is_active=True,
+        ).distinct()
 
         for resource in user_resources:
             link = (resource.link_backend or "").strip().lower()

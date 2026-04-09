@@ -2,10 +2,14 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { catchError, forkJoin, map, of } from 'rxjs';
+import { ConfirmationService } from 'primeng/api';
 import { RoomService } from '../../../services/room';
 import { AmenityI, RoomI } from '../room-model';
+import { errorActionAlert, successActionAlert } from '../../../services/action-alerts';
+import { openActionConfirmation } from '../../../services/action-confirmations';
 
 type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
+type UsageFilter = 'ALL' | 'IN_USE' | 'NO_USE';
 type DrawerMode = 'create' | 'edit';
 type ToastKind = 'success' | 'danger' | 'info';
 
@@ -45,6 +49,7 @@ export class AmenitiesPage implements OnInit {
 
   search = '';
   statusFilter: StatusFilter = 'ALL';
+  usageFilter: UsageFilter = 'ALL';
 
   showDrawer = false;
   drawerMode: DrawerMode = 'create';
@@ -62,7 +67,6 @@ export class AmenitiesPage implements OnInit {
     is_active: true
   };
 
-  showDeleteConfirm = false;
   deleteTarget: AmenityI | null = null;
 
   toastVisible = false;
@@ -72,7 +76,10 @@ export class AmenitiesPage implements OnInit {
 
   readonly iconCatalog = AMENITY_ICON_CATALOG;
 
-  constructor(private roomService: RoomService) {
+  constructor(
+    private roomService: RoomService,
+    private confirmationService: ConfirmationService
+  ) {
     this.form = this.emptyForm();
   }
 
@@ -148,9 +155,42 @@ export class AmenitiesPage implements OnInit {
 
       const pool = [item.name, item.description || '', item.icon || ''].join(' ').toLowerCase();
       const matchesSearch = !q || pool.includes(q);
+      const usageCount = this.getUsageCount(item.id);
+      const matchesUsage =
+        this.usageFilter === 'ALL' ||
+        (this.usageFilter === 'IN_USE' && usageCount > 0) ||
+        (this.usageFilter === 'NO_USE' && usageCount === 0);
 
-      return matchesStatus && matchesSearch;
+      return matchesStatus && matchesSearch && matchesUsage;
     });
+  }
+
+  exportCsv(): void {
+    if (!this.filteredAmenities.length) return;
+
+    const headers = ['amenidad', 'descripcion', 'icono', 'uso', 'estado', 'creada'];
+
+    const rows = this.filteredAmenities.map((item) => {
+      const row = [
+        item.name || '',
+        item.description || '',
+        item.icon || '',
+        this.getUsageCount(item.id),
+        item.is_active ? 'Activa' : 'Inactiva',
+        this.formatDate(item.created_at)
+      ];
+
+      return row.map((cell) => this.escapeCsvCell(cell)).join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `amenidades-${this.formatFileDate(new Date())}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   openCreate(): void {
@@ -211,12 +251,12 @@ export class AmenitiesPage implements OnInit {
         next: () => {
           this.saving = false;
           this.showDrawer = false;
-          this.toast('Amenidad actualizada.', 'success');
+          this.toast(successActionAlert('update', 'amenidad'), 'success');
           this.loadData();
         },
         error: (error) => {
           this.saving = false;
-          this.toast(this.extractErrorMessage(error, 'No se pudo actualizar la amenidad.'), 'danger');
+          this.toast(this.extractErrorMessage(error, errorActionAlert('update', 'amenidad')), 'danger');
         }
       });
       return;
@@ -226,19 +266,23 @@ export class AmenitiesPage implements OnInit {
       next: () => {
         this.saving = false;
         this.showDrawer = false;
-        this.toast('Amenidad creada.', 'success');
+        this.toast(successActionAlert('create', 'amenidad'), 'success');
         this.loadData();
       },
       error: (error) => {
         this.saving = false;
-        this.toast(this.extractErrorMessage(error, 'No se pudo crear la amenidad.'), 'danger');
+        this.toast(this.extractErrorMessage(error, errorActionAlert('create', 'amenidad')), 'danger');
       }
     });
   }
 
   askDelete(item: AmenityI): void {
     this.deleteTarget = item;
-    this.showDeleteConfirm = true;
+    openActionConfirmation(this.confirmationService, {
+      action: 'delete',
+      target: item.name || 'amenidad',
+      onAccept: () => this.confirmDelete()
+    });
   }
 
   confirmDelete(): void {
@@ -247,15 +291,13 @@ export class AmenitiesPage implements OnInit {
 
     this.roomService.deleteAmenity(targetId).subscribe({
       next: () => {
-        this.showDeleteConfirm = false;
         this.deleteTarget = null;
-        this.toast('Amenidad eliminada.', 'success');
+        this.toast(successActionAlert('delete', 'amenidad'), 'success');
         this.loadData();
       },
       error: (error) => {
-        this.showDeleteConfirm = false;
         this.deleteTarget = null;
-        this.toast(this.extractErrorMessage(error, 'No se pudo eliminar la amenidad.'), 'danger');
+        this.toast(this.extractErrorMessage(error, errorActionAlert('delete', 'amenidad')), 'danger');
       }
     });
   }
@@ -331,5 +373,18 @@ export class AmenitiesPage implements OnInit {
     }
 
     return fallback;
+  }
+
+  private formatFileDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+    return `${year}${month}${day}`;
+  }
+
+  private escapeCsvCell(value: unknown): string {
+    const normalized = String(value ?? '');
+    const escaped = normalized.replace(/"/g, '""');
+    return `"${escaped}"`;
   }
 }

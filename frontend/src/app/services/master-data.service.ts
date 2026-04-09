@@ -1,11 +1,12 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { Observable, map, of, switchMap } from 'rxjs';
 import { environment } from '../../enviorements/environment';
 import { AuthService } from './auth/auth';
 import { MasterDataGroupI, MasterDataI } from '../components/pages/master-data/master-data-model';
 
 type DRFPaginated<T> = {
+  next?: string | null;
   results?: T[];
 };
 
@@ -27,21 +28,65 @@ export class MasterDataService {
     return [];
   }
 
+  private extractNext<T>(res: unknown): string | null {
+    if (!res || typeof res !== 'object') return null;
+    const next = (res as DRFPaginated<T>).next;
+    if (typeof next !== 'string' || !next.trim()) return null;
+    return next;
+  }
+
+  private buildListParams(filters?: {
+    group?: string;
+    is_active?: 'true' | 'false';
+    search?: string;
+    ordering?: string;
+  }): HttpParams {
+    let params = new HttpParams();
+    if (filters?.group) params = params.set('group', filters.group);
+    if (filters?.is_active) params = params.set('is_active', filters.is_active);
+    if (filters?.search?.trim()) params = params.set('search', filters.search.trim());
+    if (filters?.ordering?.trim()) params = params.set('ordering', filters.ordering.trim());
+    return params;
+  }
+
+  private collectAllPages<T>(res: unknown, acc: T[] = []): Observable<T[]> {
+    const pageItems = this.unwrapArray<T>(res);
+    const next = this.extractNext<T>(res);
+    const merged = [...acc, ...pageItems];
+
+    if (!next) {
+      return of(merged);
+    }
+
+    return this.http
+      .get<T[] | DRFPaginated<T>>(next, { withCredentials: true })
+      .pipe(switchMap((nextRes) => this.collectAllPages<T>(nextRes, merged)));
+  }
+
   listMasterData(filters?: {
     group?: string;
     is_active?: 'true' | 'false';
     search?: string;
     ordering?: string;
   }): Observable<MasterDataI[]> {
-    let params = new HttpParams();
-    if (filters?.group) params = params.set('group', filters.group);
-    if (filters?.is_active) params = params.set('is_active', filters.is_active);
-    if (filters?.search?.trim()) params = params.set('search', filters.search.trim());
-    if (filters?.ordering?.trim()) params = params.set('ordering', filters.ordering.trim());
+    const params = this.buildListParams(filters);
 
     return this.http
       .get<MasterDataI[] | DRFPaginated<MasterDataI>>(this.masterDataUrl, { withCredentials: true, params })
       .pipe(map((res) => this.unwrapArray<MasterDataI>(res)));
+  }
+
+  listMasterDataAll(filters?: {
+    group?: string;
+    is_active?: 'true' | 'false';
+    search?: string;
+    ordering?: string;
+  }): Observable<MasterDataI[]> {
+    const params = this.buildListParams(filters);
+
+    return this.http
+      .get<MasterDataI[] | DRFPaginated<MasterDataI>>(this.masterDataUrl, { withCredentials: true, params })
+      .pipe(switchMap((res) => this.collectAllPages<MasterDataI>(res)));
   }
 
   getMasterDataById(id: number): Observable<MasterDataI> {

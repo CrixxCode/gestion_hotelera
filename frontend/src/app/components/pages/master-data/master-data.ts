@@ -1,8 +1,11 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ConfirmationService } from 'primeng/api';
 import { MasterDataGroupI, MasterDataI } from './master-data-model';
 import { MasterDataService } from '../../../services/master-data.service';
+import { errorActionAlert, successActionAlert } from '../../../services/action-alerts';
+import { openActionConfirmation } from '../../../services/action-confirmations';
 
 type ToastKind = 'success' | 'danger' | 'info';
 type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
@@ -41,7 +44,6 @@ export class MasterDataComponent implements OnInit {
     sort_order: number;
   } = this.emptyForm();
 
-  showDeleteConfirm = false;
   deleteTarget: MasterDataI | null = null;
 
   toastVisible = false;
@@ -49,7 +51,10 @@ export class MasterDataComponent implements OnInit {
   toastKind: ToastKind = 'info';
   private toastTimer?: ReturnType<typeof setTimeout>;
 
-  constructor(private masterDataService: MasterDataService) {}
+  constructor(
+    private masterDataService: MasterDataService,
+    private confirmationService: ConfirmationService
+  ) {}
 
   ngOnInit(): void {
     this.loadInitialData();
@@ -91,7 +96,7 @@ export class MasterDataComponent implements OnInit {
 
   loadMasterData(): void {
     this.loading = true;
-    this.masterDataService.listMasterData({ ordering: 'group,sort_order,name' }).subscribe({
+    this.masterDataService.listMasterDataAll({ ordering: 'group,sort_order,name' }).subscribe({
       next: (items) => {
         this.allItems = Array.isArray(items) ? items : [];
         this.loading = false;
@@ -210,12 +215,12 @@ export class MasterDataComponent implements OnInit {
         next: () => {
           this.saving = false;
           this.showDrawer = false;
-          this.toast('Valor de catalogo actualizado.', 'success');
+          this.toast(successActionAlert('update', 'valor de catalogo'), 'success');
           this.loadInitialData();
         },
         error: (error) => {
           this.saving = false;
-          this.toast(this.extractErrorMessage(error, 'No se pudo actualizar el registro.'), 'danger');
+          this.toast(this.extractErrorMessage(error, errorActionAlert('update', 'valor de catalogo')), 'danger');
         }
       });
       return;
@@ -225,19 +230,23 @@ export class MasterDataComponent implements OnInit {
       next: () => {
         this.saving = false;
         this.showDrawer = false;
-        this.toast('Valor de catalogo creado.', 'success');
+        this.toast(successActionAlert('create', 'valor de catalogo'), 'success');
         this.loadInitialData();
       },
       error: (error) => {
         this.saving = false;
-        this.toast(this.extractErrorMessage(error, 'No se pudo crear el registro.'), 'danger');
+        this.toast(this.extractErrorMessage(error, errorActionAlert('create', 'valor de catalogo')), 'danger');
       }
     });
   }
 
   askDelete(item: MasterDataI): void {
     this.deleteTarget = item;
-    this.showDeleteConfirm = true;
+    openActionConfirmation(this.confirmationService, {
+      action: 'delete',
+      target: `${item.group} ${item.code}`.trim(),
+      onAccept: () => this.confirmDelete()
+    });
   }
 
   confirmDelete(): void {
@@ -246,15 +255,13 @@ export class MasterDataComponent implements OnInit {
 
     this.masterDataService.deleteMasterData(targetId).subscribe({
       next: () => {
-        this.showDeleteConfirm = false;
         this.deleteTarget = null;
-        this.toast('Valor eliminado.', 'success');
+        this.toast(successActionAlert('delete', 'valor de catalogo'), 'success');
         this.loadInitialData();
       },
       error: (error) => {
-        this.showDeleteConfirm = false;
         this.deleteTarget = null;
-        this.toast(this.extractErrorMessage(error, 'No se pudo eliminar el registro.'), 'danger');
+        this.toast(this.extractErrorMessage(error, errorActionAlert('delete', 'valor de catalogo')), 'danger');
       }
     });
   }

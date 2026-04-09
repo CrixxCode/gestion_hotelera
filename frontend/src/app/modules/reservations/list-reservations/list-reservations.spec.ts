@@ -1,4 +1,5 @@
-﻿import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 
 import { ListReservations } from './list-reservations';
@@ -16,6 +17,7 @@ describe('ListReservations', () => {
     await TestBed.configureTestingModule({
       imports: [ListReservations],
       providers: [
+        provideRouter([]),
         {
           provide: ReservationService,
           useValue: {
@@ -58,7 +60,8 @@ describe('ListReservations', () => {
         {
           provide: RoomService,
           useValue: {
-            listRooms: () => of([])
+            listRooms: () => of([]),
+            listRates: () => of([])
           }
         },
         {

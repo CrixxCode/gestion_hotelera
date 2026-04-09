@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.billing.models import Charge, Invoice, InvoiceCharge, Payment
+from apps.billing.models import Charge, CreditNote, Invoice, InvoiceCharge, Payment
 
 
 @admin.register(Charge)
@@ -67,3 +67,17 @@ class PaymentAdmin(admin.ModelAdmin):
     )
     search_fields = ("invoice__invoice_number", "reference", "notes")
     list_filter = ("payment_method", "is_active", "payment_date")
+    
+@admin.register(CreditNote)
+class CreditNoteAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "credit_note_number",
+        "invoice",
+        "status",
+        "amount",
+        "issue_date",
+        "is_active",
+    )
+    search_fields = ("credit_note_number", "invoice__invoice_number", "reason", "notes")
+    list_filter = ("status", "is_active", "issue_date")

@@ -9,6 +9,13 @@
   color: #1f2937;
 }
 
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
 .page-header h1 {
   margin: 0;
   font-size: 40px;
@@ -21,6 +28,13 @@
   margin: 8px 0 0;
   color: #8a94a6;
   font-size: 15px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .stats-grid {
@@ -102,8 +116,8 @@
 
 .filters-grid {
   display: grid;
-  gap: 12px;
-  grid-template-columns: 220px 220px minmax(320px, 1fr);
+  gap: 10px;
+  grid-template-columns: minmax(360px, 1fr) 220px 220px;
 }
 
 label {
@@ -133,37 +147,13 @@ input {
 }
 
 select:focus,
-input:focus {
+input:focus:not(.gh-search-input) {
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.13);
 }
 
 .search-wrap {
   min-width: 0;
-}
-
-.search-control {
-  height: 40px;
-  border: 1px solid #d7deea;
-  border-radius: 11px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-}
-
-.search-control svg {
-  width: 15px;
-  height: 15px;
-  color: #95a2b5;
-  flex: 0 0 auto;
-}
-
-.search-control input {
-  border: 0;
-  box-shadow: none;
-  width: 100%;
-  padding: 0;
 }
 
 .filters-actions {
@@ -173,7 +163,7 @@ input:focus {
   gap: 12px;
 }
 
-.actions-left {
+.action-group {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -183,10 +173,14 @@ input:focus {
 .btn {
   border-radius: 11px;
   border: 1px solid transparent;
-  height: 40px;
+  min-height: 40px;
   padding: 0 14px;
   font-size: 14px;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   cursor: pointer;
 }
 
@@ -223,11 +217,6 @@ input:focus {
   background: #0f1f41;
   border-color: #0f1f41;
   color: #fff;
-}
-
-.view-toggle button svg {
-  width: 16px;
-  height: 16px;
 }
 
 .status-tabs {
@@ -631,6 +620,18 @@ td small {
     padding: 16px;
   }
 
+  .page-header {
+    flex-direction: column;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions .btn {
+    flex: 1;
+  }
+
   .stats-grid,
   .rooms-grid,
   .filters-grid {
@@ -638,18 +639,16 @@ td small {
   }
 
   .filters-actions {
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .actions-left {
+  .view-toggle,
+  .action-group {
     width: 100%;
   }
 
-  .actions-left .btn {
-    flex: 1;
-  }
-
-  .btn {
+  .action-group .btn {
     flex: 1;
   }
 }

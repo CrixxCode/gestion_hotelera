@@ -42,12 +42,14 @@
       <div class="grid two">
         <label>
           <span>Nombre *</span>
-          <input id="first_name" formControlName="first_name" type="text" />
+          <input id="first_name" formControlName="first_name" type="text" [class.input-error]="form.get('first_name')?.touched && form.get('first_name')?.invalid" />
+          <small class="field-error" *ngIf="form.get('first_name')?.touched && form.get('first_name')?.invalid">El nombre es obligatorio.</small>
         </label>
 
         <label>
           <span>Apellido *</span>
-          <input id="last_name" formControlName="last_name" type="text" />
+          <input id="last_name" formControlName="last_name" type="text" [class.input-error]="form.get('last_name')?.touched && form.get('last_name')?.invalid" />
+          <small class="field-error" *ngIf="form.get('last_name')?.touched && form.get('last_name')?.invalid">El apellido es obligatorio.</small>
         </label>
       </div>
     </section>
@@ -57,12 +59,15 @@
       <div class="grid one">
         <label>
           <span>Nombre de usuario *</span>
-          <input id="username" formControlName="username" type="text" />
+          <input id="username" formControlName="username" type="text" [class.input-error]="form.get('username')?.touched && form.get('username')?.invalid" />
+          <small class="field-error" *ngIf="form.get('username')?.touched && form.get('username')?.invalid">El usuario es obligatorio.</small>
         </label>
 
         <label>
           <span>Correo electronico *</span>
-          <input id="email" formControlName="email" type="email" />
+          <input id="email" formControlName="email" type="email" [class.input-error]="form.get('email')?.touched && form.get('email')?.invalid" />
+          <small class="field-error" *ngIf="form.get('email')?.touched && form.get('email')?.hasError('required')">El correo es obligatorio.</small>
+          <small class="field-error" *ngIf="form.get('email')?.touched && form.get('email')?.hasError('email')">Ingresa un correo valido.</small>
         </label>
 
         <label>

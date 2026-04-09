@@ -7,6 +7,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from accounts.permissions import HasResourcePermission
+from accounts.soft_delete import LogicalDeleteViewSetMixin
 from apps.master_data.models import MasterData
 
 from .models import Client
@@ -18,9 +19,10 @@ from .serializers import (
 )
 
 
-class ClientViewSet(viewsets.ModelViewSet):
+class ClientViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = Client.objects.select_related("document_type", "client_type", "status").all().order_by("-id")
     serializer_class = ClientSerializer
+    pagination_class = None
     permission_classes = [HasResourcePermission]
 
     required_scopes = ["clients.read"]

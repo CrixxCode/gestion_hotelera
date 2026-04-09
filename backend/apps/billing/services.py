@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from decimal import Decimal, InvalidOperation
+from typing import Any
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.billing.models import Charge, Invoice
+from apps.inventory.models import Item
 from apps.master_data.models import MasterData
 from apps.reservations.models import Reservation
 from apps.reservations.services import get_reservation_financials
@@ -13,6 +15,7 @@ from apps.reservations.services import get_reservation_financials
 
 AUTO_ROOM_KEY_PREFIX = "ROOM"
 AUTO_PACKAGE_KEY = "PACKAGE"
+AUTO_INVENTORY_MISSING_KEY_PREFIX = "INVENTORY_MISSING"
 MONEY_ZERO = Decimal("0.00")
 
 DEFAULT_CHARGE_TYPES: dict[str, tuple[str, int]] = {
@@ -107,6 +110,110 @@ def _build_package_charge_description(reservation) -> str:
     if package_name:
         return f"Paquete: {package_name}"
     return "Paquete"
+
+
+def _build_inventory_missing_charge_description(
+    *,
+    reservation_id: int,
+    room_label: str,
+    item_name: str,
+) -> str:
+    return (
+        f"Faltante inventario habitacion {room_label}: {item_name} "
+        f"(post check-out reserva #{reservation_id})"
+    )
+
+
+def create_inventory_missing_charges_for_checkout(
+    reservation,
+    *,
+    inventory_comparison: dict[str, Any] | None,
+) -> int:
+    if not reservation or not getattr(reservation, "id", None):
+        return 0
+    if not isinstance(inventory_comparison, dict):
+        return 0
+
+    lines = inventory_comparison.get("lines") or []
+    if not isinstance(lines, list):
+        return 0
+
+    shortage_lines = [
+        line
+        for line in lines
+        if isinstance(line, dict) and int(line.get("difference_quantity") or 0) < 0
+    ]
+    if not shortage_lines:
+        return 0
+
+    charge_type = get_or_create_default_charge_type("INVENTARIO_FALTANTE")
+    if not charge_type:
+        charge_type = get_or_create_default_charge_type("OTRO")
+    if not charge_type:
+        return 0
+
+    item_ids = {int(line.get("item_id")) for line in shortage_lines if line.get("item_id")}
+    item_by_id = {
+        item.id: item
+        for item in Item.objects.filter(id__in=item_ids).only("id", "name", "sale_price")
+    }
+
+    check_id = inventory_comparison.get("check_id")
+    created_or_updated = 0
+
+    for line in shortage_lines:
+        item_id = line.get("item_id")
+        room_id = line.get("room_id")
+        if not item_id or not room_id:
+            continue
+
+        try:
+            item_id = int(item_id)
+            room_id = int(room_id)
+        except (TypeError, ValueError):
+            continue
+
+        missing_quantity = abs(int(line.get("difference_quantity") or 0))
+        if missing_quantity <= 0:
+            continue
+
+        item = item_by_id.get(item_id)
+        if not item:
+            continue
+
+        unit_price = _to_decimal(getattr(item, "sale_price", MONEY_ZERO))
+        if unit_price < MONEY_ZERO:
+            unit_price = MONEY_ZERO
+
+        room_label = str(line.get("room_number") or room_id)
+        item_name = str(getattr(item, "name", "") or line.get("item_name") or f"Item {item_id}").strip()
+        automation_key = (
+            f"{AUTO_INVENTORY_MISSING_KEY_PREFIX}:"
+            f"{check_id or 'NA'}:{room_id}:{item_id}"
+        )
+
+        Charge.objects.update_or_create(
+            reservation=reservation,
+            automation_key=automation_key,
+            defaults={
+                "charge_type": charge_type,
+                "service": None,
+                "package": None,
+                "description": _build_inventory_missing_charge_description(
+                    reservation_id=reservation.id,
+                    room_label=room_label,
+                    item_name=item_name,
+                ),
+                "quantity": missing_quantity,
+                "unit_price": unit_price,
+                "is_active": True,
+                # Se marca como manual para que entre al total de cargos de la reserva.
+                "is_automatic": False,
+            },
+        )
+        created_or_updated += 1
+
+    return created_or_updated
 
 
 def _sync_automatic_room_charges(reservation, *, room_charge_type) -> set[str]:

@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.hotel_settings.models import HotelSettings
-from apps.master_data.models import MasterData
+from apps.rooms.models import RoomType
 from apps.services.models import Service
 
 
@@ -13,10 +13,9 @@ class Package(models.Model):
         related_name="packages",
     )
     room_type = models.ForeignKey(
-        MasterData,
+        RoomType,
         on_delete=models.PROTECT,
         related_name="packages_by_room_type",
-        limit_choices_to={"group": MasterData.Group.ROOM_TYPE},
         blank=True,
         null=True,
     )

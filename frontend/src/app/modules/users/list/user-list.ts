@@ -3,6 +3,13 @@ import { CommonModule, NgClass } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { UserService } from '../../../services/user';
 import { UserI } from '../user-model';
+import {
+  ACTION_ALERT_ERROR_SUMMARY,
+  ACTION_ALERT_SUCCESS_SUMMARY,
+  errorActionAlert,
+  successActionAlert
+} from '../../../services/action-alerts';
+import { openActionConfirmation } from '../../../services/action-confirmations';
 
 // PrimeNG
 import { ToastModule } from 'primeng/toast';
@@ -134,6 +141,33 @@ export class UserList implements OnInit {
     this.first = 0;
   }
 
+  exportCsv(): void {
+    if (!this.filteredUsers.length) return;
+
+    const headers = ['usuario', 'nombre', 'correo', 'rol', 'estado'];
+
+    const rows = this.filteredUsers.map((user) => {
+      const row = [
+        user.username || '',
+        `${user.first_name || ''} ${user.last_name || ''}`.trim(),
+        user.email || '',
+        this.getRoleLabel(user),
+        this.isActive(user) ? 'Activo' : 'Inactivo'
+      ];
+
+      return row.map((cell) => this.escapeCsvCell(cell)).join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `usuarios-${this.formatFileDate(new Date())}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   openRegisterDialog(): void {
     this.visibleRegisterDialog = true;
   }
@@ -151,8 +185,8 @@ export class UserList implements OnInit {
   onUserUpdated(): void {
     this.messageService.add({
       severity: 'success',
-      summary: 'Usuario actualizado',
-      detail: 'Los cambios se guardaron correctamente.',
+      summary: ACTION_ALERT_SUCCESS_SUMMARY,
+      detail: successActionAlert('update', 'usuario'),
       life: 3000
     });
   }
@@ -168,25 +202,19 @@ export class UserList implements OnInit {
   }
 
   confirmDelete(user: UserI): void {
-    this.confirmationService.confirm({
-      message: `Deseas eliminar a ${user.first_name} ${user.last_name}?`,
-      header: 'Confirmar eliminacion',
-      icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Si, eliminar',
-      rejectLabel: 'Cancelar',
+    openActionConfirmation(this.confirmationService, {
+      action: 'delete',
+      target: `${user.first_name} ${user.last_name}`.trim() || 'usuario',
       key: 'userDelete',
-      acceptButtonStyleClass: 'p-button-danger',
-      rejectButtonStyleClass: 'p-button-secondary p-button-outlined',
-      defaultFocus: 'reject',
-      accept: () => {
+      onAccept: () => {
         if (!user.id) return;
 
         this.userService.deleteUserLogic(user.id).subscribe({
           next: () => {
             this.messageService.add({
               severity: 'success',
-              summary: 'Eliminado',
-              detail: 'Usuario eliminado correctamente.',
+              summary: ACTION_ALERT_SUCCESS_SUMMARY,
+              detail: successActionAlert('delete', 'usuario'),
               life: 3000
             });
             this.loadUsers();
@@ -194,8 +222,8 @@ export class UserList implements OnInit {
           error: () => {
             this.messageService.add({
               severity: 'error',
-              summary: 'Error',
-              detail: 'No se pudo eliminar el usuario.',
+              summary: ACTION_ALERT_ERROR_SUMMARY,
+              detail: errorActionAlert('delete', 'usuario'),
               life: 3000
             });
           }
@@ -339,5 +367,18 @@ export class UserList implements OnInit {
 
   private hasAnyRole(user: UserI): boolean {
     return (user.roles && user.roles.length > 0) || !!user.role;
+  }
+
+  private formatFileDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+    return `${year}${month}${day}`;
+  }
+
+  private escapeCsvCell(value: unknown): string {
+    const normalized = String(value ?? '');
+    const escaped = normalized.replace(/"/g, '""');
+    return `"${escaped}"`;
   }
 }
