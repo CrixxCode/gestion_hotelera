@@ -3,9 +3,9 @@
 }
 
 .manual-charge-card {
-  border: 1px solid #d7dfeb;
+  border: 1px solid var(--gh-border-strong);
   border-radius: 14px;
-  background: #f3f6fb;
+  background: var(--gh-surface-soft);
   padding: 12px;
 }
 
@@ -30,7 +30,7 @@ label {
 }
 
 label span {
-  color: #5b6f8e;
+  color: var(--gh-text-muted);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -40,11 +40,11 @@ label span {
 select,
 input {
   height: 40px;
-  border: 1px solid #ced9e8;
+  border: 1px solid var(--gh-border-strong);
   border-radius: 11px;
   padding: 0 10px;
-  color: #1e293b;
-  background: #ffffff;
+  color: var(--gh-text);
+  background: var(--gh-surface);
   outline: 0;
 }
 
@@ -81,8 +81,8 @@ select:focus {
 }
 
 .btn-primary {
-  background: #c8a549;
-  color: #ffffff;
+  background: var(--gh-brand);
+  color: var(--gh-surface);
 }
 
 .btn-primary:disabled {
@@ -93,8 +93,8 @@ select:focus {
 .btn-close {
   width: 40px;
   padding: 0;
-  background: #e2e8f0;
-  color: #64748b;
+  background: var(--gh-status-neutral-bg);
+  color: var(--gh-text-muted);
 }
 
 .feedback {
@@ -105,13 +105,13 @@ select:focus {
 }
 
 .feedback.error {
-  background: #fef2f2;
-  color: #b91c1c;
+  background: var(--gh-status-danger-bg);
+  color: var(--gh-status-danger-text);
 }
 
 .feedback.hint {
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: var(--gh-status-info-bg);
+  color: var(--gh-status-info-text);
 }
 
 @media (max-width: 1100px) {

@@ -1,4 +1,4 @@
-:host {
+﻿:host {
   display: block;
 }
 
@@ -7,7 +7,7 @@
   flex-direction: column;
   gap: 16px;
   padding: 8px 0 20px;
-  color: #1f2d3d;
+  color: var(--gh-text-strong);
 }
 
 .welcome-banner {
@@ -94,11 +94,11 @@
 }
 
 .dashboard-state {
-  border: 1px solid #dfe6ef;
+  border: 1px solid var(--gh-border);
   border-radius: 12px;
-  background: #fff;
+  background: var(--gh-surface);
   padding: 12px 14px;
-  color: #526276;
+  color: var(--gh-text);
   font-size: 13px;
 }
 
@@ -107,7 +107,7 @@
 }
 
 .state-error {
-  color: #d25f72;
+  color: var(--gh-status-danger-text);
   font-weight: 600;
 }
 
@@ -118,11 +118,11 @@
 }
 
 .metric-card {
-  background: #fff;
-  border: 1px solid #dfe6ef;
+  background: var(--gh-surface);
+  border: 1px solid var(--gh-border);
   border-radius: 14px;
   padding: 14px 16px;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--gh-shadow-soft-sm);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -137,7 +137,7 @@
 
 .metric-label {
   margin: 0;
-  color: #7a889a;
+  color: var(--gh-text-muted);
   font-size: 13px;
   font-weight: 700;
 }
@@ -158,7 +158,7 @@
   line-height: 1;
   letter-spacing: -0.02em;
   font-weight: 700;
-  color: #1f2d3d;
+  color: var(--gh-text-strong);
 }
 
 .metric-foot {
@@ -169,50 +169,50 @@
 }
 
 .metric-note {
-  color: #95a2b3;
+  color: var(--gh-text-soft);
   font-size: 12px;
 }
 
 .metric-trend {
-  color: #1aa16e;
+  color: var(--gh-status-success-text);
   font-size: 12px;
   font-weight: 600;
 }
 
 .metric-trend.trend-negative {
-  color: #d25f72;
+  color: var(--gh-status-danger-text);
 }
 
 .tone-blue .metric-icon {
-  background: #e8f1ff;
-  color: #3b82f6;
+  background: var(--gh-status-info-bg);
+  color: var(--gh-status-info-strong);
 }
 
 .tone-green .metric-icon {
-  background: #e6f7ef;
-  color: #16a34a;
+  background: var(--gh-status-success-bg);
+  color: var(--gh-status-success-strong-alt);
 }
 
 .tone-violet .metric-icon {
-  background: #f3ecff;
-  color: #8b5cf6;
+  background: var(--gh-status-violet-bg);
+  color: var(--gh-status-violet-text);
 }
 
 .tone-amber .metric-icon {
-  background: #fff6df;
-  color: #d79a1e;
+  background: var(--gh-status-warn-bg);
+  color: var(--gh-status-warn-text);
 }
 
 .tone-gold .metric-icon {
-  background: #fff9e9;
-  color: #d0a024;
+  background: var(--gh-status-warn-bg);
+  color: var(--gh-status-warn-strong);
 }
 
 .panel {
-  background: #fff;
-  border: 1px solid #dfe6ef;
+  background: var(--gh-surface);
+  border: 1px solid var(--gh-border);
   border-radius: 14px;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--gh-shadow-soft-sm);
 }
 
 .panel-header {
@@ -229,7 +229,7 @@
 
 .panel-header h3 {
   margin: 0;
-  color: #223147;
+  color: var(--gh-text-strong);
   font-size: 1.06rem;
   letter-spacing: -0.01em;
   font-weight: 700;
@@ -237,7 +237,7 @@
 
 .panel-header p {
   margin: 4px 0 0;
-  color: #94a2b3;
+  color: var(--gh-text-soft);
   font-size: 12px;
 }
 
@@ -251,7 +251,7 @@
   display: inline-flex;
   align-items: center;
   gap: 14px;
-  color: #63758a;
+  color: var(--gh-text-muted);
   font-size: 12px;
   font-weight: 500;
 }
@@ -271,27 +271,27 @@
 
 .dot-occupied,
 .dot.dot-occupied {
-  background: #3b82f6;
+  background: var(--gh-status-info-strong);
 }
 
 .dot-free,
 .dot.dot-free {
-  background: #69d7b5;
+  background: var(--gh-status-success-strong);
 }
 
 .dot-maintenance,
 .dot.dot-maintenance {
-  background: #e87686;
+  background: var(--gh-status-danger-strong);
 }
 
 .dot-cleaning,
 .dot.dot-cleaning {
-  background: #d8b33a;
+  background: var(--gh-status-warn-strong);
 }
 
 .dot-reserved,
 .dot.dot-reserved {
-  background: #7eb3e7;
+  background: var(--gh-status-info-strong);
 }
 
 .chart-area {
@@ -319,10 +319,10 @@
 .room-filter {
   min-width: 120px;
   height: 34px;
-  border: 1px solid #d4deea;
+  border: 1px solid var(--gh-border-strong);
   border-radius: 10px;
-  background: #f8fafc;
-  color: #516174;
+  background: var(--gh-surface-soft);
+  color: var(--gh-text);
   font-size: 12px;
   padding: 0 10px;
 }
@@ -342,7 +342,7 @@
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
-  color: #74869b;
+  color: var(--gh-text-muted);
   font-size: 11px;
   font-weight: 500;
 }
@@ -363,7 +363,7 @@
 .room-tile {
   min-height: 92px;
   border-radius: 10px;
-  border: 1px solid #dce5ef;
+  border: 1px solid var(--gh-border-strong);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -390,33 +390,33 @@
 }
 
 .state-occupied {
-  background: #15233d;
-  border-color: #15233d;
-  color: #f4f6fb;
+  background: var(--gh-brand);
+  border-color: var(--gh-brand);
+  color: var(--gh-on-brand);
 }
 
 .state-free {
-  background: #e6f5ef;
-  border-color: #8fd6bf;
-  color: #33586b;
+  background: var(--gh-status-success-bg);
+  border-color: var(--gh-status-success-border);
+  color: var(--gh-status-success-text);
 }
 
 .state-maintenance {
-  background: #fdf2f3;
-  border-color: #efc4cc;
-  color: #d05f72;
+  background: var(--gh-status-danger-bg);
+  border-color: var(--gh-status-danger-border);
+  color: var(--gh-status-danger-text);
 }
 
 .state-cleaning {
-  background: #faf7eb;
-  border-color: #e6d08b;
-  color: #9f8426;
+  background: var(--gh-status-warn-bg);
+  border-color: var(--gh-status-warn-border);
+  color: var(--gh-status-warn-text);
 }
 
 .state-reserved {
-  background: #edf4fb;
-  border-color: #bdd7ef;
-  color: #4879a6;
+  background: var(--gh-status-info-bg);
+  border-color: var(--gh-status-info-border);
+  color: var(--gh-status-info-text);
 }
 
 .stacked-panels {
@@ -434,7 +434,7 @@
 .panel-link {
   border: 0;
   background: transparent;
-  color: #be9d41;
+  color: var(--gh-status-warn-strong);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -452,7 +452,7 @@
   gap: 10px;
   align-items: center;
   padding: 10px 16px;
-  border-top: 1px solid #edf2f7;
+  border-top: 1px solid var(--gh-border-soft);
 }
 
 .avatar {
@@ -462,7 +462,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--gh-on-brand);
   font-size: 11px;
   font-weight: 700;
 }
@@ -501,7 +501,7 @@
 
 .stay-guest {
   margin: 0;
-  color: #2c3f57;
+  color: var(--gh-text-strong);
   font-size: 14px;
   font-weight: 600;
   line-height: 1.25;
@@ -509,7 +509,7 @@
 
 .stay-detail {
   margin: 2px 0 0;
-  color: #8b9bad;
+  color: var(--gh-text-soft);
   font-size: 11px;
   white-space: nowrap;
   overflow: hidden;
@@ -522,19 +522,19 @@
 
 .stay-time {
   margin: 0;
-  color: #4f6074;
+  color: var(--gh-text);
   font-size: 12px;
 }
 
 .stay-state {
   margin: 3px 0 0;
-  color: #1ea977;
+  color: var(--gh-status-success-text);
   font-size: 11px;
   font-weight: 600;
 }
 
 .stay-state.is-pending {
-  color: #cf8e17;
+  color: var(--gh-status-warn-text);
 }
 
 .checkout-meta {
@@ -543,7 +543,7 @@
 
 .checkout-amount {
   margin: 0;
-  color: #20a76f;
+  color: var(--gh-status-success-text);
   font-size: 14px;
   font-weight: 700;
 }
@@ -558,8 +558,8 @@
   width: 22px;
   height: 22px;
   border-radius: 999px;
-  background: #f03c4e;
-  color: #fff;
+  background: var(--gh-status-danger-strong);
+  color: var(--gh-on-brand);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -568,7 +568,7 @@
 }
 
 .alert-count.is-empty {
-  background: #a9b6c6;
+  background: var(--gh-status-neutral-border);
 }
 
 .alert-list {
@@ -583,11 +583,11 @@
   align-items: center;
   gap: 10px;
   padding: 11px 16px;
-  border-top: 1px solid #edf2f7;
+  border-top: 1px solid var(--gh-border-soft);
 }
 
 .alert-row.alert-unread {
-  background: #f8fbff;
+  background: var(--gh-surface-soft);
 }
 
 .alert-icon {
@@ -595,15 +595,15 @@
 }
 
 .tone-warning {
-  color: #e0a02d;
+  color: var(--gh-status-warn-text);
 }
 
 .tone-info {
-  color: #4d87da;
+  color: var(--gh-status-info-text);
 }
 
 .tone-success {
-  color: #2cb478;
+  color: var(--gh-status-success-text);
 }
 
 .alert-copy {
@@ -612,7 +612,7 @@
 
 .alert-copy p {
   margin: 0;
-  color: #33465d;
+  color: var(--gh-text);
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;
@@ -621,7 +621,7 @@
 
 .alert-copy span {
   display: block;
-  color: #98a6b7;
+  color: var(--gh-text-soft);
   font-size: 11px;
 }
 
@@ -631,11 +631,11 @@
 }
 
 .alert-read-state.state-unread {
-  color: #2d6cdf;
+  color: var(--gh-status-info-text);
 }
 
 .alert-read-state.state-read {
-  color: #a2b0c0;
+  color: var(--gh-text-soft);
 }
 
 .alert-row.alert-unread .alert-copy p {
@@ -645,7 +645,7 @@
 .alert-action {
   border: 0;
   background: transparent;
-  color: #c39d45;
+  color: var(--gh-status-warn-strong);
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
@@ -672,12 +672,12 @@
 }
 
 .service-total span {
-  color: #98a5b4;
+  color: var(--gh-text-soft);
   font-size: 11px;
 }
 
 .service-total strong {
-  color: #1f3046;
+  color: var(--gh-text-strong);
   font-size: 1.7rem;
   line-height: 1;
 }
@@ -715,13 +715,13 @@
 
 .service-copy p {
   margin: 0;
-  color: #32465d;
+  color: var(--gh-text);
   font-size: 14px;
   font-weight: 600;
 }
 
 .service-copy span {
-  color: #96a4b4;
+  color: var(--gh-text-soft);
   font-size: 11px;
 }
 
@@ -732,19 +732,19 @@
 .service-meta strong {
   display: block;
   margin: 0;
-  color: #2c3f57;
+  color: var(--gh-text-strong);
   font-size: 14px;
 }
 
 .service-meta span {
-  color: #94a2b2;
+  color: var(--gh-text-soft);
   font-size: 11px;
 }
 
 .service-track {
   grid-column: 1 / -1;
   height: 6px;
-  background: #ebeff4;
+  background: var(--gh-border-soft);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -756,33 +756,33 @@
 }
 
 .service-orange {
-  background: #e29f42;
-  color: #e29f42;
+  background: var(--gh-status-orange-strong);
+  color: var(--gh-status-orange-strong);
 }
 
 .service-violet {
-  background: #b06ce0;
-  color: #b06ce0;
+  background: var(--gh-status-violet-text);
+  color: var(--gh-status-violet-text);
 }
 
 .service-pink {
-  background: #e86aab;
-  color: #e86aab;
+  background: var(--gh-status-danger-strong);
+  color: var(--gh-status-danger-strong);
 }
 
 .service-blue {
-  background: #5895db;
-  color: #5895db;
+  background: var(--gh-status-info-strong);
+  color: var(--gh-status-info-strong);
 }
 
 .service-teal {
-  background: #4cbdb2;
-  color: #4cbdb2;
+  background: var(--gh-status-success-strong);
+  color: var(--gh-status-success-strong);
 }
 
 .live-status {
   margin: 0;
-  color: #88b9a8;
+  color: var(--gh-status-success-text);
   font-size: 12px;
   display: inline-flex;
   align-items: center;
@@ -805,17 +805,17 @@
   align-items: center;
   gap: 10px;
   padding: 10px 16px;
-  border-top: 1px solid #edf2f7;
+  border-top: 1px solid var(--gh-border-soft);
 }
 
 .activity-row p {
   margin: 0;
-  color: #354960;
+  color: var(--gh-text);
   font-size: 13px;
 }
 
 .activity-row span {
-  color: #95a3b4;
+  color: var(--gh-text-soft);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -831,44 +831,44 @@
 }
 
 .activity-green {
-  color: #2daa78;
-  background: #e8f7f0;
+  color: var(--gh-status-success-text);
+  background: var(--gh-status-success-bg);
 }
 
 .activity-blue {
-  color: #4c87da;
-  background: #eaf2fd;
+  color: var(--gh-status-info-text);
+  background: var(--gh-status-info-bg);
 }
 
 .activity-orange {
-  color: #de8c2b;
-  background: #fdf2e3;
+  color: var(--gh-status-orange-text);
+  background: var(--gh-status-orange-bg);
 }
 
 .activity-amber {
-  color: #c7a034;
-  background: #fcf7e8;
+  color: var(--gh-status-warn-text);
+  background: var(--gh-status-warn-bg);
 }
 
 .activity-violet {
-  color: #b06ce0;
-  background: #f6efff;
+  color: var(--gh-status-violet-text);
+  background: var(--gh-status-violet-bg);
 }
 
 .activity-red {
-  color: #dd6475;
-  background: #fceef1;
+  color: var(--gh-status-danger-text);
+  background: var(--gh-status-danger-bg);
 }
 
 .activity-gold {
   color: #d09f22;
-  background: #fdf8e8;
+  background: var(--gh-status-warn-bg);
 }
 
 .activity-link {
   border: 0;
   background: transparent;
-  color: #be9d41;
+  color: var(--gh-status-warn-strong);
   font-size: 12px;
   font-weight: 600;
   padding: 8px 16px 2px;
@@ -900,19 +900,19 @@
 }
 
 .action-primary {
-  background: #15233d;
-  color: #fff;
+  background: var(--gh-brand);
+  color: var(--gh-on-brand);
 }
 
 .action-neutral {
-  background: #fff;
-  color: #526276;
-  border-color: #d4deea;
+  background: var(--gh-surface);
+  color: var(--gh-text);
+  border-color: var(--gh-border-strong);
 }
 
 .action-gold {
-  background: #c4a341;
-  color: #fff;
+  background: var(--gh-status-warn-strong);
+  color: var(--gh-on-brand);
 }
 
 .action-btn:hover {
@@ -1005,3 +1005,5 @@
     border-radius: 12px;
   }
 }
+
+

@@ -52,11 +52,34 @@ export class DetailInventoryMovement {
 
   getDirectionTone(): { bg: string; color: string } {
     const code = this.getMovementCode();
-    if (code === 'IN') return { bg: '#dcfce7', color: '#15803d' };
-    if (code === 'OUT' || code === 'LOSS') return { bg: '#fef2f2', color: '#b42318' };
-    if (code === 'ADJUSTMENT') return { bg: '#e0f2fe', color: '#0369a1' };
-    if (code === 'TRANSFER') return { bg: '#f3e8ff', color: '#7e22ce' };
-    return { bg: '#eef2f7', color: '#64748b' };
+    if (code === 'IN') {
+      return {
+        bg: 'var(--gh-status-success-bg)',
+        color: 'var(--gh-status-success-text)'
+      };
+    }
+    if (code === 'OUT' || code === 'LOSS') {
+      return {
+        bg: 'var(--gh-status-danger-bg)',
+        color: 'var(--gh-status-danger-text)'
+      };
+    }
+    if (code === 'ADJUSTMENT') {
+      return {
+        bg: 'var(--gh-status-info-bg)',
+        color: 'var(--gh-status-info-strong-alt)'
+      };
+    }
+    if (code === 'TRANSFER') {
+      return {
+        bg: 'var(--gh-status-violet-bg)',
+        color: 'var(--gh-status-violet-text)'
+      };
+    }
+    return {
+      bg: 'var(--gh-status-neutral-bg)',
+      color: 'var(--gh-status-neutral-text)'
+    };
   }
 
   getQuantityLabel(): string {

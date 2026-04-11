@@ -608,18 +608,18 @@ export class ListReservations implements OnInit {
     const label = this.getPaymentLabel(reservation);
 
     if (label === 'Pagado') {
-      return { bg: '#dcfce7', color: '#15803d' };
+      return { bg: 'var(--gh-status-success-bg)', color: 'var(--gh-status-success-text)' };
     }
 
     if (label === 'Parcial') {
-      return { bg: '#dbeafe', color: '#1d4ed8' };
+      return { bg: 'var(--gh-status-info-bg)', color: 'var(--gh-status-info-text)' };
     }
 
     if (label === 'Pendiente') {
-      return { bg: '#fef3c7', color: '#b45309' };
+      return { bg: 'var(--gh-status-warn-bg)', color: 'var(--gh-status-warn-text)' };
     }
 
-    return { bg: '#e2e8f0', color: '#475569' };
+    return { bg: 'var(--gh-status-neutral-bg)', color: 'var(--gh-status-neutral-text)' };
   }
 
   formatAmount(value: number): string {
@@ -792,7 +792,7 @@ export class ListReservations implements OnInit {
       'left.%': bar.leftPercent,
       'width.%': bar.widthPercent,
       'background-color': statusStyle.borderColor,
-      color: '#ffffff'
+      color: 'var(--gh-on-brand)'
     };
   }
 
@@ -1119,72 +1119,72 @@ export class ListReservations implements OnInit {
       case 'CONFIRMADA':
         return {
           label: 'Confirmada',
-          chipBg: '#dbeafe',
-          chipColor: '#1d4ed8',
-          dotColor: '#3b82f6',
-          borderColor: '#3b82f6',
-          actionBg: '#1d4ed8',
-          actionColor: '#ffffff'
+          chipBg: 'var(--gh-status-info-bg)',
+          chipColor: 'var(--gh-status-info-text)',
+          dotColor: 'var(--gh-status-info-strong)',
+          borderColor: 'var(--gh-status-info-strong)',
+          actionBg: 'var(--gh-status-info-strong)',
+          actionColor: 'var(--gh-on-brand)'
         };
       case 'PENDIENTE':
         return {
           label: 'Pendiente',
-          chipBg: '#fef3c7',
-          chipColor: '#b45309',
-          dotColor: '#f59e0b',
-          borderColor: '#f59e0b',
-          actionBg: '#b45309',
-          actionColor: '#ffffff'
+          chipBg: 'var(--gh-status-warn-bg)',
+          chipColor: 'var(--gh-status-warn-text)',
+          dotColor: 'var(--gh-status-warn-strong)',
+          borderColor: 'var(--gh-status-warn-strong)',
+          actionBg: 'var(--gh-status-warn-text)',
+          actionColor: 'var(--gh-on-brand)'
         };
       case 'EN_CURSO':
         return {
           label: 'En curso',
-          chipBg: '#dcfce7',
-          chipColor: '#15803d',
-          dotColor: '#22c55e',
-          borderColor: '#22c55e',
-          actionBg: '#166534',
-          actionColor: '#ffffff'
+          chipBg: 'var(--gh-status-success-bg)',
+          chipColor: 'var(--gh-status-success-text)',
+          dotColor: 'var(--gh-status-success-strong-alt)',
+          borderColor: 'var(--gh-status-success-strong-alt)',
+          actionBg: 'var(--gh-status-success-strong-alt)',
+          actionColor: 'var(--gh-on-brand)'
         };
       case 'POR_SALIR_HOY':
         return {
           label: 'Por salir hoy',
-          chipBg: '#ffedd5',
-          chipColor: '#c2410c',
-          dotColor: '#f97316',
-          borderColor: '#f97316',
-          actionBg: '#ea580c',
-          actionColor: '#ffffff'
+          chipBg: 'var(--gh-status-orange-bg)',
+          chipColor: 'var(--gh-status-orange-text)',
+          dotColor: 'var(--gh-status-orange-strong)',
+          borderColor: 'var(--gh-status-orange-strong)',
+          actionBg: 'var(--gh-status-orange-strong)',
+          actionColor: 'var(--gh-on-brand)'
         };
       case 'CANCELADA':
         return {
           label: 'Cancelada',
-          chipBg: '#e5e7eb',
-          chipColor: '#4b5563',
-          dotColor: '#9ca3af',
-          borderColor: '#9ca3af',
-          actionBg: '#64748b',
-          actionColor: '#ffffff'
+          chipBg: 'var(--gh-status-neutral-bg)',
+          chipColor: 'var(--gh-status-neutral-text)',
+          dotColor: 'var(--gh-text-soft)',
+          borderColor: 'var(--gh-text-soft)',
+          actionBg: 'var(--gh-text-muted)',
+          actionColor: 'var(--gh-on-brand)'
         };
       case 'FINALIZADA':
         return {
           label: 'Finalizada',
-          chipBg: '#e2e8f0',
-          chipColor: '#334155',
-          dotColor: '#64748b',
-          borderColor: '#64748b',
-          actionBg: '#334155',
-          actionColor: '#ffffff'
+          chipBg: 'var(--gh-status-neutral-bg)',
+          chipColor: 'var(--gh-status-neutral-text)',
+          dotColor: 'var(--gh-text-muted)',
+          borderColor: 'var(--gh-text-muted)',
+          actionBg: 'var(--gh-text-muted)',
+          actionColor: 'var(--gh-on-brand)'
         };
       default:
         return {
           label: 'Sin estado',
-          chipBg: '#e2e8f0',
-          chipColor: '#334155',
-          dotColor: '#94a3b8',
-          borderColor: '#94a3b8',
-          actionBg: '#334155',
-          actionColor: '#ffffff'
+          chipBg: 'var(--gh-status-neutral-bg)',
+          chipColor: 'var(--gh-status-neutral-text)',
+          dotColor: 'var(--gh-text-soft)',
+          borderColor: 'var(--gh-text-soft)',
+          actionBg: 'var(--gh-text-muted)',
+          actionColor: 'var(--gh-on-brand)'
         };
     }
   }

@@ -298,12 +298,12 @@ export class ListIncomeConsolidated implements OnInit {
 
   getMethodCardTone(index: number): { bg: string; accent: string } {
     const palette = [
-      { bg: '#eff6ff', accent: '#1d4ed8' },
-      { bg: '#ecfdf5', accent: '#059669' },
-      { bg: '#fff7ed', accent: '#ea580c' },
-      { bg: '#f5f3ff', accent: '#7c3aed' },
-      { bg: '#fdf2f8', accent: '#be185d' },
-      { bg: '#f0fdfa', accent: '#0f766e' }
+      { bg: 'var(--gh-status-info-bg)', accent: 'var(--gh-status-info-text)' },
+      { bg: 'var(--gh-status-success-bg)', accent: 'var(--gh-status-success-text)' },
+      { bg: 'var(--gh-status-orange-bg)', accent: 'var(--gh-status-orange-text)' },
+      { bg: 'var(--gh-status-violet-bg)', accent: 'var(--gh-status-violet-text)' },
+      { bg: 'var(--gh-status-danger-bg)', accent: 'var(--gh-status-danger-text)' },
+      { bg: 'var(--gh-status-neutral-bg)', accent: 'var(--gh-status-neutral-text)' }
     ];
     return palette[index % palette.length];
   }

@@ -458,9 +458,17 @@ export class ListServices implements OnInit {
 
   getStatusTone(service: ServiceI): { bg: string; color: string; dot: string } {
     if (service.is_active) {
-      return { bg: '#dcfce7', color: '#15803d', dot: '#22c55e' };
+      return {
+        bg: 'var(--gh-status-success-bg)',
+        color: 'var(--gh-status-success-text)',
+        dot: 'var(--gh-status-success-strong-alt)'
+      };
     }
-    return { bg: '#eef2f7', color: '#64748b', dot: '#94a3b8' };
+    return {
+      bg: 'var(--gh-status-neutral-bg)',
+      color: 'var(--gh-status-neutral-text)',
+      dot: 'var(--gh-text-soft)'
+    };
   }
 
   isPopular(groupKey: string, serviceId: number): boolean {

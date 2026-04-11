@@ -290,9 +290,17 @@ export class ListRoomTypes implements OnInit {
 
   getStatusTone(roomType: RoomTypeI): { bg: string; color: string; dot: string } {
     if (roomType.is_active === false) {
-      return { bg: '#eef2f7', color: '#64748b', dot: '#94a3b8' };
+      return {
+        bg: 'var(--gh-status-neutral-bg)',
+        color: 'var(--gh-status-neutral-text)',
+        dot: 'var(--gh-status-neutral-border)'
+      };
     }
-    return { bg: '#dcfce7', color: '#15803d', dot: '#22c55e' };
+    return {
+      bg: 'var(--gh-status-success-bg)',
+      color: 'var(--gh-status-success-text)',
+      dot: 'var(--gh-status-success-strong)'
+    };
   }
 
   getBedSummary(roomType: RoomTypeI): string {

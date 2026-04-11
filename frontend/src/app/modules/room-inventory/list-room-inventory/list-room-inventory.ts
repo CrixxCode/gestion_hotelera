@@ -43,39 +43,39 @@ type RoomTab = {
 const ROOM_TONES: RoomInventoryTone[] = [
   {
     icon: 'fa-solid fa-door-open',
-    iconBg: '#e0ecff',
-    iconColor: '#1d4ed8',
+    iconBg: 'var(--gh-status-info-bg)',
+    iconColor: 'var(--gh-status-info-text)',
     cover: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)',
-    badgeBg: '#e7eeff',
-    badgeColor: '#1d4ed8',
-    accent: '#3b82f6'
+    badgeBg: 'var(--gh-status-info-bg)',
+    badgeColor: 'var(--gh-status-info-text)',
+    accent: 'var(--gh-status-info-strong)'
   },
   {
     icon: 'fa-solid fa-bed',
-    iconBg: '#dcfdf2',
-    iconColor: '#0f766e',
+    iconBg: 'var(--gh-status-success-bg)',
+    iconColor: 'var(--gh-status-success-text)',
     cover: 'linear-gradient(135deg, #115e59 0%, #10b981 100%)',
-    badgeBg: '#dcfdf2',
-    badgeColor: '#0f766e',
-    accent: '#10b981'
+    badgeBg: 'var(--gh-status-success-bg)',
+    badgeColor: 'var(--gh-status-success-text)',
+    accent: 'var(--gh-status-success-strong)'
   },
   {
     icon: 'fa-solid fa-key',
-    iconBg: '#f3e8ff',
-    iconColor: '#7e22ce',
+    iconBg: 'var(--gh-status-violet-bg)',
+    iconColor: 'var(--gh-status-violet-text)',
     cover: 'linear-gradient(135deg, #4c1d95 0%, #a855f7 100%)',
-    badgeBg: '#f3e8ff',
-    badgeColor: '#7e22ce',
-    accent: '#a855f7'
+    badgeBg: 'var(--gh-status-violet-bg)',
+    badgeColor: 'var(--gh-status-violet-text)',
+    accent: 'var(--gh-status-violet-text)'
   },
   {
     icon: 'fa-solid fa-house',
-    iconBg: '#ffedd5',
-    iconColor: '#c2410c',
+    iconBg: 'var(--gh-status-orange-bg)',
+    iconColor: 'var(--gh-status-orange-text)',
     cover: 'linear-gradient(135deg, #7c2d12 0%, #f97316 100%)',
-    badgeBg: '#ffedd5',
-    badgeColor: '#c2410c',
-    accent: '#f97316'
+    badgeBg: 'var(--gh-status-orange-bg)',
+    badgeColor: 'var(--gh-status-orange-text)',
+    accent: 'var(--gh-status-orange-strong)'
   }
 ];
 
@@ -393,14 +393,40 @@ export class ListRoomInventory implements OnInit {
 
   getCoverageTone(record: RoomInventoryI): { bg: string; color: string; dot: string } {
     const coverage = this.resolveCoverageState(record);
-    if (coverage === 'OUT') return { bg: '#fef2f2', color: '#b42318', dot: '#ef4444' };
-    if (coverage === 'LOW') return { bg: '#fff7ed', color: '#c2410c', dot: '#f97316' };
-    return { bg: '#dcfce7', color: '#15803d', dot: '#22c55e' };
+    if (coverage === 'OUT') {
+      return {
+        bg: 'var(--gh-status-danger-bg)',
+        color: 'var(--gh-status-danger-text)',
+        dot: 'var(--gh-status-danger-strong)'
+      };
+    }
+    if (coverage === 'LOW') {
+      return {
+        bg: 'var(--gh-status-orange-bg)',
+        color: 'var(--gh-status-orange-text)',
+        dot: 'var(--gh-status-orange-strong)'
+      };
+    }
+    return {
+      bg: 'var(--gh-status-success-bg)',
+      color: 'var(--gh-status-success-text)',
+      dot: 'var(--gh-status-success-strong)'
+    };
   }
 
   getStatusTone(record: RoomInventoryI): { bg: string; color: string; dot: string } {
-    if (record.is_active) return { bg: '#dcfce7', color: '#15803d', dot: '#22c55e' };
-    return { bg: '#eef2f7', color: '#64748b', dot: '#94a3b8' };
+    if (record.is_active) {
+      return {
+        bg: 'var(--gh-status-success-bg)',
+        color: 'var(--gh-status-success-text)',
+        dot: 'var(--gh-status-success-strong)'
+      };
+    }
+    return {
+      bg: 'var(--gh-status-neutral-bg)',
+      color: 'var(--gh-status-neutral-text)',
+      dot: 'var(--gh-text-muted)'
+    };
   }
 
   getStockLabel(record: RoomInventoryI): string {
@@ -421,9 +447,9 @@ export class ListRoomInventory implements OnInit {
 
   getStockBarColor(record: RoomInventoryI): string {
     const coverage = this.resolveCoverageState(record);
-    if (coverage === 'OUT') return '#ef4444';
-    if (coverage === 'LOW') return '#f59e0b';
-    return '#10b981';
+    if (coverage === 'OUT') return 'var(--gh-status-danger-strong)';
+    if (coverage === 'LOW') return 'var(--gh-status-orange-strong)';
+    return 'var(--gh-status-success-strong)';
   }
 
   getTypeBadgeTone(record: RoomInventoryI): { bg: string; color: string; dot: string } {
@@ -472,9 +498,9 @@ export class ListRoomInventory implements OnInit {
     const outCount = this.getRoomOutCoverageItems(group);
     const lowCount = this.getRoomLowCoverageItems(group);
 
-    if (outCount > 0) return { bg: '#fef2f2', color: '#b42318' };
-    if (lowCount > 0) return { bg: '#fff7ed', color: '#c2410c' };
-    return { bg: '#dcfce7', color: '#15803d' };
+    if (outCount > 0) return { bg: 'var(--gh-status-danger-bg)', color: 'var(--gh-status-danger-text)' };
+    if (lowCount > 0) return { bg: 'var(--gh-status-orange-bg)', color: 'var(--gh-status-orange-text)' };
+    return { bg: 'var(--gh-status-success-bg)', color: 'var(--gh-status-success-text)' };
   }
 
   getRoomItemsPreview(group: RoomInventoryGroup): string {

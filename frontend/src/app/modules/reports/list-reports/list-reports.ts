@@ -405,7 +405,7 @@ export class ListReports implements OnInit {
   }
 
   getDonutGradient(items: Array<{ pct: number }>): string {
-    if (!items.length) return 'conic-gradient(#dbe4f1 0deg, #dbe4f1 360deg)';
+    if (!items.length) return 'conic-gradient(var(--gh-border-strong) 0deg, var(--gh-border-strong) 360deg)';
 
     const palette = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899'];
     let current = 0;
@@ -422,7 +422,7 @@ export class ListReports implements OnInit {
     }
 
     if (current < 360) {
-      segments.push(`#e2e8f0 ${current}deg 360deg`);
+      segments.push(`var(--gh-border) ${current}deg 360deg`);
     }
 
     return `conic-gradient(${segments.join(',')})`;

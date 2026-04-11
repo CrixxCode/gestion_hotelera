@@ -61,18 +61,18 @@ export class DetailMaintenanceOrder {
 
   getStatusTone(): { bg: string; color: string } {
     const normalized = this.normalizeCode(this.maintenanceOrderData?.status);
-    if (normalized === 'COMPLETADA') return { bg: '#dcfce7', color: '#15803d' };
-    if (normalized === 'ENPROCESO') return { bg: '#e0f2fe', color: '#0369a1' };
-    if (normalized === 'CANCELADA') return { bg: '#eef2f7', color: '#64748b' };
-    return { bg: '#fff7ed', color: '#c2410c' };
+    if (normalized === 'COMPLETADA') return { bg: 'var(--gh-status-success-bg)', color: 'var(--gh-status-success-text)' };
+    if (normalized === 'ENPROCESO') return { bg: 'var(--gh-status-info-bg)', color: 'var(--gh-status-info-text)' };
+    if (normalized === 'CANCELADA') return { bg: 'var(--gh-status-neutral-bg)', color: 'var(--gh-status-neutral-text)' };
+    return { bg: 'var(--gh-status-orange-bg)', color: 'var(--gh-status-orange-text)' };
   }
 
   getPriorityTone(): { bg: string; color: string } {
     const normalized = this.normalizeCode(this.maintenanceOrderData?.priority);
-    if (normalized === 'URGENTE') return { bg: '#fef2f2', color: '#b42318' };
-    if (normalized === 'ALTA') return { bg: '#fff7ed', color: '#c2410c' };
-    if (normalized === 'MEDIA') return { bg: '#e0f2fe', color: '#0369a1' };
-    return { bg: '#dcfce7', color: '#15803d' };
+    if (normalized === 'URGENTE') return { bg: 'var(--gh-status-danger-bg)', color: 'var(--gh-status-danger-text)' };
+    if (normalized === 'ALTA') return { bg: 'var(--gh-status-orange-bg)', color: 'var(--gh-status-orange-text)' };
+    if (normalized === 'MEDIA') return { bg: 'var(--gh-status-info-bg)', color: 'var(--gh-status-info-text)' };
+    return { bg: 'var(--gh-status-success-bg)', color: 'var(--gh-status-success-text)' };
   }
 
   getProgressActionLabel(): string {

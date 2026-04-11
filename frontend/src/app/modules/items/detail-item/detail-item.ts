@@ -58,16 +58,39 @@ export class DetailItem {
   }
 
   getStockStateTone(): { bg: string; color: string } {
-    if (!this.itemData) return { bg: '#eef2f7', color: '#64748b' };
+    if (!this.itemData) {
+      return {
+        bg: 'var(--gh-status-neutral-bg)',
+        color: 'var(--gh-status-neutral-text)'
+      };
+    }
 
     const stock = this.toNonNegativeInt(this.itemData.stock);
     const minimum = this.toNonNegativeInt(this.itemData.minimum_stock);
     const maximum = this.toNonNegativeInt(this.itemData.maximum_stock);
 
-    if (stock <= 0) return { bg: '#fef2f2', color: '#b42318' };
-    if (stock <= minimum) return { bg: '#fff7ed', color: '#c2410c' };
-    if (maximum > 0 && stock > maximum) return { bg: '#e0f2fe', color: '#0369a1' };
-    return { bg: '#dcfce7', color: '#15803d' };
+    if (stock <= 0) {
+      return {
+        bg: 'var(--gh-status-danger-bg)',
+        color: 'var(--gh-status-danger-text)'
+      };
+    }
+    if (stock <= minimum) {
+      return {
+        bg: 'var(--gh-status-orange-bg)',
+        color: 'var(--gh-status-orange-text)'
+      };
+    }
+    if (maximum > 0 && stock > maximum) {
+      return {
+        bg: 'var(--gh-status-info-bg)',
+        color: 'var(--gh-status-info-strong-alt)'
+      };
+    }
+    return {
+      bg: 'var(--gh-status-success-bg)',
+      color: 'var(--gh-status-success-text)'
+    };
   }
 
   getMaximumStockLabel(): string {

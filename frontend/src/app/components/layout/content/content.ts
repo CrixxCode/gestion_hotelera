@@ -9,6 +9,7 @@ import { BreadcrumbModule } from 'primeng/breadcrumb';
   selector: 'app-content',
   imports: [RouterOutlet, BreadcrumbModule],
   templateUrl: './content.html',
+  styleUrl: './content.css',
   standalone: true,
 })
 export class Content {

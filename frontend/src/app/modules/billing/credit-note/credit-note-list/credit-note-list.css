@@ -1,12 +1,22 @@
 :host {
   display: block;
+  --drawer-overlay-bg: rgba(15, 23, 42, 0.58);
+  --drawer-overlay-soft: rgba(15, 23, 42, 0.5);
+  --drawer-accent: #f0c660;
+}
+
+:host-context(.my-app-dark),
+:host-context(.dark) {
+  --drawer-overlay-bg: rgba(2, 6, 23, 0.8);
+  --drawer-overlay-soft: rgba(2, 6, 23, 0.72);
+  --drawer-accent: #fbbf24;
 }
 
 .credit-overlay {
   position: fixed;
   inset: 0;
   z-index: 220;
-  background: rgba(15, 23, 42, 0.58);
+  background: var(--drawer-overlay-bg);
   display: grid;
   place-items: center;
   padding: 20px;
@@ -15,9 +25,9 @@
 .credit-modal {
   width: min(980px, calc(100vw - 40px));
   max-height: min(760px, calc(100vh - 40px));
-  background: #f7f8fb;
+  background: var(--gh-page-bg-alt);
   border-radius: 14px;
-  border: 1px solid #d7dfeb;
+  border: 1px solid var(--gh-border-strong);
   box-shadow: 0 20px 44px rgba(2, 6, 23, 0.35);
   overflow: auto;
   display: flex;
@@ -29,7 +39,7 @@
 .credit-head {
   border-radius: 12px;
   background: linear-gradient(135deg, #162844 0%, #1d3560 100%);
-  color: #ffffff;
+  color: var(--gh-on-brand);
   padding: 12px 14px;
   display: flex;
   align-items: flex-start;
@@ -45,7 +55,7 @@
 
 .credit-head p {
   margin: 5px 0 0;
-  color: #c8d9f0;
+  color: var(--gh-text-soft);
   font-size: 12px;
 }
 
@@ -59,15 +69,15 @@
 
 .state-card {
   border-radius: 12px;
-  border: 1px dashed #d3dcec;
-  background: #ffffff;
+  border: 1px dashed var(--gh-border-strong);
+  background: var(--gh-surface);
   padding: 12px;
 }
 
 .state-card p {
   margin: 0;
   font-size: 13px;
-  color: #516684;
+  color: var(--gh-text-muted);
 }
 
 .state-card p + p {
@@ -75,11 +85,11 @@
 }
 
 .state-card .error {
-  color: #b42318;
+  color: var(--gh-status-danger-text);
 }
 
 .state-card .info {
-  color: #0f766e;
+  color: var(--gh-status-success-text);
 }
 
 .notes-list {
@@ -90,8 +100,8 @@
 
 .note-card {
   border-radius: 12px;
-  border: 1px solid #d7dfeb;
-  background: #ffffff;
+  border: 1px solid var(--gh-border-strong);
+  background: var(--gh-surface);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -107,14 +117,14 @@
 
 .note-head strong {
   display: block;
-  color: #0f172a;
+  color: var(--gh-text-strong);
   font-size: 18px;
 }
 
 .note-head small {
   display: block;
   margin-top: 2px;
-  color: #7d8da4;
+  color: var(--gh-text-soft);
   font-size: 12px;
 }
 
@@ -136,20 +146,20 @@
 
 .note-body .reason {
   margin: 0;
-  color: #1f2937;
+  color: var(--gh-text);
   font-size: 14px;
   line-height: 1.35;
 }
 
 .note-body .notes {
   margin: 6px 0 0;
-  color: #5f7391;
+  color: var(--gh-text-muted);
   font-size: 12px;
 }
 
 .note-foot {
   margin-top: auto;
-  border-top: 1px solid #edf1f7;
+  border-top: 1px solid var(--gh-border-soft);
   padding-top: 10px;
   display: flex;
   align-items: flex-end;
@@ -159,7 +169,7 @@
 
 .amount-block small {
   display: block;
-  color: #7e8ea6;
+  color: var(--gh-text-soft);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -168,7 +178,7 @@
 .amount-block strong {
   display: block;
   margin-top: 2px;
-  color: #0f172a;
+  color: var(--gh-text-strong);
   font-size: 26px;
   line-height: 1;
 }
@@ -181,9 +191,9 @@
 
 .row-btn {
   border-radius: 9px;
-  border: 1px solid #d8e2ef;
-  background: #ffffff;
-  color: #334155;
+  border: 1px solid var(--gh-border-strong);
+  background: var(--gh-surface);
+  color: var(--gh-text);
   height: 34px;
   padding: 0 11px;
   display: inline-flex;
@@ -195,9 +205,9 @@
 }
 
 .row-btn.danger {
-  border-color: #fecaca;
-  color: #b42318;
-  background: #fff5f5;
+  border-color: var(--gh-status-danger-border);
+  color: var(--gh-status-danger-text);
+  background: var(--gh-status-danger-bg);
 }
 
 .row-btn:disabled {
@@ -207,8 +217,8 @@
 
 .inactive-chip {
   border-radius: 999px;
-  background: #fee2e2;
-  color: #b42318;
+  background: var(--gh-status-danger-bg);
+  color: var(--gh-status-danger-text);
   font-size: 11px;
   font-weight: 700;
   padding: 4px 9px;
@@ -216,15 +226,15 @@
 
 .empty-state {
   border-radius: 12px;
-  border: 1px dashed #d4dcec;
-  background: #ffffff;
+  border: 1px dashed var(--gh-border-strong);
+  background: var(--gh-surface);
   padding: 20px;
   text-align: center;
 }
 
 .empty-state p {
   margin: 0 0 12px;
-  color: #64748b;
+  color: var(--gh-text-muted);
 }
 
 .btn {
@@ -247,28 +257,28 @@
 }
 
 .btn-dark {
-  background: #0f1f41;
-  color: #f0c660;
+  background: var(--gh-brand);
+  color: var(--drawer-accent);
 }
 
 .btn-light {
-  background: #ffffff;
-  border-color: #d7dfeb;
-  color: #334155;
+  background: var(--gh-surface);
+  border-color: var(--gh-border-strong);
+  color: var(--gh-text);
 }
 
 .btn-close {
   width: 40px;
   padding: 0;
-  background: #e2e8f0;
-  color: #64748b;
+  background: var(--gh-status-neutral-bg);
+  color: var(--gh-text-muted);
 }
 
 .form-overlay {
   position: fixed;
   inset: 0;
   z-index: 230;
-  background: rgba(15, 23, 42, 0.5);
+  background: var(--drawer-overlay-soft);
   display: grid;
   place-items: center;
   padding: 20px;

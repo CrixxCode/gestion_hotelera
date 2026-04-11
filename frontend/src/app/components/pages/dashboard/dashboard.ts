@@ -358,6 +358,7 @@ export class Dashboard implements OnInit, OnDestroy {
       },
     ];
 
+    const chartPalette = this.getChartPalette();
     const occupancySeries = this.buildOccupancySeries(data.reservations, totalRooms);
     const occupancyMax = Math.max(...occupancySeries.occupiedValues, ...occupancySeries.freeValues, totalRooms, 1);
     this.occupancyChartData = {
@@ -366,8 +367,8 @@ export class Dashboard implements OnInit, OnDestroy {
         {
           label: 'Ocupadas',
           data: occupancySeries.occupiedValues,
-          backgroundColor: '#3b82f6',
-          borderColor: '#3b82f6',
+          backgroundColor: chartPalette.occupied,
+          borderColor: chartPalette.occupied,
           borderRadius: 8,
           maxBarThickness: 20,
           categoryPercentage: 0.72,
@@ -376,8 +377,8 @@ export class Dashboard implements OnInit, OnDestroy {
         {
           label: 'Libres',
           data: occupancySeries.freeValues,
-          backgroundColor: '#69d7b5',
-          borderColor: '#69d7b5',
+          backgroundColor: chartPalette.free,
+          borderColor: chartPalette.free,
           borderRadius: 8,
           maxBarThickness: 20,
           categoryPercentage: 0.72,
@@ -393,10 +394,10 @@ export class Dashboard implements OnInit, OnDestroy {
       datasets: [{
         label: 'Ingresos',
         data: incomeSeries.values,
-        borderColor: '#c6a749',
-        backgroundColor: 'rgba(198, 167, 73, 0.2)',
-        pointBackgroundColor: '#c6a749',
-        pointBorderColor: '#c6a749',
+        borderColor: chartPalette.revenue,
+        backgroundColor: chartPalette.revenueFill,
+        pointBackgroundColor: chartPalette.revenue,
+        pointBorderColor: chartPalette.revenue,
         pointRadius: 3,
         pointHoverRadius: 4,
         tension: 0.35,
@@ -712,17 +713,18 @@ export class Dashboard implements OnInit, OnDestroy {
 
   private buildBarOptions(maxValue: number): ChartOptions<'bar'> {
     const max = Math.max(5, Math.ceil(maxValue / 5) * 5);
+    const chartPalette = this.getChartPalette();
     return {
       responsive: true,
       maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
-        x: { grid: { display: false }, ticks: { color: '#96a3b2', font: { size: 11 } }, border: { display: false } },
+        x: { grid: { display: false }, ticks: { color: chartPalette.tick, font: { size: 11 } }, border: { display: false } },
         y: {
           min: 0,
           max,
-          ticks: { stepSize: Math.max(1, Math.round(max / 4)), color: '#96a3b2', font: { size: 11 } },
-          grid: { color: '#e9eef3' },
+          ticks: { stepSize: Math.max(1, Math.round(max / 4)), color: chartPalette.tick, font: { size: 11 } },
+          grid: { color: chartPalette.grid },
           border: { display: false },
         },
       },
@@ -731,25 +733,51 @@ export class Dashboard implements OnInit, OnDestroy {
 
   private buildLineOptions(maxValue: number): ChartOptions<'line'> {
     const max = Math.max(1000, Math.ceil(maxValue / 1000) * 1000);
+    const chartPalette = this.getChartPalette();
     return {
       responsive: true,
       maintainAspectRatio: false,
       plugins: { legend: { display: false } },
       scales: {
-        x: { grid: { color: '#f3f6f9' }, ticks: { color: '#96a3b2', font: { size: 11 } }, border: { display: false } },
+        x: { grid: { color: chartPalette.gridSoft }, ticks: { color: chartPalette.tick, font: { size: 11 } }, border: { display: false } },
         y: {
           min: 0,
           max,
           ticks: {
-            color: '#96a3b2',
+            color: chartPalette.tick,
             font: { size: 11 },
             callback: (value) => this.formatCompactCurrency(this.toNumber(value)),
           },
-          grid: { color: '#e9eef3' },
+          grid: { color: chartPalette.grid },
           border: { display: false },
         },
       },
     };
+  }
+
+  private getChartPalette(): {
+    occupied: string;
+    free: string;
+    revenue: string;
+    revenueFill: string;
+    tick: string;
+    grid: string;
+    gridSoft: string;
+  } {
+    const occupied = this.readThemeColor('--gh-status-info-strong', '#3b82f6');
+    const free = this.readThemeColor('--gh-status-success-strong', '#69d7b5');
+    const revenue = this.readThemeColor('--gh-status-warn-strong', '#c6a749');
+    const tick = this.readThemeColor('--gh-text-soft', '#96a3b2');
+    const grid = this.readThemeColor('--gh-border-soft', '#e9eef3');
+    const gridSoft = this.readThemeColor('--gh-border', '#f3f6f9');
+    const revenueFill = this.readThemeColor('--gh-status-warn-bg', 'rgba(198, 167, 73, 0.2)');
+
+    return { occupied, free, revenue, revenueFill, tick, grid, gridSoft };
+  }
+
+  private readThemeColor(token: string, fallback: string): string {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+    return value || fallback;
   }
 
   private mapRoomState(status: string): RoomState {

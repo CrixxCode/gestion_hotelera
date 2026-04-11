@@ -75,6 +75,7 @@ export class Header implements OnInit {
 
   ngOnInit(): void {
     this.darkMode = false;
+    document.documentElement.classList.remove('my-app-dark');
     document.documentElement.classList.remove('dark');
     this.loadUserInfo();
   }
@@ -193,6 +194,7 @@ export class Header implements OnInit {
 
   toggleTheme(): void {
     this.darkMode = !this.darkMode;
+    document.documentElement.classList.toggle('my-app-dark', this.darkMode);
     document.documentElement.classList.toggle('dark', this.darkMode);
     this.menuOpen = false;
     this.notificationsOpen = false;

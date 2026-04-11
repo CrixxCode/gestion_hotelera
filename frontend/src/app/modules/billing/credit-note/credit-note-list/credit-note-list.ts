@@ -179,16 +179,32 @@ export class CreditNoteList implements OnChanges {
     const code = this.normalizeCode(note.status_code);
 
     if (code.includes('BORRADOR')) {
-      return { bg: '#e2e8f0', color: '#334155', dot: '#64748b' };
+      return {
+        bg: 'var(--gh-status-neutral-bg)',
+        color: 'var(--gh-status-neutral-text)',
+        dot: 'var(--gh-text-muted)'
+      };
     }
     if (code.includes('EMITIDA') || code.includes('APLICADA')) {
-      return { bg: '#dbeafe', color: '#1d4ed8', dot: '#3b82f6' };
+      return {
+        bg: 'var(--gh-status-info-bg)',
+        color: 'var(--gh-status-info-text)',
+        dot: 'var(--gh-status-info-strong)'
+      };
     }
     if (code.includes('ANULADA') || !note.is_active) {
-      return { bg: '#fee2e2', color: '#b42318', dot: '#ef4444' };
+      return {
+        bg: 'var(--gh-status-danger-bg)',
+        color: 'var(--gh-status-danger-text)',
+        dot: 'var(--gh-status-danger-strong)'
+      };
     }
 
-    return { bg: '#e2e8f0', color: '#334155', dot: '#94a3b8' };
+    return {
+      bg: 'var(--gh-status-neutral-bg)',
+      color: 'var(--gh-status-neutral-text)',
+      dot: 'var(--gh-text-soft)'
+    };
   }
 
   formatDate(value: string | null | undefined): string {

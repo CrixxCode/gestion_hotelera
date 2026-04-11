@@ -81,9 +81,9 @@ export class DetailRoomInventory {
 
   getCoverageTone(record: RoomInventoryI): { bg: string; color: string } {
     const state = this.resolveCoverageState(record);
-    if (state === 'OUT') return { bg: '#fef2f2', color: '#b42318' };
-    if (state === 'LOW') return { bg: '#fff7ed', color: '#c2410c' };
-    return { bg: '#dcfce7', color: '#15803d' };
+    if (state === 'OUT') return { bg: 'var(--gh-status-danger-bg)', color: 'var(--gh-status-danger-text)' };
+    if (state === 'LOW') return { bg: 'var(--gh-status-orange-bg)', color: 'var(--gh-status-orange-text)' };
+    return { bg: 'var(--gh-status-success-bg)', color: 'var(--gh-status-success-text)' };
   }
 
   getStatusLabel(record: RoomInventoryI): string {
@@ -91,8 +91,8 @@ export class DetailRoomInventory {
   }
 
   getStatusTone(record: RoomInventoryI): { bg: string; color: string } {
-    if (record.is_active) return { bg: '#dcfce7', color: '#15803d' };
-    return { bg: '#eef2f7', color: '#64748b' };
+    if (record.is_active) return { bg: 'var(--gh-status-success-bg)', color: 'var(--gh-status-success-text)' };
+    return { bg: 'var(--gh-status-neutral-bg)', color: 'var(--gh-status-neutral-text)' };
   }
 
   getItemLabel(record: RoomInventoryI): string {

@@ -13,7 +13,10 @@
 
       <div class="head-right">
         <span>Saldo pendiente</span>
-        <strong [ngStyle]="{ color: pendingAmount > 0 ? '#f0c660' : '#86efac' }">
+        <strong
+          [ngStyle]="{
+            color: pendingAmount > 0 ? 'var(--drawer-accent)' : 'var(--gh-status-success-strong-alt)'
+          }">
           {{ formatCurrency(pendingAmount) }}
         </strong>
         <small>Total factura: {{ formatCurrency(totalWithTaxAmount) }}</small>

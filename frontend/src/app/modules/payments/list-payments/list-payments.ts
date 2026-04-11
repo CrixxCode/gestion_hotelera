@@ -309,9 +309,17 @@ export class ListPayments implements OnInit {
 
   getStatusTone(payment: PaymentI): { bg: string; color: string; dot: string } {
     if (payment.is_active) {
-      return { bg: '#dcfce7', color: '#166534', dot: '#22c55e' };
+      return {
+        bg: 'var(--gh-status-success-bg)',
+        color: 'var(--gh-status-success-text)',
+        dot: 'var(--gh-status-success-strong-alt)'
+      };
     }
-    return { bg: '#e2e8f0', color: '#475569', dot: '#94a3b8' };
+    return {
+      bg: 'var(--gh-status-neutral-bg)',
+      color: 'var(--gh-status-neutral-text)',
+      dot: 'var(--gh-text-soft)'
+    };
   }
 
   getAmountLabel(payment: PaymentI): string {

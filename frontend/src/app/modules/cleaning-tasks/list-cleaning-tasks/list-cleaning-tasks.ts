@@ -37,48 +37,48 @@ type CleaningTaskGroup = {
 const TYPE_TONES: Record<string, CleaningTaskTone> = {
   DIARIA: {
     icon: 'fa-solid fa-broom-ball',
-    iconBg: '#dcfce7',
-    iconColor: '#15803d',
+    iconBg: 'var(--gh-status-success-bg)',
+    iconColor: 'var(--gh-status-success-text)',
     cover: 'linear-gradient(135deg, #14532d 0%, #16a34a 100%)',
-    badgeBg: '#dcfce7',
-    badgeColor: '#15803d',
-    accent: '#22c55e'
+    badgeBg: 'var(--gh-status-success-bg)',
+    badgeColor: 'var(--gh-status-success-text)',
+    accent: 'var(--gh-status-success-strong)'
   },
   SALIDA: {
     icon: 'fa-solid fa-door-open',
-    iconBg: '#ffedd5',
-    iconColor: '#c2410c',
+    iconBg: 'var(--gh-status-orange-bg)',
+    iconColor: 'var(--gh-status-orange-text)',
     cover: 'linear-gradient(135deg, #7c2d12 0%, #f97316 100%)',
-    badgeBg: '#ffedd5',
-    badgeColor: '#c2410c',
-    accent: '#f97316'
+    badgeBg: 'var(--gh-status-orange-bg)',
+    badgeColor: 'var(--gh-status-orange-text)',
+    accent: 'var(--gh-status-orange-strong)'
   },
   PROFUNDA: {
     icon: 'fa-solid fa-soap',
-    iconBg: '#ede9fe',
-    iconColor: '#6d28d9',
+    iconBg: 'var(--gh-status-violet-bg)',
+    iconColor: 'var(--gh-status-violet-text)',
     cover: 'linear-gradient(135deg, #4c1d95 0%, #8b5cf6 100%)',
-    badgeBg: '#ede9fe',
-    badgeColor: '#6d28d9',
-    accent: '#8b5cf6'
+    badgeBg: 'var(--gh-status-violet-bg)',
+    badgeColor: 'var(--gh-status-violet-text)',
+    accent: 'var(--gh-status-violet-text)'
   },
   INSPECCION: {
     icon: 'fa-solid fa-clipboard-check',
-    iconBg: '#e0f2fe',
-    iconColor: '#0369a1',
+    iconBg: 'var(--gh-status-info-bg)',
+    iconColor: 'var(--gh-status-info-text)',
     cover: 'linear-gradient(135deg, #0c4a6e 0%, #0ea5e9 100%)',
-    badgeBg: '#e0f2fe',
-    badgeColor: '#0369a1',
-    accent: '#0ea5e9'
+    badgeBg: 'var(--gh-status-info-bg)',
+    badgeColor: 'var(--gh-status-info-text)',
+    accent: 'var(--gh-status-info-strong)'
   },
   DEFAULT: {
     icon: 'fa-solid fa-spray-can-sparkles',
-    iconBg: '#e6edf7',
-    iconColor: '#1f3f73',
+    iconBg: 'var(--gh-status-neutral-bg)',
+    iconColor: 'var(--gh-status-neutral-text)',
     cover: 'linear-gradient(135deg, #1f365f 0%, #3d659f 100%)',
-    badgeBg: '#e6edf7',
-    badgeColor: '#1f3f73',
-    accent: '#335f9d'
+    badgeBg: 'var(--gh-status-neutral-bg)',
+    badgeColor: 'var(--gh-status-neutral-text)',
+    accent: 'var(--gh-text-muted)'
   }
 };
 
@@ -408,10 +408,32 @@ export class ListCleaningTasks implements OnInit {
 
   getStatusTone(task: CleaningTaskI): { bg: string; color: string; dot: string } {
     const code = this.normalizeCode(task.status);
-    if (code === 'COMPLETADA') return { bg: '#dcfce7', color: '#15803d', dot: '#22c55e' };
-    if (code === 'ENPROCESO') return { bg: '#e0f2fe', color: '#0369a1', dot: '#0ea5e9' };
-    if (code === 'CANCELADA') return { bg: '#eef2f7', color: '#64748b', dot: '#94a3b8' };
-    return { bg: '#fff7ed', color: '#c2410c', dot: '#f97316' };
+    if (code === 'COMPLETADA') {
+      return {
+        bg: 'var(--gh-status-success-bg)',
+        color: 'var(--gh-status-success-text)',
+        dot: 'var(--gh-status-success-strong)'
+      };
+    }
+    if (code === 'ENPROCESO') {
+      return {
+        bg: 'var(--gh-status-info-bg)',
+        color: 'var(--gh-status-info-text)',
+        dot: 'var(--gh-status-info-strong)'
+      };
+    }
+    if (code === 'CANCELADA') {
+      return {
+        bg: 'var(--gh-status-neutral-bg)',
+        color: 'var(--gh-status-neutral-text)',
+        dot: 'var(--gh-text-muted)'
+      };
+    }
+    return {
+      bg: 'var(--gh-status-orange-bg)',
+      color: 'var(--gh-status-orange-text)',
+      dot: 'var(--gh-status-orange-strong)'
+    };
   }
 
   getTypeBadgeTone(task: CleaningTaskI): { bg: string; color: string; dot: string } {

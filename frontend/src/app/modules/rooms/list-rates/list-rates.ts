@@ -338,8 +338,19 @@ export class ListRates implements OnInit {
   }
 
   getStatusTone(rate: RateI): { bg: string; color: string; dot: string } {
-    if (rate.is_active === false) return { bg: '#eef2f7', color: '#64748b', dot: '#94a3b8' };
-    return { bg: '#dcfce7', color: '#15803d', dot: '#22c55e' };
+    if (rate.is_active === false) {
+      return {
+        bg: 'var(--gh-status-neutral-bg)',
+        color: 'var(--gh-status-neutral-text)',
+        dot: 'var(--gh-text-soft)'
+      };
+    }
+
+    return {
+      bg: 'var(--gh-status-success-bg)',
+      color: 'var(--gh-status-success-text)',
+      dot: 'var(--gh-status-success-strong)'
+    };
   }
 
   getValidityLabel(rate: RateI): string {
@@ -352,10 +363,10 @@ export class ListRates implements OnInit {
 
   getValidityTone(rate: RateI): { bg: string; color: string } {
     const validity = this.getValidityState(rate);
-    if (validity === 'ACTIVE_NOW') return { bg: '#dcfce7', color: '#15803d' };
-    if (validity === 'UPCOMING') return { bg: '#e0f2fe', color: '#0369a1' };
-    if (validity === 'EXPIRED') return { bg: '#fff7ed', color: '#c2410c' };
-    return { bg: '#eef2ff', color: '#4338ca' };
+    if (validity === 'ACTIVE_NOW') return { bg: 'var(--gh-status-success-bg)', color: 'var(--gh-status-success-text)' };
+    if (validity === 'UPCOMING') return { bg: 'var(--gh-status-info-bg)', color: 'var(--gh-status-info-text)' };
+    if (validity === 'EXPIRED') return { bg: 'var(--gh-status-orange-bg)', color: 'var(--gh-status-orange-text)' };
+    return { bg: 'var(--gh-status-violet-bg)', color: 'var(--gh-status-violet-text)' };
   }
 
   getGroupAverageLabel(group: RateGroup): string {

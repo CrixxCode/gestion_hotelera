@@ -468,12 +468,24 @@ export class ListItems implements OnInit {
 
   getStockStateTone(item: ItemI): { bg: string; color: string; dot: string } {
     if (this.toNonNegativeInt(item.stock) <= 0) {
-      return { bg: '#fef2f2', color: '#b42318', dot: '#ef4444' };
+      return {
+        bg: 'var(--gh-status-danger-bg)',
+        color: 'var(--gh-status-danger-text)',
+        dot: 'var(--gh-status-danger-strong)'
+      };
     }
     if (this.isLowStock(item)) {
-      return { bg: '#fff7ed', color: '#c2410c', dot: '#f97316' };
+      return {
+        bg: 'var(--gh-status-orange-bg)',
+        color: 'var(--gh-status-orange-text)',
+        dot: 'var(--gh-status-orange-strong)'
+      };
     }
-    return { bg: '#dcfce7', color: '#15803d', dot: '#22c55e' };
+    return {
+      bg: 'var(--gh-status-success-bg)',
+      color: 'var(--gh-status-success-text)',
+      dot: 'var(--gh-status-success-strong)'
+    };
   }
 
   getStockCount(item: ItemI): number {
@@ -506,11 +518,11 @@ export class ListItems implements OnInit {
 
   getStockBarColor(item: ItemI): string {
     const state = this.resolveInventoryState(item);
-    if (state === 'OUT') return '#ef4444';
-    if (state === 'LOW') return '#f59e0b';
-    if (state === 'EXCESS') return '#0ea5e9';
-    if (state === 'INACTIVE') return '#94a3b8';
-    return '#10b981';
+    if (state === 'OUT') return 'var(--gh-status-danger-strong)';
+    if (state === 'LOW') return 'var(--gh-status-warn-strong)';
+    if (state === 'EXCESS') return 'var(--gh-status-info-strong)';
+    if (state === 'INACTIVE') return 'var(--gh-text-soft)';
+    return 'var(--gh-status-success-strong)';
   }
 
   getTableStatusLabel(item: ItemI): string {
@@ -526,22 +538,42 @@ export class ListItems implements OnInit {
     const state = this.resolveInventoryState(item);
 
     if (state === 'OUT') {
-      return { bg: '#fef2f2', color: '#b42318', icon: 'fa-regular fa-circle-xmark' };
+      return {
+        bg: 'var(--gh-status-danger-bg)',
+        color: 'var(--gh-status-danger-text)',
+        icon: 'fa-regular fa-circle-xmark'
+      };
     }
 
     if (state === 'LOW') {
-      return { bg: '#fff7ed', color: '#c2410c', icon: 'fa-solid fa-triangle-exclamation' };
+      return {
+        bg: 'var(--gh-status-orange-bg)',
+        color: 'var(--gh-status-orange-text)',
+        icon: 'fa-solid fa-triangle-exclamation'
+      };
     }
 
     if (state === 'EXCESS') {
-      return { bg: '#e0f2fe', color: '#0369a1', icon: 'fa-solid fa-chart-line' };
+      return {
+        bg: 'var(--gh-status-info-bg)',
+        color: 'var(--gh-status-info-strong-alt)',
+        icon: 'fa-solid fa-chart-line'
+      };
     }
 
     if (state === 'INACTIVE') {
-      return { bg: '#eef2f7', color: '#64748b', icon: 'fa-regular fa-circle-pause' };
+      return {
+        bg: 'var(--gh-status-neutral-bg)',
+        color: 'var(--gh-status-neutral-text)',
+        icon: 'fa-regular fa-circle-pause'
+      };
     }
 
-    return { bg: '#dcfce7', color: '#15803d', icon: 'fa-regular fa-circle-check' };
+    return {
+      bg: 'var(--gh-status-success-bg)',
+      color: 'var(--gh-status-success-text)',
+      icon: 'fa-regular fa-circle-check'
+    };
   }
 
   getTotalStockValueLabel(item: ItemI): string {
@@ -561,9 +593,17 @@ export class ListItems implements OnInit {
 
   getStatusTone(item: ItemI): { bg: string; color: string; dot: string } {
     if (item.is_active) {
-      return { bg: '#dcfce7', color: '#15803d', dot: '#22c55e' };
+      return {
+        bg: 'var(--gh-status-success-bg)',
+        color: 'var(--gh-status-success-text)',
+        dot: 'var(--gh-status-success-strong)'
+      };
     }
-    return { bg: '#eef2f7', color: '#64748b', dot: '#94a3b8' };
+    return {
+      bg: 'var(--gh-status-neutral-bg)',
+      color: 'var(--gh-status-neutral-text)',
+      dot: 'var(--gh-text-soft)'
+    };
   }
 
   getGroupTone(group: ItemCatalogGroup): ItemCategoryTone {

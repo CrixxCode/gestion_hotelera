@@ -44,9 +44,17 @@ export class DetailExpense implements OnChanges {
 
   get statusTone(): { bg: string; color: string; dot: string } {
     if (this.activeExpense?.is_active) {
-      return { bg: '#dcfce7', color: '#166534', dot: '#22c55e' };
+      return {
+        bg: 'var(--gh-status-success-bg)',
+        color: 'var(--gh-status-success-text)',
+        dot: 'var(--gh-status-success-strong)'
+      };
     }
-    return { bg: '#e2e8f0', color: '#475569', dot: '#94a3b8' };
+    return {
+      bg: 'var(--gh-status-neutral-bg)',
+      color: 'var(--gh-status-neutral-text)',
+      dot: 'var(--gh-text-muted)'
+    };
   }
 
   closeDrawer(): void {

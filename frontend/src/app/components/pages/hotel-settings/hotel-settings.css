@@ -4,10 +4,9 @@
 
 .hotel-settings-page {
   min-height: 100%;
-  background: #f3f5f9;
   padding: 24px;
   padding-bottom: 96px;
-  color: #1f2937;
+  color: var(--gh-text-strong);
 }
 
 .page-header {
@@ -27,7 +26,7 @@
 
 .page-header p {
   margin: 8px 0 0;
-  color: #8a94a6;
+  color: var(--gh-text-muted);
   font-size: 15px;
 }
 
@@ -39,10 +38,10 @@
 }
 
 .stat-card {
-  background: #fff;
-  border: 1px solid #e5e9f0;
+  background: var(--gh-surface);
+  border: 1px solid var(--gh-border);
   border-radius: 14px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--gh-shadow-card);
   padding: 14px 16px;
 }
 
@@ -50,7 +49,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: #4f5f79;
+  color: var(--gh-text);
   font-size: 13px;
   font-weight: 500;
 }
@@ -65,23 +64,23 @@
 }
 
 .stat-icon.blue {
-  background: #e8f0ff;
-  color: #2563eb;
+  background: var(--gh-status-info-bg);
+  color: var(--gh-status-info-text);
 }
 
 .stat-icon.green {
-  background: #e6f8ef;
-  color: #059669;
+  background: var(--gh-status-success-bg);
+  color: var(--gh-status-success-text);
 }
 
 .stat-icon.slate {
-  background: #eef2f7;
-  color: #64748b;
+  background: var(--gh-status-neutral-bg);
+  color: var(--gh-text-muted);
 }
 
 .stat-icon.violet {
-  background: #f3ecff;
-  color: #9333ea;
+  background: var(--gh-status-violet-bg);
+  color: var(--gh-status-violet-text);
 }
 
 .stat-value {
@@ -93,13 +92,184 @@
 
 .stat-note {
   margin-top: 8px;
-  color: #7b8ea8;
+  color: var(--gh-text-muted);
   font-size: 14px;
 }
 
 .settings-footer {
   padding-left: 24px;
   padding-right: 24px;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page,
+:host-context(.dark) .hotel-settings-page {
+  color: var(--gh-text);
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .bg-white,
+:host-context(.dark) .hotel-settings-page .bg-white,
+:host-context(.my-app-dark) .hotel-settings-page .bg-white\/95,
+:host-context(.dark) .hotel-settings-page .bg-white\/95 {
+  background: var(--gh-surface) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .bg-gray-50,
+:host-context(.dark) .hotel-settings-page .bg-gray-50,
+:host-context(.my-app-dark) .hotel-settings-page .bg-gray-100,
+:host-context(.dark) .hotel-settings-page .bg-gray-100 {
+  background: var(--gh-surface-soft) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .border-gray-100,
+:host-context(.dark) .hotel-settings-page .border-gray-100,
+:host-context(.my-app-dark) .hotel-settings-page .border-gray-200,
+:host-context(.dark) .hotel-settings-page .border-gray-200,
+:host-context(.my-app-dark) .hotel-settings-page .border-gray-300,
+:host-context(.dark) .hotel-settings-page .border-gray-300 {
+  border-color: var(--gh-border) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+:host-context(.dark) .hotel-settings-page .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+:host-context(.my-app-dark) .hotel-settings-page .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+:host-context(.dark) .hotel-settings-page .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--gh-border-soft) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .text-slate-900,
+:host-context(.dark) .hotel-settings-page .text-slate-900,
+:host-context(.my-app-dark) .hotel-settings-page .text-slate-800,
+:host-context(.dark) .hotel-settings-page .text-slate-800 {
+  color: var(--gh-text-strong) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .text-slate-700,
+:host-context(.dark) .hotel-settings-page .text-slate-700,
+:host-context(.my-app-dark) .hotel-settings-page .text-slate-600,
+:host-context(.dark) .hotel-settings-page .text-slate-600 {
+  color: var(--gh-text) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .text-gray-600,
+:host-context(.dark) .hotel-settings-page .text-gray-600,
+:host-context(.my-app-dark) .hotel-settings-page .text-gray-500,
+:host-context(.dark) .hotel-settings-page .text-gray-500,
+:host-context(.my-app-dark) .hotel-settings-page .text-gray-400,
+:host-context(.dark) .hotel-settings-page .text-gray-400 {
+  color: var(--gh-text-muted) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .bg-slate-900,
+:host-context(.dark) .hotel-settings-page .bg-slate-900 {
+  background: var(--gh-brand) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .hover\:bg-slate-800:hover,
+:host-context(.dark) .hotel-settings-page .hover\:bg-slate-800:hover {
+  background: var(--gh-brand-hover) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .hover\:bg-gray-50:hover,
+:host-context(.dark) .hotel-settings-page .hover\:bg-gray-50:hover,
+:host-context(.my-app-dark) .hotel-settings-page .hover\:bg-blue-50:hover,
+:host-context(.dark) .hotel-settings-page .hover\:bg-blue-50:hover,
+:host-context(.my-app-dark) .hotel-settings-page .hover\:bg-red-50:hover,
+:host-context(.dark) .hotel-settings-page .hover\:bg-red-50:hover {
+  background: var(--gh-surface-soft) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .bg-red-50,
+:host-context(.dark) .hotel-settings-page .bg-red-50 {
+  background: var(--gh-status-danger-bg) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .bg-blue-50,
+:host-context(.dark) .hotel-settings-page .bg-blue-50 {
+  background: var(--gh-status-info-bg) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .border-red-200,
+:host-context(.dark) .hotel-settings-page .border-red-200,
+:host-context(.my-app-dark) .hotel-settings-page .border-red-300,
+:host-context(.dark) .hotel-settings-page .border-red-300,
+:host-context(.my-app-dark) .hotel-settings-page .border-red-400,
+:host-context(.dark) .hotel-settings-page .border-red-400 {
+  border-color: var(--gh-status-danger-border) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .border-blue-200,
+:host-context(.dark) .hotel-settings-page .border-blue-200,
+:host-context(.my-app-dark) .hotel-settings-page .border-blue-300,
+:host-context(.dark) .hotel-settings-page .border-blue-300 {
+  border-color: var(--gh-status-info-border) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .text-red-600,
+:host-context(.dark) .hotel-settings-page .text-red-600,
+:host-context(.my-app-dark) .hotel-settings-page .text-red-700,
+:host-context(.dark) .hotel-settings-page .text-red-700 {
+  color: var(--gh-status-danger-text) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .text-blue-600,
+:host-context(.dark) .hotel-settings-page .text-blue-600,
+:host-context(.my-app-dark) .hotel-settings-page .text-blue-700,
+:host-context(.dark) .hotel-settings-page .text-blue-700 {
+  color: var(--gh-status-info-text) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .bg-amber-50,
+:host-context(.dark) .hotel-settings-page .bg-amber-50 {
+  background: var(--gh-status-warn-bg) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .border-amber-200,
+:host-context(.dark) .hotel-settings-page .border-amber-200 {
+  border-color: var(--gh-status-warn-border) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .text-amber-600,
+:host-context(.dark) .hotel-settings-page .text-amber-600,
+:host-context(.my-app-dark) .hotel-settings-page .text-amber-700,
+:host-context(.dark) .hotel-settings-page .text-amber-700 {
+  color: var(--gh-status-warn-text) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .bg-emerald-50,
+:host-context(.dark) .hotel-settings-page .bg-emerald-50,
+:host-context(.my-app-dark) .hotel-settings-page .bg-emerald-100,
+:host-context(.dark) .hotel-settings-page .bg-emerald-100 {
+  background: var(--gh-status-success-bg) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .border-emerald-200,
+:host-context(.dark) .hotel-settings-page .border-emerald-200 {
+  border-color: var(--gh-status-success-border) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page .text-emerald-700,
+:host-context(.dark) .hotel-settings-page .text-emerald-700 {
+  color: var(--gh-status-success-text) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page input:not([type='checkbox']):not([type='radio']),
+:host-context(.dark) .hotel-settings-page input:not([type='checkbox']):not([type='radio']),
+:host-context(.my-app-dark) .hotel-settings-page select,
+:host-context(.dark) .hotel-settings-page select,
+:host-context(.my-app-dark) .hotel-settings-page textarea,
+:host-context(.dark) .hotel-settings-page textarea {
+  background: var(--gh-surface) !important;
+  color: var(--gh-text) !important;
+  border-color: var(--gh-border-strong) !important;
+}
+
+:host-context(.my-app-dark) .hotel-settings-page input:focus,
+:host-context(.dark) .hotel-settings-page input:focus,
+:host-context(.my-app-dark) .hotel-settings-page select:focus,
+:host-context(.dark) .hotel-settings-page select:focus,
+:host-context(.my-app-dark) .hotel-settings-page textarea:focus,
+:host-context(.dark) .hotel-settings-page textarea:focus {
+  border-color: var(--gh-search-focus) !important;
 }
 
 @media (max-width: 1280px) {

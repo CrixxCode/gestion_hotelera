@@ -65,32 +65,32 @@ export class UserList implements OnInit {
       value: '0',
       sub: 'Cuentas registradas',
       icon: 'fa-solid fa-users',
-      color: '#3b82f6',
-      bg: '#e8f1ff'
+      color: 'var(--gh-status-info-strong)',
+      bg: 'var(--gh-status-info-bg)'
     },
     {
       label: 'Usuarios activos',
       value: '0',
       sub: 'Acceso habilitado',
       icon: 'fa-solid fa-user-check',
-      color: '#059669',
-      bg: '#e8faf2'
+      color: 'var(--gh-status-success-text)',
+      bg: 'var(--gh-status-success-bg)'
     },
     {
       label: 'Con roles',
       value: '0',
       sub: 'Permisos asignados',
       icon: 'fa-solid fa-shield-halved',
-      color: '#d97706',
-      bg: '#fff6df'
+      color: 'var(--gh-status-warn-text)',
+      bg: 'var(--gh-status-warn-bg)'
     },
     {
       label: 'Nuevos este mes',
       value: '0',
       sub: 'Altas recientes',
       icon: 'fa-solid fa-user-plus',
-      color: '#7c3aed',
-      bg: '#f3edff'
+      color: 'var(--gh-status-violet-text)',
+      bg: 'var(--gh-status-violet-bg)'
     }
   ];
 

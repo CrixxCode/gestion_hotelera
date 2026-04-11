@@ -345,66 +345,66 @@ export class ListRooms implements OnInit {
     switch (visualStatus) {
       case 'DISPONIBLE':
         return {
-          bg: '#e9f9ef',
-          color: '#0f9f56',
-          dot: '#21c06a',
-          border: '#2bc769',
-          buttonBg: '#0f1f41',
-          buttonColor: '#ffffff'
+          bg: 'var(--gh-status-success-bg)',
+          color: 'var(--gh-status-success-text)',
+          dot: 'var(--gh-status-success-strong)',
+          border: 'var(--gh-status-success-border)',
+          buttonBg: 'var(--gh-brand)',
+          buttonColor: 'var(--gh-on-brand)'
         };
       case 'OCUPADA':
         return {
-          bg: '#eaf1ff',
-          color: '#2f69e2',
-          dot: '#3979ff',
-          border: '#3f7fff',
-          buttonBg: '#e6eaf0',
-          buttonColor: '#334155'
+          bg: 'var(--gh-status-info-bg)',
+          color: 'var(--gh-status-info-text)',
+          dot: 'var(--gh-status-info-strong)',
+          border: 'var(--gh-status-info-border)',
+          buttonBg: 'var(--gh-surface-soft)',
+          buttonColor: 'var(--gh-text)'
         };
       case 'RESERVADA':
         return {
-          bg: '#eff6ff',
-          color: '#1d4ed8',
-          dot: '#2563eb',
-          border: '#2563eb',
-          buttonBg: '#0f172a',
-          buttonColor: '#ffffff'
+          bg: 'var(--gh-status-info-bg)',
+          color: 'var(--gh-status-info-text)',
+          dot: 'var(--gh-status-info-strong)',
+          border: 'var(--gh-status-info-border)',
+          buttonBg: 'var(--gh-brand)',
+          buttonColor: 'var(--gh-on-brand)'
         };
       case 'POR_SALIR_HOY':
         return {
-          bg: '#fff7cc',
-          color: '#ad7a00',
-          dot: '#f1bf24',
-          border: '#e6b100',
-          buttonBg: '#ef4444',
-          buttonColor: '#ffffff'
+          bg: 'var(--gh-status-warn-bg)',
+          color: 'var(--gh-status-warn-text)',
+          dot: 'var(--gh-status-warn-strong)',
+          border: 'var(--gh-status-warn-border)',
+          buttonBg: 'var(--gh-status-danger-strong)',
+          buttonColor: 'var(--gh-on-brand)'
         };
       case 'MANTENIMIENTO':
         return {
-          bg: '#ffeceb',
-          color: '#c8372e',
-          dot: '#ef4444',
-          border: '#ef4444',
-          buttonBg: '#f2f4f8',
-          buttonColor: '#98a2b3'
+          bg: 'var(--gh-status-danger-bg)',
+          color: 'var(--gh-status-danger-text)',
+          dot: 'var(--gh-status-danger-strong)',
+          border: 'var(--gh-status-danger-border)',
+          buttonBg: 'var(--gh-surface-soft)',
+          buttonColor: 'var(--gh-text-soft)'
         };
       case 'LIMPIEZA':
         return {
-          bg: '#ecfeff',
-          color: '#0e7490',
-          dot: '#06b6d4',
-          border: '#06b6d4',
-          buttonBg: '#f2f4f8',
-          buttonColor: '#475569'
+          bg: 'var(--gh-status-info-bg)',
+          color: 'var(--gh-status-info-text)',
+          dot: 'var(--gh-status-info-strong)',
+          border: 'var(--gh-status-info-border)',
+          buttonBg: 'var(--gh-surface-soft)',
+          buttonColor: 'var(--gh-text-muted)'
         };
       default:
         return {
-          bg: '#f1f5f9',
-          color: '#4b5563',
-          dot: '#9ca3af',
-          border: '#94a3b8',
-          buttonBg: '#f2f4f8',
-          buttonColor: '#98a2b3'
+          bg: 'var(--gh-status-neutral-bg)',
+          color: 'var(--gh-status-neutral-text)',
+          dot: 'var(--gh-status-neutral-text)',
+          border: 'var(--gh-status-neutral-border)',
+          buttonBg: 'var(--gh-surface-soft)',
+          buttonColor: 'var(--gh-text-soft)'
         };
     }
   }
@@ -594,5 +594,6 @@ export class ListRooms implements OnInit {
     return `"${escaped}"`;
   }
 }
+
 
 

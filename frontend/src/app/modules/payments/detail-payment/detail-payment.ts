@@ -115,10 +115,18 @@ export class DetailPayment implements OnInit, OnChanges {
 
   get paymentStatusTone(): { bg: string; color: string; dot: string } {
     if (this.activePayment?.is_active) {
-      return { bg: '#dcfce7', color: '#166534', dot: '#22c55e' };
+      return {
+        bg: 'var(--gh-status-success-bg)',
+        color: 'var(--gh-status-success-text)',
+        dot: 'var(--gh-status-success-strong-alt)'
+      };
     }
 
-    return { bg: '#e2e8f0', color: '#475569', dot: '#94a3b8' };
+    return {
+      bg: 'var(--gh-status-neutral-bg)',
+      color: 'var(--gh-status-neutral-text)',
+      dot: 'var(--gh-text-soft)'
+    };
   }
 
   closeDrawer(): void {
@@ -265,17 +273,41 @@ export class DetailPayment implements OnInit, OnChanges {
     const code = String(refund.status_code || '').trim().toUpperCase();
     switch (code) {
       case 'PROCESADO':
-        return { bg: '#dcfce7', color: '#166534', dot: '#22c55e' };
+        return {
+          bg: 'var(--gh-status-success-bg)',
+          color: 'var(--gh-status-success-text)',
+          dot: 'var(--gh-status-success-strong-alt)'
+        };
       case 'APROBADO':
-        return { bg: '#dbeafe', color: '#1d4ed8', dot: '#3b82f6' };
+        return {
+          bg: 'var(--gh-status-info-bg)',
+          color: 'var(--gh-status-info-text)',
+          dot: 'var(--gh-status-info-strong)'
+        };
       case 'PENDIENTE':
-        return { bg: '#fef3c7', color: '#92400e', dot: '#f59e0b' };
+        return {
+          bg: 'var(--gh-status-warn-bg)',
+          color: 'var(--gh-status-warn-text)',
+          dot: 'var(--gh-status-warn-strong)'
+        };
       case 'RECHAZADO':
-        return { bg: '#fee2e2', color: '#b42318', dot: '#ef4444' };
+        return {
+          bg: 'var(--gh-status-danger-bg)',
+          color: 'var(--gh-status-danger-text)',
+          dot: 'var(--gh-status-danger-strong)'
+        };
       case 'ANULADO':
-        return { bg: '#e2e8f0', color: '#475569', dot: '#94a3b8' };
+        return {
+          bg: 'var(--gh-status-neutral-bg)',
+          color: 'var(--gh-status-neutral-text)',
+          dot: 'var(--gh-text-soft)'
+        };
       default:
-        return { bg: '#e2e8f0', color: '#475569', dot: '#94a3b8' };
+        return {
+          bg: 'var(--gh-status-neutral-bg)',
+          color: 'var(--gh-status-neutral-text)',
+          dot: 'var(--gh-text-soft)'
+        };
     }
   }
 

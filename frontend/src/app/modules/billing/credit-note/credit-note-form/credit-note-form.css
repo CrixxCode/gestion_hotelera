@@ -3,9 +3,9 @@
 }
 
 .credit-note-form-card {
-  border: 1px solid #d7dfeb;
+  border: 1px solid var(--gh-border-strong);
   border-radius: 14px;
-  background: #f7f9fd;
+  background: var(--gh-page-bg-alt);
   padding: 14px;
 }
 
@@ -15,14 +15,14 @@
 
 .form-head h3 {
   margin: 0;
-  color: #0f172a;
+  color: var(--gh-text-strong);
   font-size: 20px;
   line-height: 1.1;
 }
 
 .form-head p {
   margin: 4px 0 0;
-  color: #6b7e98;
+  color: var(--gh-text-muted);
   font-size: 12px;
 }
 
@@ -46,7 +46,7 @@ label {
 }
 
 label span {
-  color: #5b6f8e;
+  color: var(--gh-text-muted);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -56,10 +56,10 @@ label span {
 select,
 input,
 textarea {
-  border: 1px solid #ced9e8;
+  border: 1px solid var(--gh-border-strong);
   border-radius: 11px;
-  color: #1e293b;
-  background: #ffffff;
+  color: var(--gh-text);
+  background: var(--gh-surface);
   outline: 0;
   font-size: 14px;
   font-family: inherit;
@@ -104,14 +104,14 @@ textarea:focus {
 }
 
 .btn-dark {
-  background: #0f1f41;
-  color: #f0c660;
+  background: var(--gh-brand);
+  color: var(--gh-on-brand);
 }
 
 .btn-light {
-  background: #ffffff;
-  border-color: #d7dfeb;
-  color: #334155;
+  background: var(--gh-surface);
+  border-color: var(--gh-border-strong);
+  color: var(--gh-text);
 }
 
 .btn:disabled {
@@ -127,13 +127,13 @@ textarea:focus {
 }
 
 .feedback.error {
-  background: #fef2f2;
-  color: #b91c1c;
+  background: var(--gh-status-danger-bg);
+  color: var(--gh-status-danger-text);
 }
 
 .feedback.hint {
-  background: #ecfdf5;
-  color: #0f766e;
+  background: var(--gh-status-success-bg);
+  color: var(--gh-status-success-text);
 }
 
 @media (max-width: 920px) {

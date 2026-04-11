@@ -176,8 +176,8 @@
                 class="w-full text-left px-4 py-3 hover:bg-gray-100 flex items-center gap-2"
                 (click)="toggleTheme()"
               >
-                <i class="fa-solid fa-moon text-gray-600 w-5"></i>
-                Modo oscuro
+                <i [class]="darkMode ? 'fa-solid fa-sun text-gray-600 w-5' : 'fa-solid fa-moon text-gray-600 w-5'"></i>
+                {{ darkMode ? 'Modo claro' : 'Modo oscuro' }}
               </button>
             </li>
             <li>

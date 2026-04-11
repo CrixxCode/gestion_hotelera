@@ -43,32 +43,32 @@ export class ListClients implements OnInit {
       value: '0',
       sub: 'Registrados',
       icon: 'fa-solid fa-users',
-      color: '#3b82f6',
-      bg: '#e8f1ff'
+      color: 'var(--gh-status-info-text)',
+      bg: 'var(--gh-status-info-bg)'
     },
     {
       label: 'Clientes VIP',
       value: '0',
       sub: 'Alto valor',
       icon: 'fa-solid fa-star',
-      color: '#d97706',
-      bg: '#fff6df'
+      color: 'var(--gh-status-warn-text)',
+      bg: 'var(--gh-status-warn-bg)'
     },
     {
       label: 'Huespedes actuales',
       value: '0',
       sub: 'En estancia',
       icon: 'fa-solid fa-user-check',
-      color: '#059669',
-      bg: '#e8faf2'
+      color: 'var(--gh-status-success-text)',
+      bg: 'var(--gh-status-success-bg)'
     },
     {
       label: 'Clientes nuevos',
       value: '0',
       sub: 'Este mes',
       icon: 'fa-solid fa-user-plus',
-      color: '#7c3aed',
-      bg: '#f3edff'
+      color: 'var(--gh-status-violet-text)',
+      bg: 'var(--gh-status-violet-bg)'
     }
   ];
 
@@ -298,13 +298,29 @@ export class ListClients implements OnInit {
 
     switch (normalized) {
       case 'ACTIVO':
-        return { bg: '#ecfdf5', color: '#059669', dot: '#10b981' };
+        return {
+          bg: 'var(--gh-status-success-bg)',
+          color: 'var(--gh-status-success-text)',
+          dot: 'var(--gh-status-success-strong)'
+        };
       case 'INACTIVO':
-        return { bg: '#f3f4f6', color: '#6b7280', dot: '#9ca3af' };
+        return {
+          bg: 'var(--gh-status-neutral-bg)',
+          color: 'var(--gh-status-neutral-text)',
+          dot: 'var(--gh-text-soft)'
+        };
       case 'HUESPED_ACTUAL':
-        return { bg: '#eff6ff', color: '#2563eb', dot: '#3b82f6' };
+        return {
+          bg: 'var(--gh-status-info-bg)',
+          color: 'var(--gh-status-info-text)',
+          dot: 'var(--gh-status-info-strong)'
+        };
       default:
-        return { bg: '#f3f4f6', color: '#6b7280', dot: '#9ca3af' };
+        return {
+          bg: 'var(--gh-status-neutral-bg)',
+          color: 'var(--gh-status-neutral-text)',
+          dot: 'var(--gh-text-soft)'
+        };
     }
   }
 
@@ -313,13 +329,13 @@ export class ListClients implements OnInit {
 
     switch (normalized) {
       case 'VIP':
-        return { bg: '#fffbeb', color: '#d97706' };
+        return { bg: 'var(--gh-status-warn-bg)', color: 'var(--gh-status-warn-text)' };
       case 'FRECUENTE':
-        return { bg: '#f5f3ff', color: '#7c3aed' };
+        return { bg: 'var(--gh-status-violet-bg)', color: 'var(--gh-status-violet-text)' };
       case 'REGULAR':
-        return { bg: '#f3f4f6', color: '#6b7280' };
+        return { bg: 'var(--gh-status-neutral-bg)', color: 'var(--gh-status-neutral-text)' };
       default:
-        return { bg: '#f3f4f6', color: '#6b7280' };
+        return { bg: 'var(--gh-status-neutral-bg)', color: 'var(--gh-status-neutral-text)' };
     }
   }
 

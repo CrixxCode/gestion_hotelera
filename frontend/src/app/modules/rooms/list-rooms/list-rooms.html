@@ -220,8 +220,8 @@
                   class="action-btn"
                   [disabled]="!canPrimaryAction(room)"
                   [ngStyle]="{
-                    'background-color': canPrimaryAction(room) ? getStatusStyle(room).buttonBg : '#f2f4f8',
-                    color: canPrimaryAction(room) ? getStatusStyle(room).buttonColor : '#9aa4b2'
+                    'background-color': canPrimaryAction(room) ? getStatusStyle(room).buttonBg : 'var(--gh-surface-soft)',
+                    color: canPrimaryAction(room) ? getStatusStyle(room).buttonColor : 'var(--gh-text-soft)'
                   }"
                   (click)="onPrimaryAction(room)">
                   {{ getPrimaryActionLabel(room) }}

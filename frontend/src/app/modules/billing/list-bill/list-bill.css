@@ -4,9 +4,8 @@
 
 .billing-page {
   min-height: 100%;
-  background: #f2f4f8;
   padding: 24px;
-  color: #1f2937;
+  color: var(--gh-text-strong);
 }
 
 .page-header {
@@ -26,7 +25,7 @@
 
 .page-header p {
   margin: 8px 0 0;
-  color: #8a94a6;
+  color: var(--gh-text-soft);
   font-size: 15px;
 }
 
@@ -38,10 +37,10 @@
 }
 
 .stat-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--gh-surface);
+  border: 1px solid var(--gh-border);
   border-radius: 14px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--gh-shadow-soft);
   padding: 14px 16px;
 }
 
@@ -49,7 +48,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: #4f5f79;
+  color: var(--gh-text-muted);
   font-size: 13px;
   font-weight: 500;
 }
@@ -64,23 +63,23 @@
 }
 
 .stat-icon.blue {
-  background: #e5edff;
-  color: #3d79f9;
+  background: var(--gh-status-info-bg);
+  color: var(--gh-status-info-strong);
 }
 
 .stat-icon.gray {
-  background: #eef2f7;
-  color: #64748b;
+  background: var(--gh-status-neutral-bg);
+  color: var(--gh-text-muted);
 }
 
 .stat-icon.green {
-  background: #dff7e8;
-  color: #20b461;
+  background: var(--gh-status-success-bg);
+  color: var(--gh-status-success-strong);
 }
 
 .stat-icon.gold {
-  background: #ffedd5;
-  color: #ea580c;
+  background: var(--gh-status-orange-bg);
+  color: var(--gh-status-orange-text);
 }
 
 .stat-value {
@@ -96,15 +95,15 @@
 
 .stat-note {
   margin-top: 8px;
-  color: #7b8ea8;
+  color: var(--gh-text-soft);
   font-size: 13px;
 }
 
 .toolbar-card {
   margin-top: 16px;
   border-radius: 14px;
-  border: 1px solid #dce4f0;
-  background: #ffffff;
+  border: 1px solid var(--gh-border-strong);
+  background: var(--gh-surface);
   padding: 12px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 230px 190px auto;
@@ -116,22 +115,51 @@
   min-width: 0;
 }
 
+.search-control.gh-search-control {
+  width: 100%;
+  border: 1px solid var(--gh-border-strong) !important;
+  background: var(--gh-surface) !important;
+}
+
+.search-control.gh-search-control .gh-search-input {
+  height: 100% !important;
+}
+
+.search-control.gh-search-control:focus-within {
+  border-color: var(--gh-status-info-strong) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.13) !important;
+}
+
+:host-context(.my-app-dark) .search-control.gh-search-control,
+:host-context(.dark) .search-control.gh-search-control {
+  border-color: #64748b !important;
+  box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.35) !important;
+}
+
+:host-context(.my-app-dark) .search-control.gh-search-control:focus-within,
+:host-context(.dark) .search-control.gh-search-control:focus-within {
+  border-color: #93c5fd !important;
+  box-shadow:
+    0 0 0 3px rgba(59, 130, 246, 0.24) !important,
+    inset 0 0 0 1px rgba(147, 197, 253, 0.45) !important;
+}
+
 .tool-select {
-  border: 1px solid #d8e2ef;
+  border: 1px solid var(--gh-border-strong);
   border-radius: 11px;
   height: 42px;
   padding: 0 12px;
-  color: #1e293b;
-  background: #ffffff;
+  color: var(--gh-text);
+  background: var(--gh-surface);
   font-size: 14px;
 }
 
 .total-chip {
   justify-self: end;
   border-radius: 999px;
-  border: 1px solid #d8e2ef;
-  background: #f8fbff;
-  color: #4f6282;
+  border: 1px solid var(--gh-border-strong);
+  background: var(--gh-surface-soft);
+  color: var(--gh-text-muted);
   font-size: 12px;
   font-weight: 600;
   padding: 7px 10px;
@@ -140,14 +168,14 @@
 .state-message {
   margin-top: 16px;
   border-radius: 14px;
-  border: 1px dashed #cdd8ea;
-  background: #ffffff;
+  border: 1px dashed var(--gh-border-strong);
+  background: var(--gh-surface);
   padding: 18px;
 }
 
 .state-message p {
   margin: 0;
-  color: #4f6282;
+  color: var(--gh-text-muted);
   font-size: 14px;
 }
 
@@ -156,11 +184,11 @@
 }
 
 .state-message .error {
-  color: #b42318;
+  color: var(--gh-status-danger-text);
 }
 
 .state-message .info {
-  color: #0f766e;
+  color: var(--gh-status-success-text);
 }
 
 .invoice-grid {
@@ -172,8 +200,8 @@
 
 .invoice-card {
   border-radius: 14px;
-  border: 1px solid #dce4f0;
-  background: #ffffff;
+  border: 1px solid var(--gh-border-strong);
+  background: var(--gh-surface);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -184,7 +212,7 @@
 
 .invoice-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 22px rgba(14, 31, 65, 0.12);
+  box-shadow: var(--gh-shadow-hover);
 }
 
 .invoice-head {
@@ -196,13 +224,13 @@
 
 .invoice-number {
   display: block;
-  color: #0f1f41;
+  color: var(--gh-text-strong);
   font-size: 20px;
   font-weight: 700;
 }
 
 .invoice-head small {
-  color: #8a94a6;
+  color: var(--gh-text-soft);
   font-size: 12px;
 }
 
@@ -225,14 +253,14 @@
 .invoice-body h3 {
   margin: 0;
   font-size: 18px;
-  color: #0f1f41;
+  color: var(--gh-text-strong);
   line-height: 1.2;
 }
 
 .invoice-body p {
   margin: 4px 0 0;
   font-size: 13px;
-  color: #5b6f8e;
+  color: var(--gh-text-muted);
 }
 
 .meta-row {
@@ -243,13 +271,13 @@
 }
 
 .meta-row span {
-  color: #5f7391;
+  color: var(--gh-text-muted);
   font-size: 12px;
 }
 
 .invoice-foot {
   margin-top: auto;
-  border-top: 1px solid #eef2f7;
+  border-top: 1px solid var(--gh-status-neutral-bg);
   padding-top: 10px;
   display: flex;
   align-items: center;
@@ -259,23 +287,23 @@
 
 .invoice-foot small {
   display: block;
-  color: #8a94a6;
+  color: var(--gh-text-soft);
   font-size: 12px;
 }
 
 .invoice-foot strong {
   display: block;
   margin-top: 2px;
-  color: #0f172a;
+  color: var(--gh-text-strong);
   font-size: 26px;
   line-height: 1;
 }
 
 .row-btn {
   border-radius: 9px;
-  border: 1px solid #d8e2ef;
-  background: #ffffff;
-  color: #334155;
+  border: 1px solid var(--gh-border-strong);
+  background: var(--gh-surface);
+  color: var(--gh-text);
   height: 34px;
   padding: 0 11px;
   display: inline-flex;
@@ -301,9 +329,9 @@
 }
 
 .btn-light {
-  background: #ffffff;
-  color: #334155;
-  border-color: #d7deea;
+  background: var(--gh-surface);
+  color: var(--gh-text);
+  border-color: var(--gh-border-strong);
 }
 
 .btn:disabled {

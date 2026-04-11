@@ -421,11 +421,39 @@ export class ListInventoryMovements implements OnInit {
   getMovementDirectionTone(movement: InventoryMovementI): { bg: string; color: string; dot: string } {
     const direction = this.resolveDirection(movement);
 
-    if (direction === 'IN') return { bg: '#dcfce7', color: '#15803d', dot: '#22c55e' };
-    if (direction === 'OUT') return { bg: '#fef2f2', color: '#b42318', dot: '#ef4444' };
-    if (direction === 'ADJUSTMENT') return { bg: '#e0f2fe', color: '#0369a1', dot: '#0ea5e9' };
-    if (direction === 'TRANSFER') return { bg: '#f3e8ff', color: '#7e22ce', dot: '#a855f7' };
-    return { bg: '#eef2f7', color: '#64748b', dot: '#94a3b8' };
+    if (direction === 'IN') {
+      return {
+        bg: 'var(--gh-status-success-bg)',
+        color: 'var(--gh-status-success-text)',
+        dot: 'var(--gh-status-success-strong)'
+      };
+    }
+    if (direction === 'OUT') {
+      return {
+        bg: 'var(--gh-status-danger-bg)',
+        color: 'var(--gh-status-danger-text)',
+        dot: 'var(--gh-status-danger-strong)'
+      };
+    }
+    if (direction === 'ADJUSTMENT') {
+      return {
+        bg: 'var(--gh-status-info-bg)',
+        color: 'var(--gh-status-info-strong-alt)',
+        dot: 'var(--gh-status-info-strong)'
+      };
+    }
+    if (direction === 'TRANSFER') {
+      return {
+        bg: 'var(--gh-status-violet-bg)',
+        color: 'var(--gh-status-violet-text)',
+        dot: 'var(--gh-status-violet-text)'
+      };
+    }
+    return {
+      bg: 'var(--gh-status-neutral-bg)',
+      color: 'var(--gh-status-neutral-text)',
+      dot: 'var(--gh-text-soft)'
+    };
   }
 
   getQuantitySignedLabel(movement: InventoryMovementI): string {
@@ -456,8 +484,18 @@ export class ListInventoryMovements implements OnInit {
   }
 
   getStatusTone(movement: InventoryMovementI): { bg: string; color: string; dot: string } {
-    if (movement.is_active) return { bg: '#dcfce7', color: '#15803d', dot: '#22c55e' };
-    return { bg: '#eef2f7', color: '#64748b', dot: '#94a3b8' };
+    if (movement.is_active) {
+      return {
+        bg: 'var(--gh-status-success-bg)',
+        color: 'var(--gh-status-success-text)',
+        dot: 'var(--gh-status-success-strong)'
+      };
+    }
+    return {
+      bg: 'var(--gh-status-neutral-bg)',
+      color: 'var(--gh-status-neutral-text)',
+      dot: 'var(--gh-text-soft)'
+    };
   }
 
   getTypeBadgeTone(movement: InventoryMovementI): { bg: string; color: string; dot: string } {

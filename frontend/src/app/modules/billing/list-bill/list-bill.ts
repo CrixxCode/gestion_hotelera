@@ -250,19 +250,39 @@ export class ListBill implements OnInit {
     const statusCode = this.normalizeCode(invoice.status_code);
 
     if (statusCode === 'BORRADOR') {
-      return { bg: '#e2e8f0', color: '#334155', dot: '#64748b' };
+      return {
+        bg: 'var(--gh-status-neutral-bg)',
+        color: 'var(--gh-status-neutral-text)',
+        dot: 'var(--gh-text-muted)'
+      };
     }
     if (statusCode === 'EMITIDA') {
-      return { bg: '#fef3c7', color: '#b45309', dot: '#f59e0b' };
+      return {
+        bg: 'var(--gh-status-warn-bg)',
+        color: 'var(--gh-status-warn-text)',
+        dot: 'var(--gh-status-warn-strong)'
+      };
     }
     if (statusCode === 'PAGADA') {
-      return { bg: '#dcfce7', color: '#15803d', dot: '#22c55e' };
+      return {
+        bg: 'var(--gh-status-success-bg)',
+        color: 'var(--gh-status-success-text)',
+        dot: 'var(--gh-status-success-strong-alt)'
+      };
     }
     if (statusCode === 'ANULADA') {
-      return { bg: '#fee2e2', color: '#b42318', dot: '#ef4444' };
+      return {
+        bg: 'var(--gh-status-danger-bg)',
+        color: 'var(--gh-status-danger-text)',
+        dot: 'var(--gh-status-danger-strong)'
+      };
     }
 
-    return { bg: '#e2e8f0', color: '#334155', dot: '#94a3b8' };
+    return {
+      bg: 'var(--gh-status-neutral-bg)',
+      color: 'var(--gh-status-neutral-text)',
+      dot: 'var(--gh-text-soft)'
+    };
   }
 
   getReservationCode(invoice: InvoiceI, reservation?: ReservationI | null): string {

@@ -37,48 +37,48 @@ type MaintenanceOrderGroup = {
 const PRIORITY_TONES: Record<string, MaintenancePriorityTone> = {
   URGENTE: {
     icon: 'fa-solid fa-triangle-exclamation',
-    iconBg: '#fef2f2',
-    iconColor: '#b42318',
+    iconBg: 'var(--gh-status-danger-bg)',
+    iconColor: 'var(--gh-status-danger-text)',
     cover: 'linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%)',
-    badgeBg: '#fee2e2',
-    badgeColor: '#b42318',
-    accent: '#ef4444'
+    badgeBg: 'var(--gh-status-danger-bg)',
+    badgeColor: 'var(--gh-status-danger-text)',
+    accent: 'var(--gh-status-danger-strong)'
   },
   ALTA: {
     icon: 'fa-solid fa-bolt',
-    iconBg: '#fff7ed',
-    iconColor: '#c2410c',
+    iconBg: 'var(--gh-status-orange-bg)',
+    iconColor: 'var(--gh-status-orange-text)',
     cover: 'linear-gradient(135deg, #7c2d12 0%, #f97316 100%)',
-    badgeBg: '#ffedd5',
-    badgeColor: '#c2410c',
-    accent: '#fb923c'
+    badgeBg: 'var(--gh-status-orange-bg)',
+    badgeColor: 'var(--gh-status-orange-text)',
+    accent: 'var(--gh-status-orange-strong)'
   },
   MEDIA: {
     icon: 'fa-solid fa-screwdriver-wrench',
-    iconBg: '#e0f2fe',
-    iconColor: '#0369a1',
+    iconBg: 'var(--gh-status-info-bg)',
+    iconColor: 'var(--gh-status-info-text)',
     cover: 'linear-gradient(135deg, #0c4a6e 0%, #0ea5e9 100%)',
-    badgeBg: '#e0f2fe',
-    badgeColor: '#0369a1',
-    accent: '#0ea5e9'
+    badgeBg: 'var(--gh-status-info-bg)',
+    badgeColor: 'var(--gh-status-info-text)',
+    accent: 'var(--gh-status-info-strong)'
   },
   BAJA: {
     icon: 'fa-solid fa-toolbox',
-    iconBg: '#dcfce7',
-    iconColor: '#15803d',
+    iconBg: 'var(--gh-status-success-bg)',
+    iconColor: 'var(--gh-status-success-text)',
     cover: 'linear-gradient(135deg, #14532d 0%, #16a34a 100%)',
-    badgeBg: '#dcfce7',
-    badgeColor: '#15803d',
-    accent: '#22c55e'
+    badgeBg: 'var(--gh-status-success-bg)',
+    badgeColor: 'var(--gh-status-success-text)',
+    accent: 'var(--gh-status-success-strong)'
   },
   DEFAULT: {
     icon: 'fa-solid fa-helmet-safety',
-    iconBg: '#e6edf7',
-    iconColor: '#1f3f73',
+    iconBg: 'var(--gh-status-neutral-bg)',
+    iconColor: 'var(--gh-status-neutral-text)',
     cover: 'linear-gradient(135deg, #1f365f 0%, #3d659f 100%)',
-    badgeBg: '#e6edf7',
-    badgeColor: '#1f3f73',
-    accent: '#335f9d'
+    badgeBg: 'var(--gh-status-neutral-bg)',
+    badgeColor: 'var(--gh-status-neutral-text)',
+    accent: 'var(--gh-text-muted)'
   }
 };
 
@@ -430,10 +430,32 @@ export class ListMaintenanceOrders implements OnInit {
 
   getStatusTone(order: MaintenanceOrderI): { bg: string; color: string; dot: string } {
     const code = this.normalizeCode(order.status);
-    if (code === 'COMPLETADA') return { bg: '#dcfce7', color: '#15803d', dot: '#22c55e' };
-    if (code === 'ENPROCESO') return { bg: '#e0f2fe', color: '#0369a1', dot: '#0ea5e9' };
-    if (code === 'CANCELADA') return { bg: '#eef2f7', color: '#64748b', dot: '#94a3b8' };
-    return { bg: '#fff7ed', color: '#c2410c', dot: '#f97316' };
+    if (code === 'COMPLETADA') {
+      return {
+        bg: 'var(--gh-status-success-bg)',
+        color: 'var(--gh-status-success-text)',
+        dot: 'var(--gh-status-success-strong)'
+      };
+    }
+    if (code === 'ENPROCESO') {
+      return {
+        bg: 'var(--gh-status-info-bg)',
+        color: 'var(--gh-status-info-text)',
+        dot: 'var(--gh-status-info-strong)'
+      };
+    }
+    if (code === 'CANCELADA') {
+      return {
+        bg: 'var(--gh-status-neutral-bg)',
+        color: 'var(--gh-status-neutral-text)',
+        dot: 'var(--gh-text-muted)'
+      };
+    }
+    return {
+      bg: 'var(--gh-status-orange-bg)',
+      color: 'var(--gh-status-orange-text)',
+      dot: 'var(--gh-status-orange-strong)'
+    };
   }
 
   getPriorityBadgeTone(order: MaintenanceOrderI): { bg: string; color: string; dot: string } {

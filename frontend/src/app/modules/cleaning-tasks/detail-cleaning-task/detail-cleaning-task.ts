@@ -61,10 +61,10 @@ export class DetailCleaningTask {
 
   getStatusTone(): { bg: string; color: string } {
     const normalized = this.normalizeCode(this.cleaningTaskData?.status);
-    if (normalized === 'COMPLETADA') return { bg: '#dcfce7', color: '#15803d' };
-    if (normalized === 'ENPROCESO') return { bg: '#e0f2fe', color: '#0369a1' };
-    if (normalized === 'CANCELADA') return { bg: '#eef2f7', color: '#64748b' };
-    return { bg: '#fff7ed', color: '#c2410c' };
+    if (normalized === 'COMPLETADA') return { bg: 'var(--gh-status-success-bg)', color: 'var(--gh-status-success-text)' };
+    if (normalized === 'ENPROCESO') return { bg: 'var(--gh-status-info-bg)', color: 'var(--gh-status-info-text)' };
+    if (normalized === 'CANCELADA') return { bg: 'var(--gh-status-neutral-bg)', color: 'var(--gh-status-neutral-text)' };
+    return { bg: 'var(--gh-status-orange-bg)', color: 'var(--gh-status-orange-text)' };
   }
 
   getProgressActionLabel(): string {

@@ -46,75 +46,75 @@ type PackageCategoryTab = {
 const CATEGORY_TONES: Record<string, PackageCategoryTone> = {
   ROMANTICO: {
     icon: 'fa-regular fa-star',
-    iconBg: '#ffe8f3',
-    iconColor: '#be185d',
+    iconBg: 'var(--gh-status-violet-bg)',
+    iconColor: 'var(--gh-status-violet-text)',
     cover: 'linear-gradient(135deg, #7a1d47 0%, #db2777 100%)',
-    badgeBg: '#ffe5f0',
-    badgeColor: '#be185d',
-    accent: '#ec4899'
+    badgeBg: 'var(--gh-status-violet-bg)',
+    badgeColor: 'var(--gh-status-violet-text)',
+    accent: 'var(--gh-status-violet-text)'
   },
   FAMILIAR: {
     icon: 'fa-solid fa-people-roof',
-    iconBg: '#e4f1ff',
-    iconColor: '#0369a1',
+    iconBg: 'var(--gh-status-info-bg)',
+    iconColor: 'var(--gh-status-info-text)',
     cover: 'linear-gradient(135deg, #11406b 0%, #0ea5e9 100%)',
-    badgeBg: '#e6f6ff',
-    badgeColor: '#0369a1',
-    accent: '#0ea5e9'
+    badgeBg: 'var(--gh-status-info-bg)',
+    badgeColor: 'var(--gh-status-info-text)',
+    accent: 'var(--gh-status-info-strong)'
   },
   CORPORATIVO: {
     icon: 'fa-solid fa-briefcase',
-    iconBg: '#edf2f7',
-    iconColor: '#334155',
+    iconBg: 'var(--gh-status-neutral-bg)',
+    iconColor: 'var(--gh-status-neutral-text)',
     cover: 'linear-gradient(135deg, #263344 0%, #64748b 100%)',
-    badgeBg: '#eef2f7',
-    badgeColor: '#334155',
-    accent: '#64748b'
+    badgeBg: 'var(--gh-status-neutral-bg)',
+    badgeColor: 'var(--gh-status-neutral-text)',
+    accent: 'var(--gh-text-muted)'
   },
   BIENESTAR: {
     icon: 'fa-solid fa-spa',
-    iconBg: '#ddfbff',
-    iconColor: '#0e7490',
+    iconBg: 'var(--gh-status-info-bg)',
+    iconColor: 'var(--gh-status-info-text)',
     cover: 'linear-gradient(135deg, #0f3b47 0%, #06b6d4 100%)',
-    badgeBg: '#ddfbff',
-    badgeColor: '#0e7490',
-    accent: '#06b6d4'
+    badgeBg: 'var(--gh-status-info-bg)',
+    badgeColor: 'var(--gh-status-info-text)',
+    accent: 'var(--gh-status-info-strong)'
   },
   AVENTURA: {
     icon: 'fa-solid fa-mountain-sun',
-    iconBg: '#fff1e8',
-    iconColor: '#b45309',
+    iconBg: 'var(--gh-status-orange-bg)',
+    iconColor: 'var(--gh-status-orange-text)',
     cover: 'linear-gradient(135deg, #7c3e12 0%, #fb923c 100%)',
-    badgeBg: '#fff1e8',
-    badgeColor: '#b45309',
-    accent: '#fb923c'
+    badgeBg: 'var(--gh-status-orange-bg)',
+    badgeColor: 'var(--gh-status-orange-text)',
+    accent: 'var(--gh-status-orange-strong)'
   },
   TEMPORADA: {
     icon: 'fa-regular fa-snowflake',
-    iconBg: '#ede9fe',
-    iconColor: '#6d28d9',
+    iconBg: 'var(--gh-status-violet-bg)',
+    iconColor: 'var(--gh-status-violet-text)',
     cover: 'linear-gradient(135deg, #2a2463 0%, #8b5cf6 100%)',
-    badgeBg: '#f3ecff',
-    badgeColor: '#6d28d9',
-    accent: '#8b5cf6'
+    badgeBg: 'var(--gh-status-violet-bg)',
+    badgeColor: 'var(--gh-status-violet-text)',
+    accent: 'var(--gh-status-violet-text)'
   },
   DESAYUNO: {
     icon: 'fa-solid fa-utensils',
-    iconBg: '#dcfce7',
-    iconColor: '#15803d',
+    iconBg: 'var(--gh-status-success-bg)',
+    iconColor: 'var(--gh-status-success-text)',
     cover: 'linear-gradient(135deg, #14532d 0%, #22c55e 100%)',
-    badgeBg: '#dcfce7',
-    badgeColor: '#15803d',
-    accent: '#22c55e'
+    badgeBg: 'var(--gh-status-success-bg)',
+    badgeColor: 'var(--gh-status-success-text)',
+    accent: 'var(--gh-status-success-strong)'
   },
   DEFAULT: {
     icon: 'fa-solid fa-box-open',
-    iconBg: '#e6edf7',
-    iconColor: '#1f3f73',
+    iconBg: 'var(--gh-status-info-bg)',
+    iconColor: 'var(--gh-status-info-text)',
     cover: 'linear-gradient(135deg, #1f365f 0%, #3d659f 100%)',
-    badgeBg: '#e6edf7',
-    badgeColor: '#1f3f73',
-    accent: '#335f9d'
+    badgeBg: 'var(--gh-status-info-bg)',
+    badgeColor: 'var(--gh-status-info-text)',
+    accent: 'var(--gh-status-info-strong)'
   }
 };
 
@@ -484,15 +484,26 @@ export class ListPackages implements OnInit {
 
   getValidityTone(pkg: PackageI): { bg: string; color: string } {
     const state = this.getValidityState(pkg);
-    if (state === 'VIGENTE') return { bg: '#dcfce7', color: '#15803d' };
-    if (state === 'PROXIMO') return { bg: '#e0f2fe', color: '#0369a1' };
-    if (state === 'FUERA') return { bg: '#fff7ed', color: '#c2410c' };
-    return { bg: '#eef2f7', color: '#64748b' };
+    if (state === 'VIGENTE') return { bg: 'var(--gh-status-success-bg)', color: 'var(--gh-status-success-text)' };
+    if (state === 'PROXIMO') return { bg: 'var(--gh-status-info-bg)', color: 'var(--gh-status-info-text)' };
+    if (state === 'FUERA') return { bg: 'var(--gh-status-orange-bg)', color: 'var(--gh-status-orange-text)' };
+    return { bg: 'var(--gh-status-neutral-bg)', color: 'var(--gh-status-neutral-text)' };
   }
 
   getStatusTone(pkg: PackageI): { bg: string; color: string; dot: string } {
-    if (pkg.is_active) return { bg: '#dcfce7', color: '#15803d', dot: '#22c55e' };
-    return { bg: '#eef2f7', color: '#64748b', dot: '#94a3b8' };
+    if (pkg.is_active) {
+      return {
+        bg: 'var(--gh-status-success-bg)',
+        color: 'var(--gh-status-success-text)',
+        dot: 'var(--gh-status-success-strong)'
+      };
+    }
+
+    return {
+      bg: 'var(--gh-status-neutral-bg)',
+      color: 'var(--gh-status-neutral-text)',
+      dot: 'var(--gh-text-soft)'
+    };
   }
 
   getCategoryTone(group: PackageGroup): PackageCategoryTone {
