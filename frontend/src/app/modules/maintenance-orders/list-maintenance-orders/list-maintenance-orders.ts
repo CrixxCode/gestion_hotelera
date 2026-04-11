@@ -11,7 +11,7 @@ import { RoomService } from '../../../services/room';
 import { RoomI } from '../../rooms/room-model';
 import { CreateMaintenanceOrder } from '../create-maintenance-order/create-maintenance-order';
 import { DetailMaintenanceOrder } from '../detail-maintenance-order/detail-maintenance-order';
-import { MaintenanceOrderI } from '../maintenance-order-model';
+import { MaintenanceOrderFormPayload, MaintenanceOrderI } from '../maintenance-order-model';
 
 type MaintenanceOrderViewMode = 'cards' | 'table';
 
@@ -113,6 +113,10 @@ export class ListMaintenanceOrders implements OnInit {
 
   showCreateDrawer = false;
   selectedMaintenanceOrder: MaintenanceOrderI | null = null;
+  showCompletionCommentModal = false;
+  completionComment = '';
+  completionCommentError = '';
+  statusUpdateLoading = false;
 
   private roomMap = new Map<number, RoomI>();
   private priorityMap = new Map<string, MasterDataI>();
@@ -120,6 +124,8 @@ export class ListMaintenanceOrders implements OnInit {
   private priorityOrderMap = new Map<string, number>();
   private statusCodeByNormalized = new Map<string, string>();
   private highlightedByGroup = new Map<string, Set<number>>();
+  private pendingCompletionOrder: MaintenanceOrderI | null = null;
+  private pendingCompletionStatusCode: string | null = null;
 
   constructor(
     private maintenanceOrdersService: MaintenanceOrdersService,
@@ -215,7 +221,8 @@ export class ListMaintenanceOrders implements OnInit {
       'prioridad',
       'estado',
       'reportado_en',
-      'finalizado_en',
+      'finalizacion_estimada',
+      'finalizacion_real',
       'descripcion'
     ];
     const rows = this.filteredMaintenanceOrders.map((order) => {
@@ -226,6 +233,7 @@ export class ListMaintenanceOrders implements OnInit {
         this.getPriorityLabel(order),
         this.getStatusLabel(order),
         this.formatDateTime(order.reported_at),
+        this.formatDateTime(order.estimated_completed_at),
         this.formatDateTime(order.completed_at),
         this.getDescriptionLabel(order)
       ];
@@ -264,6 +272,7 @@ export class ListMaintenanceOrders implements OnInit {
         this.getPriorityLabel(order),
         this.getStatusLabel(order),
         order.reported_at || '',
+        order.estimated_completed_at || '',
         order.completed_at || ''
       ]
         .join(' ')
@@ -309,19 +318,45 @@ export class ListMaintenanceOrders implements OnInit {
     if (!nextCode) return;
 
     const nextNormalized = this.normalizeCode(nextCode);
-    const payload = {
-      status: nextCode,
-      completed_at: nextNormalized === 'COMPLETADA' ? this.toDateTimeLocal(new Date()) : null
-    };
+    if (nextNormalized === 'COMPLETADA') {
+      this.openCompletionCommentModal(order, nextCode);
+      return;
+    }
 
-    this.maintenanceOrdersService.updateMaintenanceOrder(order.id, payload).subscribe({
-      next: () => {
-        this.refreshMaintenanceOrders();
-      },
-      error: () => {
-        this.errorMessage = 'No fue posible actualizar el estado de la orden.';
-      }
-    });
+    this.updateOrderStatus(order, nextCode);
+  }
+
+  closeCompletionCommentModal(): void {
+    if (this.statusUpdateLoading) return;
+    this.resetCompletionCommentState();
+  }
+
+  submitCompletionWithComment(): void {
+    if (this.statusUpdateLoading) return;
+    if (!this.pendingCompletionOrder || !this.pendingCompletionStatusCode) return;
+
+    this.completionCommentError = '';
+
+    const completionDescription = this.buildCompletionDescription(
+      this.pendingCompletionOrder,
+      this.completionComment
+    );
+
+    this.updateOrderStatus(
+      this.pendingCompletionOrder,
+      this.pendingCompletionStatusCode,
+      completionDescription
+    );
+  }
+
+  getCompletionOrderCode(): string {
+    if (!this.pendingCompletionOrder) return '--';
+    return this.getOrderCode(this.pendingCompletionOrder);
+  }
+
+  getCompletionRoomLabel(): string {
+    if (!this.pendingCompletionOrder) return 'Habitacion no definida';
+    return this.getRoomLabel(this.pendingCompletionOrder);
   }
 
   confirmDelete(order: MaintenanceOrderI): void {
@@ -636,6 +671,67 @@ export class ListMaintenanceOrders implements OnInit {
     return this.findStatusCode('ENPROCESO') || this.findStatusCode('PENDIENTE') || null;
   }
 
+  private updateOrderStatus(
+    order: MaintenanceOrderI,
+    nextCode: string,
+    description: string | undefined = undefined
+  ): void {
+    const nextNormalized = this.normalizeCode(nextCode);
+    const payload: Partial<MaintenanceOrderFormPayload> = {
+      status: nextCode,
+      completed_at: nextNormalized === 'COMPLETADA' ? this.toDateTimeLocal(new Date()) : null
+    };
+
+    if (typeof description === 'string') {
+      payload.description = description;
+    }
+
+    this.statusUpdateLoading = true;
+    this.maintenanceOrdersService.updateMaintenanceOrder(order.id, payload).subscribe({
+      next: () => {
+        this.statusUpdateLoading = false;
+        this.resetCompletionCommentState();
+        this.refreshMaintenanceOrders();
+      },
+      error: () => {
+        this.statusUpdateLoading = false;
+        if (this.showCompletionCommentModal) {
+          this.completionCommentError = 'No fue posible completar la orden con el comentario.';
+          return;
+        }
+        this.errorMessage = 'No fue posible actualizar el estado de la orden.';
+      }
+    });
+  }
+
+  private openCompletionCommentModal(order: MaintenanceOrderI, nextCode: string): void {
+    this.pendingCompletionOrder = order;
+    this.pendingCompletionStatusCode = nextCode;
+    this.completionComment = '';
+    this.completionCommentError = '';
+    this.showCompletionCommentModal = true;
+  }
+
+  private resetCompletionCommentState(): void {
+    this.showCompletionCommentModal = false;
+    this.pendingCompletionOrder = null;
+    this.pendingCompletionStatusCode = null;
+    this.completionComment = '';
+    this.completionCommentError = '';
+  }
+
+  private buildCompletionDescription(order: MaintenanceOrderI, comment: string): string | undefined {
+    const trimmedComment = String(comment || '').trim();
+    if (!trimmedComment) return undefined;
+
+    const currentDescription = String(order.description || '').trim();
+    const timestamp = this.formatCompletionCommentTimestamp(new Date());
+    const commentEntry = `[${timestamp}] Cierre de mantenimiento: ${trimmedComment}`;
+
+    if (!currentDescription) return commentEntry;
+    return `${currentDescription}\n${commentEntry}`;
+  }
+
   private findStatusCode(normalizedCode: string): string | null {
     return this.statusCodeByNormalized.get(this.normalizeCode(normalizedCode)) || null;
   }
@@ -675,6 +771,15 @@ export class ListMaintenanceOrders implements OnInit {
     const hours = `${date.getHours()}`.padStart(2, '0');
     const minutes = `${date.getMinutes()}`.padStart(2, '0');
     return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  private formatCompletionCommentTimestamp(date: Date): string {
+    const day = `${date.getDate()}`.padStart(2, '0');
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = `${date.getHours()}`.padStart(2, '0');
+    const minutes = `${date.getMinutes()}`.padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
   }
 
   private formatFileDate(date: Date): string {

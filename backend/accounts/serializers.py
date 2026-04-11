@@ -354,3 +354,28 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         user.set_password(self.validated_data["new_password"])
         user.save()
         return user
+
+
+class NotificationKeysSerializer(serializers.Serializer):
+    keys = serializers.ListField(
+        child=serializers.CharField(max_length=180),
+        allow_empty=False,
+    )
+
+    def validate_keys(self, value):
+        cleaned: list[str] = []
+        seen = set()
+
+        for raw in value:
+            key = str(raw or "").strip()
+            if not key:
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(key)
+
+        if not cleaned:
+            raise serializers.ValidationError("Debes enviar al menos una notificacion valida.")
+
+        return cleaned

@@ -1,13 +1,15 @@
-﻿import { CommonModule } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import { AbstractControl, ReactiveFormsModule, UntypedFormArray, UntypedFormBuilder, UntypedFormGroup, Validators } from '@angular/forms';
-import { forkJoin, of } from 'rxjs';
+import { forkJoin } from 'rxjs';
 import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
 import { ClientI } from '../../clients/client-model';
 import { RateI, RoomI } from '../../rooms/room-model';
 import { ReservationService } from '../../../services/reservation';
 import { PackageI } from '../../packages/package-model';
+import { CreateClient } from '../../clients/create-client/create-client';
 import {
+  ReservationDepositPayloadI,
   ReservationGuestPayloadI,
   ReservationPolicyI,
   ReservationRoomPayloadI,
@@ -17,7 +19,7 @@ import {
 @Component({
   selector: 'app-create-reservation',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, CreateClient],
   templateUrl: './create-reservation.html',
   styleUrls: ['./create-reservation.css']
 })
@@ -26,6 +28,8 @@ export class CreateReservation implements OnChanges {
   @Input() origins: MasterDataI[] = [];
   @Input() documentTypes: MasterDataI[] = [];
   @Input() reservationPolicies: ReservationPolicyI[] = [];
+  @Input() paymentMethods: MasterDataI[] = [];
+  @Input() depositStatuses: MasterDataI[] = [];
   @Input() rooms: RoomI[] = [];
   @Input() rates: RateI[] = [];
   @Input() packages: PackageI[] = [];
@@ -39,6 +43,8 @@ export class CreateReservation implements OnChanges {
   errorMessage = '';
   warningMessage = '';
   submitted = false;
+  showCreateClientModal = false;
+  clientOptions: ClientI[] = [];
 
   reservationForm: UntypedFormGroup;
 
@@ -55,6 +61,11 @@ export class CreateReservation implements OnChanges {
       promo_code: [''],
       total_discount: [0],
       notes: ['', [Validators.maxLength(1200)]],
+      initial_deposit_amount: [0, [Validators.min(0)]],
+      initial_deposit_payment_method: [null],
+      initial_deposit_date: [this.formatDateForInput(new Date())],
+      initial_deposit_reference: [''],
+      initial_deposit_notes: [''],
       policy_lines: this.fb.array([]),
       room_lines: this.fb.array([]),
       guest_lines: this.fb.array([])
@@ -63,9 +74,14 @@ export class CreateReservation implements OnChanges {
     this.addPolicyLine();
     this.addRoomLine();
     this.addGuestLine();
+    this.syncClientOptions();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
+    if (changes['clients']) {
+      this.syncClientOptions();
+    }
+
     if (changes['origins']) {
       const originValue = this.reservationForm.get('origin')?.value;
       if (!originValue && this.origins.length) {
@@ -75,6 +91,10 @@ export class CreateReservation implements OnChanges {
 
     if (changes['documentTypes']) {
       this.setDefaultDocumentTypeForGuests();
+    }
+
+    if (changes['paymentMethods']) {
+      this.ensureDefaultInitialDepositPaymentMethod();
     }
 
     if (changes['rooms'] || changes['initialRoomId'] || changes['initialCheckInMode']) {
@@ -98,6 +118,12 @@ export class CreateReservation implements OnChanges {
     return [...this.rooms].sort((a, b) => String(a.number).localeCompare(String(b.number), 'es-CO'));
   }
 
+  get availableClients(): ClientI[] {
+    return [...this.clientOptions].sort((a, b) =>
+      this.buildClientSortLabel(a).localeCompare(this.buildClientSortLabel(b), 'es-CO')
+    );
+  }
+
   get availableDocumentTypes(): MasterDataI[] {
     return [...this.documentTypes].sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
   }
@@ -112,6 +138,16 @@ export class CreateReservation implements OnChanges {
     return [...this.packages]
       .filter((item) => item.is_active !== false)
       .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es-CO'));
+  }
+
+  get availablePaymentMethods(): MasterDataI[] {
+    return [...this.paymentMethods]
+      .filter((method) => method.is_active !== false)
+      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
+  }
+
+  get hasInitialDepositAmount(): boolean {
+    return this.getInitialDepositAmount() > 0;
   }
 
   get selectedPoliciesCount(): number {
@@ -206,6 +242,12 @@ export class CreateReservation implements OnChanges {
       return;
     }
 
+    const initialDepositBuild = this.buildInitialDepositPayload();
+    if (initialDepositBuild.error) {
+      this.errorMessage = initialDepositBuild.error;
+      return;
+    }
+
     this.saving = true;
 
     const payload = this.buildReservationPayload(policyBuild.policyIds);
@@ -226,19 +268,40 @@ export class CreateReservation implements OnChanges {
           })
         );
 
-        const createRooms = () => {
-          if (!roomRequests.length) {
+        const createInitialDeposit = () => {
+          if (!initialDepositBuild.payload) {
             this.saving = false;
             this.created.emit();
             this.closeDrawer();
             return;
           }
 
+          this.reservationService
+            .createReservationDeposit({
+              ...initialDepositBuild.payload,
+              reservation: createdReservation.id,
+            })
+            .subscribe({
+              next: () => {
+                this.saving = false;
+                this.created.emit();
+                this.closeDrawer();
+              },
+              error: (error) => {
+                this.rollbackReservationCreation(createdReservation.id, error);
+              },
+            });
+        };
+
+        const createRooms = () => {
+          if (!roomRequests.length) {
+            createInitialDeposit();
+            return;
+          }
+
           forkJoin(roomRequests).subscribe({
             next: () => {
-              this.saving = false;
-              this.created.emit();
-              this.closeDrawer();
+              createInitialDeposit();
             },
             error: (error) => {
               this.rollbackReservationCreation(createdReservation.id, error);
@@ -273,6 +336,36 @@ export class CreateReservation implements OnChanges {
     this.submitted = false;
     this.warningMessage = '';
     this.closed.emit();
+  }
+
+  openCreateClientModal(): void {
+    if (this.saving) return;
+    this.showCreateClientModal = true;
+  }
+
+  closeCreateClientModal(): void {
+    this.showCreateClientModal = false;
+  }
+
+  onClientCreated(client: ClientI): void {
+    this.showCreateClientModal = false;
+
+    const clientId = Number(client?.id || 0);
+    if (!clientId || Number.isNaN(clientId)) return;
+
+    this.upsertClientOption(client);
+    this.reservationForm.patchValue({ client: clientId });
+    this.reservationForm.get('client')?.markAsDirty();
+    this.reservationForm.get('client')?.markAsTouched();
+  }
+
+  getClientOptionLabel(client: ClientI): string {
+    const name = this.buildClientDisplayName(client);
+    const documentNumber = this.toTrimmedString(client.document_number);
+    if (documentNumber) {
+      return `${name} - ${documentNumber}`;
+    }
+    return name;
   }
 
   trackByRoomLine(index: number): number {
@@ -319,6 +412,41 @@ export class CreateReservation implements OnChanges {
 
     if (control.hasError('maxlength') && controlName === 'notes') {
       return 'Las notas no pueden superar 1200 caracteres.';
+    }
+
+    return '';
+  }
+
+  isInitialDepositFieldInvalid(field: 'amount' | 'payment_method'): boolean {
+    return this.getInitialDepositFieldError(field) !== '';
+  }
+
+  getInitialDepositFieldError(field: 'amount' | 'payment_method'): string {
+    const amountControl = this.reservationForm.get('initial_deposit_amount');
+    const paymentMethodControl = this.reservationForm.get('initial_deposit_payment_method');
+    const amount = this.getInitialDepositAmount();
+
+    if (field === 'amount') {
+      if (
+        amountControl &&
+        this.shouldShowControlErrors(amountControl) &&
+        amountControl.hasError('min')
+      ) {
+        return 'El abono inicial no puede ser negativo.';
+      }
+      return '';
+    }
+
+    if (field === 'payment_method') {
+      if (!this.hasInitialDepositAmount) return '';
+      if (
+        paymentMethodControl &&
+        this.shouldShowControlErrors(paymentMethodControl) &&
+        !this.hasValue(paymentMethodControl.value)
+      ) {
+        return 'Selecciona el metodo de pago para registrar el abono.';
+      }
+      return '';
     }
 
     return '';
@@ -419,6 +547,61 @@ export class CreateReservation implements OnChanges {
       ? String(item.base_price || 0)
       : price.toLocaleString('es-CO');
     return `${item.name} - ${formattedPrice}`;
+  }
+
+  private syncClientOptions(): void {
+    const clientMap = new Map<number, ClientI>();
+
+    for (const client of this.clients) {
+      const clientId = Number(client.id || 0);
+      if (!clientId || Number.isNaN(clientId)) continue;
+      clientMap.set(clientId, client);
+    }
+
+    for (const client of this.clientOptions) {
+      const clientId = Number(client.id || 0);
+      if (!clientId || Number.isNaN(clientId) || clientMap.has(clientId)) continue;
+      clientMap.set(clientId, client);
+    }
+
+    this.clientOptions = Array.from(clientMap.values());
+  }
+
+  private upsertClientOption(client: ClientI): void {
+    const clientId = Number(client.id || 0);
+    if (!clientId || Number.isNaN(clientId)) return;
+
+    const clientIndex = this.clientOptions.findIndex((item) => Number(item.id || 0) === clientId);
+    if (clientIndex >= 0) {
+      this.clientOptions[clientIndex] = {
+        ...this.clientOptions[clientIndex],
+        ...client
+      };
+      return;
+    }
+
+    this.clientOptions = [...this.clientOptions, client];
+  }
+
+  private buildClientSortLabel(client: ClientI): string {
+    return this.buildClientDisplayName(client).toUpperCase();
+  }
+
+  private buildClientDisplayName(client: ClientI): string {
+    const fullName = this.toTrimmedString(client.full_name);
+    if (fullName) return fullName;
+
+    const firstName = this.toTrimmedString(client.first_name);
+    const lastName = this.toTrimmedString(client.last_name);
+    const composed = `${firstName} ${lastName}`.trim();
+    if (composed) return composed;
+
+    const clientId = Number(client.id || 0);
+    if (clientId && !Number.isNaN(clientId)) {
+      return `Cliente #${clientId}`;
+    }
+
+    return 'Cliente sin nombre';
   }
 
   private shouldShowControlErrors(control: AbstractControl): boolean {
@@ -551,6 +734,46 @@ export class CreateReservation implements OnChanges {
       total_discount: raw.total_discount ? Number(raw.total_discount) : 0,
       policies: policyIds,
       notes: raw.notes ? String(raw.notes).trim() : null
+    };
+  }
+
+  private buildInitialDepositPayload(): {
+    payload?: Omit<ReservationDepositPayloadI, 'reservation'>;
+    error?: string;
+  } {
+    const raw = this.reservationForm.getRawValue();
+    const amount = this.getInitialDepositAmount();
+
+    if (amount < 0) {
+      return { error: 'El abono inicial no puede ser negativo.' };
+    }
+
+    if (amount <= 0) {
+      return {};
+    }
+
+    const paymentMethod = Number(raw.initial_deposit_payment_method || 0);
+    if (!paymentMethod || Number.isNaN(paymentMethod)) {
+      return { error: 'Debes seleccionar un metodo de pago para el abono inicial.' };
+    }
+
+    const depositDateValue = this.toTrimmedString(raw.initial_deposit_date);
+    const depositDate = depositDateValue || this.formatDateForInput(new Date());
+    if (!this.parseDate(depositDate)) {
+      return { error: 'La fecha del abono inicial no es valida.' };
+    }
+
+    const defaultStatusId = this.getDefaultDepositStatusId();
+
+    return {
+      payload: {
+        deposit_date: depositDate,
+        amount,
+        payment_method: paymentMethod,
+        reference: this.toTrimmedString(raw.initial_deposit_reference) || null,
+        status: defaultStatusId ?? undefined,
+        notes: this.toTrimmedString(raw.initial_deposit_notes) || null,
+      },
     };
   }
 
@@ -815,6 +1038,13 @@ export class CreateReservation implements OnChanges {
     return Number.isNaN(date.getTime()) ? null : date;
   }
 
+  private getInitialDepositAmount(): number {
+    const raw = this.reservationForm.get('initial_deposit_amount')?.value;
+    const parsed = Number(raw || 0);
+    if (!Number.isFinite(parsed)) return 0;
+    return parsed;
+  }
+
   private addDays(date: Date, days: number): Date {
     const copy = new Date(date);
     copy.setDate(copy.getDate() + days);
@@ -837,6 +1067,18 @@ export class CreateReservation implements OnChanges {
     return this.origins[0]?.id ?? null;
   }
 
+  private getDefaultDepositStatusId(): number | null {
+    const preferredCodes = ['VALIDADO', 'PENDIENTE'];
+    for (const code of preferredCodes) {
+      const match = this.depositStatuses.find((status) => this.normalizeCode(status.code) === code);
+      if (match?.id) return Number(match.id);
+    }
+    const firstStatus = this.depositStatuses[0];
+    if (!firstStatus?.id) return null;
+    const fallbackId = Number(firstStatus.id);
+    return Number.isNaN(fallbackId) ? null : fallbackId;
+  }
+
   private getDefaultDocumentTypeId(): number | null {
     const preferredCodes = ['CC', 'CE', 'DNI', 'PASAPORTE'];
     for (const code of preferredCodes) {
@@ -856,6 +1098,19 @@ export class CreateReservation implements OnChanges {
         guestControl.get('document_type')?.setValue(defaultDocumentTypeId);
       }
     }
+  }
+
+  private ensureDefaultInitialDepositPaymentMethod(): void {
+    const paymentMethodControl = this.reservationForm.get('initial_deposit_payment_method');
+    if (!paymentMethodControl) return;
+
+    const currentValue = Number(paymentMethodControl.value || 0);
+    if (currentValue > 0) return;
+
+    const firstMethod = this.availablePaymentMethods[0];
+    if (!firstMethod?.id) return;
+
+    paymentMethodControl.setValue(firstMethod.id);
   }
 
   private applyInitialRoomSelection(): void {
@@ -1066,3 +1321,4 @@ export class CreateReservation implements OnChanges {
     return fallback;
   }
 }
+

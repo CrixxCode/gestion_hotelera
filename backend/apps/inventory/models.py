@@ -31,6 +31,7 @@ class Item(models.Model):
 
     stock = models.PositiveIntegerField(default=0)
     minimum_stock = models.PositiveIntegerField(default=0)
+    maximum_stock = models.PositiveIntegerField(default=0)
 
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     sale_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -64,6 +65,15 @@ class Item(models.Model):
 
         if self.minimum_stock is not None and self.minimum_stock < 0:
             errors["minimum_stock"] = "Minimum stock cannot be negative."
+
+        if self.maximum_stock is not None and self.maximum_stock < 0:
+            errors["maximum_stock"] = "Maximum stock cannot be negative."
+
+        if self.maximum_stock and self.minimum_stock and self.minimum_stock > self.maximum_stock:
+            errors["minimum_stock"] = "Minimum stock cannot be greater than maximum stock."
+
+        if self.maximum_stock and self.stock and self.stock > self.maximum_stock:
+            errors["stock"] = "Stock cannot be greater than maximum stock."
 
         if self.cost_price is not None and self.cost_price < 0:
             errors["cost_price"] = "Cost price cannot be negative."

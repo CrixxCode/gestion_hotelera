@@ -39,7 +39,11 @@
           <strong>{{ formatDateTime(maintenanceOrderData?.reported_at) }}</strong>
         </div>
         <div>
-          <span>Finalizado</span>
+          <span>Finalizacion estimada</span>
+          <strong>{{ formatDateTime(maintenanceOrderData?.estimated_completed_at) }}</strong>
+        </div>
+        <div>
+          <span>Finalizacion real</span>
           <strong>{{ formatDateTime(maintenanceOrderData?.completed_at) }}</strong>
         </div>
       </section>
@@ -68,7 +72,11 @@
             <strong>{{ formatDateTime(maintenanceOrderData?.reported_at) }}</strong>
           </div>
           <div>
-            <span>Finalizado</span>
+            <span>Finalizacion estimada</span>
+            <strong>{{ formatDateTime(maintenanceOrderData?.estimated_completed_at) }}</strong>
+          </div>
+          <div>
+            <span>Finalizacion real</span>
             <strong>{{ formatDateTime(maintenanceOrderData?.completed_at) }}</strong>
           </div>
         </div>

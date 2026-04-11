@@ -82,6 +82,7 @@ export class MaintenanceOrdersService {
       description: (payload.description || '').trim(),
       priority: this.normalizeCodeOrId(payload.priority),
       status: this.normalizeCodeOrId(payload.status),
+      estimated_completed_at: this.normalizeDateTime(payload.estimated_completed_at),
       completed_at: this.normalizeDateTime(payload.completed_at)
     };
   }
@@ -107,6 +108,10 @@ export class MaintenanceOrdersService {
 
     if (payload.status !== undefined) {
       normalized.status = this.normalizeCodeOrId(payload.status);
+    }
+
+    if (payload.estimated_completed_at !== undefined) {
+      normalized.estimated_completed_at = this.normalizeDateTime(payload.estimated_completed_at);
     }
 
     if (payload.completed_at !== undefined) {

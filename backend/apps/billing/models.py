@@ -204,7 +204,22 @@ class Payment(models.Model):
                 payment.amount
                 for payment in self.invoice.payments.filter(is_active=True).exclude(pk=self.pk)
             )
-            pending_balance = self.invoice.total_amount - total_paid
+            total_processed_refunds = sum(
+                refund.amount
+                for refund in PaymentRefund.objects.filter(
+                    payment__invoice=self.invoice,
+                    is_active=True,
+                    status__code__in=["APROBADO", "PROCESADO"],
+                ).only("amount")
+            )
+
+            net_paid = total_paid - total_processed_refunds
+            if net_paid < 0:
+                net_paid = 0
+
+            pending_balance = self.invoice.total_amount - net_paid
+            if pending_balance < 0:
+                pending_balance = 0
 
             if self.amount > pending_balance:
                 errors["amount"] = "Payment amount cannot be greater than the pending balance."
@@ -214,6 +229,80 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"Payment #{self.id} - Invoice {self.invoice.invoice_number}"
+
+
+class PaymentRefund(models.Model):
+    payment = models.ForeignKey(
+        "billing.Payment",
+        on_delete=models.CASCADE,
+        related_name="refunds",
+    )
+    status = models.ForeignKey(
+        MasterData,
+        on_delete=models.PROTECT,
+        related_name="payment_refunds_by_status",
+        limit_choices_to={"group": MasterData.Group.PAYMENT_REFUND_STATUS},
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    reason = models.TextField()
+    refund_date = models.DateTimeField(auto_now_add=True)
+    reference = models.CharField(max_length=100, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "payment_refund"
+        ordering = ["-id"]
+
+    @property
+    def status_code(self):
+        return self.status.code if self.status else None
+
+    @property
+    def invoice(self):
+        return self.payment.invoice if self.payment else None
+
+    @property
+    def payment_method(self):
+        return self.payment.payment_method if self.payment else None
+
+    def clean(self):
+        errors = {}
+
+        if self.amount is not None and self.amount <= 0:
+            errors["amount"] = "Refund amount must be greater than 0."
+
+        if self.payment and not self.payment.is_active:
+            errors["payment"] = "Cannot register a refund for an inactive payment."
+
+        if self.payment and self.amount:
+            reserved_refunds = sum(
+                refund.amount
+                for refund in PaymentRefund.objects.filter(
+                    payment=self.payment,
+                    is_active=True,
+                )
+                .exclude(pk=self.pk)
+                .exclude(status__code__in=["RECHAZADO", "ANULADO"])
+                .only("amount")
+            )
+            available_amount = self.payment.amount - reserved_refunds
+            if available_amount < 0:
+                available_amount = 0
+
+            if self.amount > available_amount:
+                errors["amount"] = "Refund amount cannot be greater than the refundable payment balance."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        invoice_number = getattr(getattr(self.payment, "invoice", None), "invoice_number", "--")
+        return f"Refund #{self.id} - Invoice {invoice_number}"
+
 
 class CreditNote(models.Model):
     invoice = models.ForeignKey(

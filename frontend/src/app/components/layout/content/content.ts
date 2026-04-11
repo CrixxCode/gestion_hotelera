@@ -17,22 +17,41 @@ export class Content {
 
   constructor(private router: Router, private route: ActivatedRoute) {
     this.router.events
-      .pipe(filter(event => event instanceof NavigationEnd))
+      .pipe(filter((event) => event instanceof NavigationEnd))
       .subscribe(() => {
         this.buildBreadcrumb();
       });
   }
 
   buildBreadcrumb() {
-    const segments = this.router.url.split('/').filter(seg => seg);
+    const routeLabel = this.getRouteLabel();
+    if (routeLabel) {
+      this.items = [{ label: routeLabel }];
+      return;
+    }
+
+    const segments = this.router.url.split('/').filter((seg) => seg);
     this.items = segments.map((seg, index) => {
       const url = '/' + segments.slice(0, index + 1).join('/');
       return { label: this.formatLabel(seg), routerLink: url };
     });
   }
 
+  private getRouteLabel(): string | null {
+    let current = this.route.snapshot;
+    while (current.firstChild) {
+      current = current.firstChild;
+    }
+
+    return current.data?.['breadcrumbLabel'] || null;
+  }
+
   private formatLabel(segment: string): string {
-    // Opcional: mejorar nombres (ej. reservas → Reservas)
-    return segment.charAt(0).toUpperCase() + segment.slice(1);
+    const normalizedSegment = decodeURIComponent(segment).toLowerCase();
+
+    return normalizedSegment
+      .split('-')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   }
 }

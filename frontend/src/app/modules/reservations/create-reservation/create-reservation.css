@@ -126,6 +126,32 @@ label span {
   font-size: 13px;
 }
 
+.field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.field-action {
+  border: 1px solid #d7deea;
+  border-radius: 999px;
+  min-height: 28px;
+  padding: 0 10px;
+  background: #ffffff;
+  color: #1e3a8a;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.field-action:hover {
+  background: #eef4ff;
+}
+
 input,
 select,
 textarea {

@@ -199,7 +199,7 @@
                 <button type="button" class="row-btn" title="Ver detalle" (click)="$event.stopPropagation(); openDetail(reservation)">
                   <i class="fa-regular fa-eye"></i>
                 </button>
-                <button type="button" class="row-btn" title="Editar" (click)="$event.stopPropagation(); openUpdateOverlay(reservation)">
+                <button type="button" class="row-btn" *ngIf="canEditReservation(reservation)" title="Editar" (click)="$event.stopPropagation(); openUpdateOverlay(reservation)">
                   <i class="fa-regular fa-pen-to-square"></i>
                 </button>
                 <button type="button" class="row-btn danger" title="Eliminar" (click)="$event.stopPropagation(); confirmDelete(reservation)">
@@ -350,6 +350,8 @@
     [origins]="origins"
     [documentTypes]="documentTypes"
     [reservationPolicies]="reservationPolicies"
+    [paymentMethods]="paymentMethods"
+    [depositStatuses]="depositStatuses"
     [rooms]="rooms"
     [rates]="rates"
     [packages]="packages"

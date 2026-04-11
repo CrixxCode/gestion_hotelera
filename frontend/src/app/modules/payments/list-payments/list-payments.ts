@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterModule } from '@angular/router';
 import { catchError, forkJoin, of } from 'rxjs';
 import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
 import { BillingService } from '../../../services/billing';
@@ -16,7 +17,7 @@ type PaymentViewMode = 'table' | 'grid';
 @Component({
   selector: 'app-list-payments',
   standalone: true,
-  imports: [CommonModule, FormsModule, DetailPayment],
+  imports: [CommonModule, FormsModule, RouterModule, DetailPayment],
   templateUrl: './list-payments.html',
   styleUrls: ['./list-payments.css']
 })

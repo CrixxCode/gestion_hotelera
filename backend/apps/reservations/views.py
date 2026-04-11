@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
@@ -11,11 +12,11 @@ from rest_framework.response import Response
 
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
+from apps.billing.models import Payment
 from apps.reservations.models import (
     Reservation,
     ReservationRoom,
     ReservationGuest,
-    ReservationDeposit,
 )
 from apps.reservations.serializers import (
     ReservationListSerializer,
@@ -26,6 +27,7 @@ from apps.reservations.serializers import (
     ReservationDepositSerializer,
 )
 from apps.reservations.services import (
+    ROOM_STATUS_AVAILABLE,
     RESERVATION_STATUS_CANCELLED_CODES,
     RESERVATION_STATUS_CANCELLED,
     RESERVATION_STATUS_CONFIRMED_CODES,
@@ -39,6 +41,7 @@ from apps.reservations.services import (
     create_check_in_inventory_snapshot,
     create_checkout_inventory_comparison,
     create_post_checkout_cleaning_tasks,
+    get_reservation_check_in_start_datetime,
     get_cancelled_reservation_status,
     get_confirmed_reservation_status,
     get_finished_reservation_status,
@@ -124,19 +127,18 @@ class ReservationViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         if self.action == "list":
             queryset = queryset.prefetch_related(
                 "policies",
-                "rooms_detail",
-                "deposits",
+                "rooms_detail__room__floor__hotel_settings",
                 "charges",
+                "invoices__payments__refunds__status",
             )
         elif self.action in {"retrieve", "confirm", "check_in", "check_out", "cancel"}:
             queryset = queryset.prefetch_related(
                 "policies",
-                "rooms_detail__room",
+                "rooms_detail__room__floor__hotel_settings",
                 "rooms_detail__meal_plan",
                 "guests__document_type",
-                "deposits__payment_method",
-                "deposits__status",
                 "charges",
+                "invoices__payments__refunds__status",
             )
 
         if self.action != "list":
@@ -325,6 +327,36 @@ class ReservationViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
             if not is_reservation_status_confirmed(code):
                 return self._error("Debes confirmar la reserva antes de hacer check-in.")
 
+            room_details = reservation.rooms_detail.select_related("room__status").all()
+            for room_detail in room_details:
+                room = room_detail.room
+                room_status_code = self._normalize_code(
+                    getattr(getattr(room, "status", None), "code", None)
+                )
+                if room_status_code != ROOM_STATUS_AVAILABLE:
+                    room_number = getattr(room, "number", room.id)
+                    room_status_name = (
+                        getattr(getattr(room, "status", None), "name", None)
+                        or room_status_code
+                        or "SIN_ESTADO"
+                    )
+                    return self._error(
+                        "No puedes hacer check-in porque la habitacion "
+                        f"{room_number} no esta disponible (estado: {room_status_name})."
+                    )
+
+            check_in_start_datetime = get_reservation_check_in_start_datetime(reservation)
+            if (
+                check_in_start_datetime is not None
+                and timezone.now() < check_in_start_datetime
+            ):
+                check_in_start_local = timezone.localtime(check_in_start_datetime)
+                return self._error(
+                    "El check-in aun no esta habilitado. "
+                    f"Puedes registrarlo desde el {check_in_start_local:%Y-%m-%d} "
+                    f"a las {check_in_start_local:%H:%M}."
+                )
+
             try:
                 reservation = self._set_status(
                     reservation,
@@ -382,12 +414,16 @@ class ReservationViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
                     inventory_review_lines=inventory_review_lines,
                     created_by=request.user,
                 )
-                from apps.billing.services import create_inventory_missing_charges_for_checkout
+                from apps.billing.services import (
+                    create_inventory_missing_charges_for_checkout,
+                    issue_default_invoice_for_reservation,
+                )
 
                 create_inventory_missing_charges_for_checkout(
                     reservation,
                     inventory_comparison=inventory_comparison,
                 )
+                issue_default_invoice_for_reservation(reservation.id)
             except ValidationError as exc:
                 return self._error(self._validation_error_message(exc))
             except ValueError as exc:
@@ -507,11 +543,13 @@ class ReservationGuestViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 
 class ReservationDepositViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
-        ReservationDeposit.objects.select_related(
-            "reservation",
+        Payment.objects.select_related(
+            "invoice",
+            "invoice__reservation",
             "payment_method",
-            "status",
         )
+        .prefetch_related("refunds__status")
+        .annotate(deposit_date=F("payment_date"))
         .order_by("-id")
     )
     serializer_class = ReservationDepositSerializer
@@ -521,12 +559,13 @@ class ReservationDepositViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [
-        "reservation__id",
+        "invoice__reservation__id",
         "reference",
         "notes",
     ]
     ordering_fields = [
         "id",
+        "payment_date",
         "deposit_date",
         "amount",
         "created_at",

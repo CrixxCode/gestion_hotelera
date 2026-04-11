@@ -176,12 +176,43 @@ export interface ReservationDepositI {
 
 export interface ReservationDepositPayloadI {
   reservation: number;
-  deposit_date: string;
+  deposit_date?: string;
   amount: string | number;
   payment_method: number;
   reference?: string | null;
-  status: number;
+  status?: number;
   notes?: string | null;
+}
+
+export interface ReservationCheckoutInventoryReviewLinePayloadI {
+  room: number;
+  item: number;
+  quantity: number;
+  notes?: string | null;
+}
+
+export interface ReservationCheckOutPayloadI {
+  inventory_review?: ReservationCheckoutInventoryReviewLinePayloadI[];
+}
+
+export interface ReservationInventoryComparisonLineI {
+  room_id: number;
+  room_number?: string | null;
+  item_id: number;
+  item_name?: string | null;
+  expected_quantity: number;
+  reviewed_quantity: number;
+  difference_quantity: number;
+  notes?: string | null;
+}
+
+export interface ReservationInventoryComparisonI {
+  check_id?: number | null;
+  total_lines: number;
+  differences_count: number;
+  missing_items_count: number;
+  extra_items_count: number;
+  lines: ReservationInventoryComparisonLineI[];
 }
 
 export interface ReservationDetailI extends ReservationI {
@@ -190,6 +221,7 @@ export interface ReservationDetailI extends ReservationI {
   rooms_detail: ReservationRoomI[];
   guests: ReservationGuestI[];
   deposits: ReservationDepositI[];
+  inventory_comparison?: ReservationInventoryComparisonI;
 }
 
 export interface ReservationStatusStyleI {

@@ -91,6 +91,37 @@ export interface PaymentCreatePayloadI {
   is_active?: boolean;
 }
 
+export interface PaymentRefundI {
+  id: number;
+  payment: number;
+  invoice?: number;
+  invoice_number?: string;
+  payment_method?: number | null;
+  payment_method_name?: string;
+  payment_method_code?: string;
+  status: number;
+  status_name?: string;
+  status_code?: string;
+  amount: string | number;
+  reason: string;
+  refund_date?: string;
+  reference?: string | null;
+  notes?: string | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PaymentRefundCreatePayloadI {
+  payment: number;
+  status?: number;
+  amount: number;
+  reason: string;
+  reference?: string | null;
+  notes?: string | null;
+  is_active?: boolean;
+}
+
 export interface CreditNoteI {
   id: number;
   invoice: number;

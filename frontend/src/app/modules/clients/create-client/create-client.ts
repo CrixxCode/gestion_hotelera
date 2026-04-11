@@ -1,4 +1,4 @@
-﻿import { Component, EventEmitter, Output } from '@angular/core';
+﻿import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ClientsService } from '../../../services/client';
@@ -12,8 +12,10 @@ import { ClientI } from '../client-model';
   styleUrls: ['./create-client.css']
 })
 export class CreateClient {
+  @Input() asModal = false;
+
   @Output() closed = new EventEmitter<void>();
-  @Output() created = new EventEmitter<void>();
+  @Output() created = new EventEmitter<ClientI>();
 
   saving = false;
   errorMessage = '';
@@ -62,9 +64,9 @@ export class CreateClient {
     };
 
     this.clientsService.createClient(payload).subscribe({
-      next: () => {
+      next: (createdClient) => {
         this.saving = false;
-        this.created.emit();
+        this.created.emit(createdClient);
         this.closeDrawer();
       },
       error: (error) => {

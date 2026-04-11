@@ -11,7 +11,7 @@ import { RoomService } from '../../../services/room';
 import { RoomI } from '../../rooms/room-model';
 import { CreateCleaningTask } from '../create-cleaning-task/create-cleaning-task';
 import { DetailCleaningTask } from '../detail-cleaning-task/detail-cleaning-task';
-import { CleaningTaskI } from '../cleaning-task-model';
+import { CleaningTaskFormPayload, CleaningTaskI } from '../cleaning-task-model';
 
 type CleaningTaskViewMode = 'cards' | 'table';
 
@@ -113,6 +113,10 @@ export class ListCleaningTasks implements OnInit {
 
   showCreateDrawer = false;
   selectedCleaningTask: CleaningTaskI | null = null;
+  showCompletionCommentModal = false;
+  completionComment = '';
+  completionCommentError = '';
+  statusUpdateLoading = false;
 
   private roomMap = new Map<number, RoomI>();
   private taskTypeMap = new Map<string, MasterDataI>();
@@ -120,6 +124,8 @@ export class ListCleaningTasks implements OnInit {
   private taskTypeOrderMap = new Map<string, number>();
   private statusCodeByNormalized = new Map<string, string>();
   private highlightedByGroup = new Map<string, Set<number>>();
+  private pendingCompletionTask: CleaningTaskI | null = null;
+  private pendingCompletionStatusCode: string | null = null;
 
   constructor(
     private cleaningTasksService: CleaningTasksService,
@@ -296,19 +302,45 @@ export class ListCleaningTasks implements OnInit {
     if (!nextCode) return;
 
     const nextNormalized = this.normalizeCode(nextCode);
-    const payload = {
-      status: nextCode,
-      completed_at: nextNormalized === 'COMPLETADA' ? this.toDateTimeLocal(new Date()) : null
-    };
+    if (nextNormalized === 'COMPLETADA') {
+      this.openCompletionCommentModal(task, nextCode);
+      return;
+    }
 
-    this.cleaningTasksService.updateCleaningTask(task.id, payload).subscribe({
-      next: () => {
-        this.refreshCleaningTasks();
-      },
-      error: () => {
-        this.errorMessage = 'No fue posible actualizar el estado de la tarea.';
-      }
-    });
+    this.updateTaskStatus(task, nextCode);
+  }
+
+  closeCompletionCommentModal(): void {
+    if (this.statusUpdateLoading) return;
+    this.resetCompletionCommentState();
+  }
+
+  submitCompletionWithComment(): void {
+    if (this.statusUpdateLoading) return;
+    if (!this.pendingCompletionTask || !this.pendingCompletionStatusCode) return;
+
+    this.completionCommentError = '';
+
+    const completionNotes = this.buildCompletionNotes(
+      this.pendingCompletionTask,
+      this.completionComment
+    );
+
+    this.updateTaskStatus(
+      this.pendingCompletionTask,
+      this.pendingCompletionStatusCode,
+      completionNotes
+    );
+  }
+
+  getCompletionTaskCode(): string {
+    if (!this.pendingCompletionTask) return '--';
+    return this.getTaskCode(this.pendingCompletionTask);
+  }
+
+  getCompletionRoomLabel(): string {
+    if (!this.pendingCompletionTask) return 'Habitacion no definida';
+    return this.getRoomLabel(this.pendingCompletionTask);
   }
 
   confirmDelete(task: CleaningTaskI): void {
@@ -637,6 +669,66 @@ export class ListCleaningTasks implements OnInit {
     return this.findStatusCode('ENPROCESO') || this.findStatusCode('PENDIENTE') || null;
   }
 
+  private updateTaskStatus(
+    task: CleaningTaskI,
+    nextCode: string,
+    notes: string | undefined = undefined
+  ): void {
+    const nextNormalized = this.normalizeCode(nextCode);
+    const payload: Partial<CleaningTaskFormPayload> = {
+      status: nextCode,
+      completed_at: nextNormalized === 'COMPLETADA' ? this.toDateTimeLocal(new Date()) : null
+    };
+    if (typeof notes === 'string') {
+      payload.notes = notes;
+    }
+
+    this.statusUpdateLoading = true;
+    this.cleaningTasksService.updateCleaningTask(task.id, payload).subscribe({
+      next: () => {
+        this.statusUpdateLoading = false;
+        this.resetCompletionCommentState();
+        this.refreshCleaningTasks();
+      },
+      error: () => {
+        this.statusUpdateLoading = false;
+        if (this.showCompletionCommentModal) {
+          this.completionCommentError = 'No fue posible completar la tarea con el comentario.';
+          return;
+        }
+        this.errorMessage = 'No fue posible actualizar el estado de la tarea.';
+      }
+    });
+  }
+
+  private openCompletionCommentModal(task: CleaningTaskI, nextCode: string): void {
+    this.pendingCompletionTask = task;
+    this.pendingCompletionStatusCode = nextCode;
+    this.completionComment = '';
+    this.completionCommentError = '';
+    this.showCompletionCommentModal = true;
+  }
+
+  private resetCompletionCommentState(): void {
+    this.showCompletionCommentModal = false;
+    this.pendingCompletionTask = null;
+    this.pendingCompletionStatusCode = null;
+    this.completionComment = '';
+    this.completionCommentError = '';
+  }
+
+  private buildCompletionNotes(task: CleaningTaskI, comment: string): string | undefined {
+    const trimmedComment = String(comment || '').trim();
+    if (!trimmedComment) return undefined;
+
+    const currentNotes = String(task.notes || '').trim();
+    const timestamp = this.formatCompletionCommentTimestamp(new Date());
+    const commentEntry = `[${timestamp}] Cierre de limpieza: ${trimmedComment}`;
+
+    if (!currentNotes) return commentEntry;
+    return `${currentNotes}\n${commentEntry}`;
+  }
+
   private findStatusCode(normalizedCode: string): string | null {
     return this.statusCodeByNormalized.get(this.normalizeCode(normalizedCode)) || null;
   }
@@ -685,6 +777,15 @@ export class ListCleaningTasks implements OnInit {
     const hours = `${date.getHours()}`.padStart(2, '0');
     const minutes = `${date.getMinutes()}`.padStart(2, '0');
     return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  private formatCompletionCommentTimestamp(date: Date): string {
+    const day = `${date.getDate()}`.padStart(2, '0');
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = `${date.getHours()}`.padStart(2, '0');
+    const minutes = `${date.getMinutes()}`.padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
   }
 
   private formatFileDate(date: Date): string {

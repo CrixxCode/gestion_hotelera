@@ -125,115 +125,44 @@
 
   <section class="catalog-sections" *ngIf="!loading && !errorMessage && filteredRoomInventory.length > 0">
     <ng-container *ngIf="viewMode === 'cards'; else tableView">
-      <article class="category-block" *ngFor="let group of groupedRoomInventory; trackBy: trackByGroup">
-        <header class="category-head">
-          <div class="category-title">
+      <div class="rooms-grid">
+        <article class="room-summary-card" *ngFor="let group of groupedRoomInventory; trackBy: trackByGroup" (click)="openRoomDetail(group)">
+          <div class="room-summary-cover" [ngStyle]="{ background: getGroupTone(group).cover }">
             <span
-              class="category-icon"
+              class="room-coverage-chip"
               [ngStyle]="{
-                'background-color': getGroupTone(group).iconBg,
-                color: getGroupTone(group).iconColor
+                'background-color': getRoomCoverageTone(group).bg,
+                color: getRoomCoverageTone(group).color
               }">
-              <i [class]="getGroupTone(group).icon"></i>
+              {{ getRoomCoverageLabel(group) }}
             </span>
-            <h2>{{ group.label }}</h2>
-            <span class="category-count">{{ group.items.length }}</span>
           </div>
 
-          <p class="category-note">
-            <i class="fa-regular fa-star"></i>
-            Se destacan los items con mayor cantidad en la habitacion
-          </p>
-        </header>
+          <div class="room-summary-body">
+            <h3>{{ group.label }}</h3>
+            <p>{{ getRoomItemsPreview(group) }}</p>
 
-        <div class="room-inventory-grid">
-          <article
-            class="room-inventory-card"
-            *ngFor="let record of group.items; trackBy: trackByRecord"
-            (click)="openDetail(record)">
-            <div class="room-inventory-cover" [ngStyle]="{ background: getGroupTone(group).cover }">
-              <div class="cover-badges">
-                <span
-                  class="cover-type"
-                  [ngStyle]="{
-                    'background-color': getTypeBadgeTone(record).bg,
-                    color: getTypeBadgeTone(record).color
-                  }">
-                  {{ getItemTypeLabel(record) }}
-                </span>
-
-                <span class="cover-badge" *ngIf="isHighlighted(group.key, record.id)">Top cantidad</span>
+            <div class="room-summary-metrics">
+              <div>
+                <span>Items</span>
+                <strong>{{ getRoomTotalItems(group) }}</strong>
               </div>
-
-              <span
-                class="coverage-chip"
-                [ngStyle]="{
-                  'background-color': getCoverageTone(record).bg,
-                  color: getCoverageTone(record).color
-                }">
-                {{ getCoverageLabel(record) }}
-              </span>
-            </div>
-
-            <div class="room-inventory-body">
-              <h3>{{ getItemLabel(record) }}</h3>
-              <p>{{ getNotesLabel(record) }}</p>
-
-              <div class="meta-row">
-                <span>
-                  <i class="fa-solid fa-barcode"></i>
-                  {{ getItemSkuLabel(record) }}
-                </span>
-                <span>
-                  <i class="fa-solid fa-hashtag"></i>
-                  {{ getRecordCode(record) }}
-                </span>
+              <div>
+                <span>Activos</span>
+                <strong>{{ getRoomActiveItems(group) }}</strong>
               </div>
-
-              <div class="stock-row">
-                <strong>{{ getStockLabel(record) }}</strong>
-                <small>Minimo: {{ getMinimumLabel(record) }}</small>
+              <div>
+                <span>Bajo min.</span>
+                <strong>{{ getRoomLowCoverageItems(group) }}</strong>
               </div>
-
-              <div class="stock-meter">
-                <span
-                  [ngStyle]="{
-                    width: getStockProgressPercent(record) + '%',
-                    'background-color': getStockBarColor(record)
-                  }"></span>
-              </div>
-
-              <div class="card-foot">
-                <span
-                  class="status-chip"
-                  [ngStyle]="{
-                    'background-color': getStatusTone(record).bg,
-                    color: getStatusTone(record).color
-                  }">
-                  <span class="status-dot" [ngStyle]="{ 'background-color': getStatusTone(record).dot }"></span>
-                  {{ record.is_active ? 'Activo' : 'Inactivo' }}
-                </span>
-
-                <div class="card-actions" (click)="$event.stopPropagation()">
-                  <button type="button" class="row-btn" title="Ver detalle" (click)="openDetail(record)">
-                    <i class="fa-regular fa-eye"></i>
-                  </button>
-                  <button
-                    type="button"
-                    class="row-btn"
-                    [title]="record.is_active ? 'Desactivar' : 'Activar'"
-                    (click)="toggleRoomInventoryStatus(record)">
-                    <i [class]="record.is_active ? 'fa-solid fa-toggle-on' : 'fa-solid fa-toggle-off'"></i>
-                  </button>
-                  <button type="button" class="row-btn danger" title="Eliminar" (click)="confirmDelete(record)">
-                    <i class="fa-regular fa-trash-can"></i>
-                  </button>
-                </div>
+              <div>
+                <span>Unidades</span>
+                <strong>{{ getRoomTotalUnits(group) }}</strong>
               </div>
             </div>
-          </article>
-        </div>
-      </article>
+          </div>
+        </article>
+      </div>
     </ng-container>
 
     <ng-template #tableView>
@@ -340,13 +269,14 @@
     *ngIf="showCreateDrawer"
     [rooms]="rooms"
     [items]="items"
+    [existingAssignments]="roomInventory"
     (closed)="closeCreateDrawer()"
     (created)="onRoomInventoryCreated()">
   </app-create-room-inventory>
 
   <app-detail-room-inventory
-    *ngIf="selectedRoomInventory"
-    [roomInventoryData]="selectedRoomInventory"
+    *ngIf="selectedRoomGroup"
+    [roomGroup]="selectedRoomGroup"
     (closed)="closeDetail()"
     (statusRequested)="toggleRoomInventoryStatus($event)"
     (deleteRequested)="confirmDelete($event)">

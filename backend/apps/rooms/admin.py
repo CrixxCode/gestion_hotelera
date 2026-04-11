@@ -27,7 +27,16 @@ class RoomAdmin(admin.ModelAdmin):
 
 @admin.register(MaintenanceOrder)
 class MaintenanceOrderAdmin(admin.ModelAdmin):
-    list_display = ("id", "room", "title", "priority", "status", "reported_at", "completed_at")
+    list_display = (
+        "id",
+        "room",
+        "title",
+        "priority",
+        "status",
+        "reported_at",
+        "estimated_completed_at",
+        "completed_at",
+    )
     list_filter = ("status", "priority", "room__floor")
     search_fields = ("title", "description", "room__number", "priority__code", "status__code")
 

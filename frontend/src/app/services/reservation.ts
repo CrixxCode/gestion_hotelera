@@ -4,6 +4,8 @@ import { Observable, map } from 'rxjs';
 import { environment } from '../../enviorements/environment';
 import { AuthService } from './auth/auth';
 import {
+  ReservationCheckOutPayloadI,
+  ReservationCheckoutInventoryReviewLinePayloadI,
   ReservationDetailI,
   ReservationDepositI,
   ReservationDepositPayloadI,
@@ -184,10 +186,10 @@ export class ReservationService {
     );
   }
 
-  checkOutReservation(id: number): Observable<ReservationDetailI> {
+  checkOutReservation(id: number, payload?: ReservationCheckOutPayloadI): Observable<ReservationDetailI> {
     return this.http.post<ReservationDetailI>(
       `${this.reservationsUrl}${id}/check-out/`,
-      {},
+      this.normalizeCheckOutPayload(payload),
       this.auth.buildCsrfRequestOptions()
     );
   }
@@ -500,5 +502,46 @@ export class ReservationService {
     }
 
     return normalized;
+  }
+
+  private normalizeCheckOutPayload(
+    payload?: ReservationCheckOutPayloadI
+  ): ReservationCheckOutPayloadI | Record<string, never> {
+    const lines = payload?.inventory_review || [];
+    if (!Array.isArray(lines) || lines.length === 0) return {};
+
+    const normalizedLines = lines
+      .map((line) => this.normalizeCheckoutInventoryLine(line))
+      .filter((line): line is ReservationCheckoutInventoryReviewLinePayloadI => line !== null);
+
+    if (normalizedLines.length === 0) return {};
+
+    return { inventory_review: normalizedLines };
+  }
+
+  private normalizeCheckoutInventoryLine(
+    line: ReservationCheckoutInventoryReviewLinePayloadI
+  ): ReservationCheckoutInventoryReviewLinePayloadI | null {
+    const roomId = Number(line.room);
+    const itemId = Number(line.item);
+    if (!Number.isFinite(roomId) || roomId <= 0 || !Number.isFinite(itemId) || itemId <= 0) {
+      return null;
+    }
+
+    const quantity = this.toNonNegativeInt(line.quantity);
+    const notes = typeof line.notes === 'string' ? line.notes.trim() : '';
+
+    return {
+      room: roomId,
+      item: itemId,
+      quantity,
+      notes: notes || null
+    };
+  }
+
+  private toNonNegativeInt(value: unknown): number {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) return 0;
+    return Math.floor(parsed);
   }
 }

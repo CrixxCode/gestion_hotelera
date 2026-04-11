@@ -113,6 +113,7 @@ export interface RoomPanelMaintenanceI {
   status: string;
   status_label?: string;
   reported_at?: string;
+  estimated_completed_at?: string | null;
   completed_at?: string | null;
 }
 

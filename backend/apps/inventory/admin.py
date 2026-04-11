@@ -14,6 +14,7 @@ class ItemAdmin(admin.ModelAdmin):
         "unit_measure",
         "stock",
         "minimum_stock",
+        "maximum_stock",
         "cost_price",
         "sale_price",
         "is_active",

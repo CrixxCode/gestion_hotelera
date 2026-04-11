@@ -255,6 +255,7 @@ export class ListItems implements OnInit {
       'unidad',
       'stock',
       'stock_minimo',
+      'stock_maximo',
       'costo_unitario',
       'precio_venta',
       'estado'
@@ -268,6 +269,7 @@ export class ListItems implements OnInit {
         this.getUnitLabel(item),
         this.toNonNegativeInt(item.stock),
         this.toNonNegativeInt(item.minimum_stock),
+        this.toNonNegativeInt(item.maximum_stock),
         this.toNumber(item.cost_price),
         this.toNumber(item.sale_price),
         item.is_active ? 'Activo' : 'Inactivo'
@@ -452,6 +454,12 @@ export class ListItems implements OnInit {
     return `${this.toNonNegativeInt(item.minimum_stock)} ${this.getUnitLabel(item)}`;
   }
 
+  getMaximumStockLabel(item: ItemI): string {
+    const maximum = this.toNonNegativeInt(item.maximum_stock);
+    if (maximum <= 0) return 'Sin tope';
+    return `${maximum} ${this.getUnitLabel(item)}`;
+  }
+
   getStockStateLabel(item: ItemI): string {
     if (this.toNonNegativeInt(item.stock) <= 0) return 'Sin stock';
     if (this.isLowStock(item)) return 'Bajo minimo';
@@ -473,6 +481,9 @@ export class ListItems implements OnInit {
   }
 
   getTargetStock(item: ItemI): number {
+    const maximum = this.toNonNegativeInt(item.maximum_stock);
+    if (maximum > 0) return maximum;
+
     const stock = this.toNonNegativeInt(item.stock);
     const minimum = this.toNonNegativeInt(item.minimum_stock);
 
@@ -482,8 +493,8 @@ export class ListItems implements OnInit {
 
   getMinMaxLabel(item: ItemI): string {
     const minimum = this.toNonNegativeInt(item.minimum_stock);
-    const target = this.getTargetStock(item);
-    return `${minimum} / ${target}`;
+    const maximum = this.toNonNegativeInt(item.maximum_stock);
+    return `${minimum} / ${maximum > 0 ? maximum : 'Sin tope'}`;
   }
 
   getStockProgressPercent(item: ItemI): number {
@@ -732,11 +743,13 @@ export class ListItems implements OnInit {
 
     const stock = this.toNonNegativeInt(item.stock);
     const minimum = this.toNonNegativeInt(item.minimum_stock);
+    const maximum = this.toNonNegativeInt(item.maximum_stock);
     const target = this.getTargetStock(item);
 
     if (stock <= 0) return 'OUT';
     if (stock <= minimum) return 'LOW';
-    if (stock >= target) return 'EXCESS';
+    if (maximum > 0 && stock > maximum) return 'EXCESS';
+    if (maximum <= 0 && stock >= target) return 'EXCESS';
     return 'NORMAL';
   }
 

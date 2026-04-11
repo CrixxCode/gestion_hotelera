@@ -3,7 +3,7 @@
     <header class="drawer-head">
       <div>
         <h1>Nuevo item</h1>
-        <p>Registra un producto de inventario con precios, unidad y nivel minimo de stock.</p>
+        <p>Registra un producto de inventario con precios, unidad y niveles minimo/maximo de stock.</p>
       </div>
       <button type="button" class="drawer-close" (click)="closeDrawer()" title="Cerrar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -79,6 +79,23 @@
             </small>
             <small class="field-error" *ngIf="minimum_stock?.touched && minimum_stock?.hasError('min')">
               El stock minimo debe ser mayor o igual a 0.
+            </small>
+          </label>
+
+          <label>
+            <span>Stock maximo *</span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              formControlName="maximum_stock"
+              placeholder="Ej: 80"
+              [class.input-error]="maximum_stock?.touched && maximum_stock?.invalid" />
+            <small class="field-error" *ngIf="maximum_stock?.touched && maximum_stock?.hasError('required')">
+              El stock maximo es obligatorio.
+            </small>
+            <small class="field-error" *ngIf="maximum_stock?.touched && maximum_stock?.hasError('min')">
+              El stock maximo debe ser mayor o igual a 0.
             </small>
           </label>
 

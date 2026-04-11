@@ -49,9 +49,11 @@ export class DetailItem {
     if (!this.itemData) return 'Sin stock';
     const stock = this.toNonNegativeInt(this.itemData.stock);
     const minimum = this.toNonNegativeInt(this.itemData.minimum_stock);
+    const maximum = this.toNonNegativeInt(this.itemData.maximum_stock);
 
     if (stock <= 0) return 'Sin stock';
     if (stock <= minimum) return 'Bajo minimo';
+    if (maximum > 0 && stock > maximum) return 'Exceso';
     return 'Stock saludable';
   }
 
@@ -60,10 +62,18 @@ export class DetailItem {
 
     const stock = this.toNonNegativeInt(this.itemData.stock);
     const minimum = this.toNonNegativeInt(this.itemData.minimum_stock);
+    const maximum = this.toNonNegativeInt(this.itemData.maximum_stock);
 
     if (stock <= 0) return { bg: '#fef2f2', color: '#b42318' };
     if (stock <= minimum) return { bg: '#fff7ed', color: '#c2410c' };
+    if (maximum > 0 && stock > maximum) return { bg: '#e0f2fe', color: '#0369a1' };
     return { bg: '#dcfce7', color: '#15803d' };
+  }
+
+  getMaximumStockLabel(): string {
+    const maximum = this.toNonNegativeInt(this.itemData?.maximum_stock);
+    if (maximum <= 0) return 'Sin tope';
+    return String(maximum);
   }
 
   getCostPriceLabel(): string {

@@ -389,6 +389,12 @@
   gap: 10px;
 }
 
+.payment-line.inactive {
+  border-style: dashed;
+  background: #f8fafc;
+  opacity: 0.8;
+}
+
 .payment-left {
   display: inline-flex;
   align-items: center;
@@ -429,6 +435,16 @@
   font-size: 11px;
   font-weight: 700;
   padding: 3px 8px;
+}
+
+.payment-chip-activity {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.payment-chip-activity.inactive {
+  background: #f1f5f9;
+  color: #475569;
 }
 
 .payment-meta small {

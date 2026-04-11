@@ -1,13 +1,17 @@
+from datetime import datetime, time
+
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 
+from apps.billing.models import Payment
+from apps.billing.services import ensure_default_invoice_for_reservation
 from apps.master_data.models import MasterData
 from apps.packages.models import Package
 from apps.reservations.models import (
     Reservation,
     ReservationRoom,
     ReservationGuest,
-    ReservationDeposit,
 )
 from apps.reservations.services import (
     RESERVATION_STATUS_PENDING_CODES,
@@ -306,30 +310,40 @@ class ReservationGuestSerializer(serializers.ModelSerializer):
             return updated
 
 
-class ReservationDepositSerializer(serializers.ModelSerializer):
+class ReservationDepositSerializer(serializers.Serializer):
+    """
+    Compatibility serializer:
+    mantiene el contrato de reservation-deposits pero persiste en billing.Payment.
+    """
+
+    id = serializers.IntegerField(read_only=True)
+    reservation = serializers.PrimaryKeyRelatedField(
+        queryset=Reservation.objects.all(),
+        required=True,
+        write_only=True,
+    )
+    deposit_date = serializers.DateField(required=False, allow_null=True, write_only=True)
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    payment_method = serializers.PrimaryKeyRelatedField(
+        queryset=MasterData.objects.filter(group=MasterData.Group.PAYMENT_METHOD, is_active=True),
+        required=True,
+    )
     payment_method_name = serializers.CharField(source="payment_method.name", read_only=True)
     payment_method_code = serializers.CharField(source="payment_method.code", read_only=True)
-    status_name = serializers.CharField(source="status.name", read_only=True)
-    status_code = serializers.CharField(source="status.code", read_only=True)
-
-    class Meta:
-        model = ReservationDeposit
-        fields = [
-            "id",
-            "reservation",
-            "deposit_date",
-            "amount",
-            "payment_method",
-            "payment_method_name",
-            "payment_method_code",
-            "reference",
-            "status",
-            "status_name",
-            "status_code",
-            "notes",
-            "created_at",
-        ]
-        read_only_fields = ("id", "created_at")
+    reference = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    status = serializers.PrimaryKeyRelatedField(
+        queryset=MasterData.objects.filter(
+            group=MasterData.Group.RESERVATION_DEPOSIT_STATUS,
+            is_active=True,
+        ),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    status_name = serializers.SerializerMethodField(read_only=True)
+    status_code = serializers.SerializerMethodField(read_only=True)
+    notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    created_at = serializers.DateTimeField(read_only=True)
 
     def validate_amount(self, value):
         if value <= 0:
@@ -339,62 +353,204 @@ class ReservationDepositSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
 
-        reservation = attrs.get("reservation") or getattr(self.instance, "reservation", None)
+        reservation = attrs.get("reservation")
+        if reservation is None:
+            reservation = getattr(getattr(self.instance, "invoice", None), "reservation", None)
+
         amount = attrs.get("amount", getattr(self.instance, "amount", None))
-        exclude_deposit_id = getattr(self.instance, "id", None)
+        exclude_payment_id = getattr(self.instance, "id", None)
 
         errors = validate_reservation_deposit_rules(
             reservation,
             amount,
-            exclude_deposit_id=exclude_deposit_id,
+            exclude_payment_id=exclude_payment_id,
         )
         if errors:
             raise serializers.ValidationError(errors)
 
         return attrs
 
+    def _get_cached_status(self, code: str):
+        cache = getattr(self, "_deposit_status_cache", None)
+        if cache is None:
+            cache = {}
+            self._deposit_status_cache = cache
+
+        normalized_code = str(code or "").strip().upper()
+        if normalized_code not in cache:
+            cache[normalized_code] = (
+                MasterData.objects.filter(
+                    group=MasterData.Group.RESERVATION_DEPOSIT_STATUS,
+                    code=normalized_code,
+                    is_active=True,
+                )
+                .only("id", "name", "code")
+                .first()
+            )
+        return cache[normalized_code]
+
+    def _resolve_output_status(self, payment):
+        status_cache = getattr(self, "_payment_status_cache", None)
+        if status_cache is None:
+            status_cache = {}
+            self._payment_status_cache = status_cache
+
+        cache_key = getattr(payment, "pk", None)
+        if cache_key in status_cache:
+            return status_cache[cache_key]
+
+        if not getattr(payment, "is_active", True):
+            status_obj = self._get_cached_status("RECHAZADO")
+            if status_obj:
+                status_cache[cache_key] = status_obj
+                return status_obj
+
+        refunds_manager = getattr(payment, "refunds", None)
+        refunds = refunds_manager.all() if refunds_manager is not None else []
+        for refund in refunds:
+            if not getattr(refund, "is_active", True):
+                continue
+            refund_status_code = str(
+                getattr(getattr(refund, "status", None), "code", "")
+                or getattr(refund, "status_code", "")
+            ).strip().upper()
+            if refund_status_code == "PENDIENTE":
+                status_obj = self._get_cached_status("PENDIENTE")
+                if status_obj:
+                    status_cache[cache_key] = status_obj
+                    return status_obj
+
+        status_obj = self._get_cached_status("VALIDADO")
+        status_cache[cache_key] = status_obj
+        return status_obj
+
+    def get_status_name(self, obj):
+        status_obj = self._resolve_output_status(obj)
+        return getattr(status_obj, "name", None)
+
+    def get_status_code(self, obj):
+        status_obj = self._resolve_output_status(obj)
+        return getattr(status_obj, "code", None)
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation["reservation"] = getattr(
+            getattr(instance, "invoice", None),
+            "reservation_id",
+            None,
+        )
+
+        payment_date = getattr(instance, "payment_date", None)
+        representation["deposit_date"] = payment_date.date().isoformat() if payment_date else None
+
+        status_obj = self._resolve_output_status(instance)
+        representation["status"] = getattr(status_obj, "id", None)
+
+        return representation
+
+    def _lock_reservation(self, reservation_id: int):
+        return (
+            Reservation.objects.select_related("status")
+            .prefetch_related(
+                "rooms_detail",
+                "charges",
+                "invoices__payments__refunds__status",
+            )
+            .select_for_update()
+            .get(pk=reservation_id)
+        )
+
+    @staticmethod
+    def _apply_payment_date(payment, deposit_date):
+        if not payment or not deposit_date:
+            return
+
+        target_datetime = datetime.combine(deposit_date, time(0, 0))
+        if timezone.is_naive(target_datetime):
+            target_datetime = timezone.make_aware(
+                target_datetime,
+                timezone.get_current_timezone(),
+            )
+
+        Payment.objects.filter(pk=payment.pk).update(payment_date=target_datetime)
+        payment.payment_date = target_datetime
+
     def create(self, validated_data):
-        reservation = validated_data["reservation"]
+        reservation = validated_data.pop("reservation")
         amount = validated_data["amount"]
+        deposit_date = validated_data.pop("deposit_date", None)
+        validated_data.pop("status", None)
 
         with transaction.atomic():
-            locked_reservation = (
-                Reservation.objects.select_related("status")
-                .prefetch_related("rooms_detail", "deposits", "charges")
-                .select_for_update()
-                .get(pk=reservation.pk)
-            )
-
-            errors = validate_reservation_deposit_rules(locked_reservation, amount)
-            if errors:
-                raise serializers.ValidationError(errors)
-
-            validated_data["reservation"] = locked_reservation
-            return super().create(validated_data)
-
-    def update(self, instance, validated_data):
-        reservation = validated_data.get("reservation") or instance.reservation
-        amount = validated_data.get("amount", instance.amount)
-        exclude_deposit_id = instance.id
-
-        with transaction.atomic():
-            locked_reservation = (
-                Reservation.objects.select_related("status")
-                .prefetch_related("rooms_detail", "deposits", "charges")
-                .select_for_update()
-                .get(pk=reservation.pk)
-            )
+            locked_reservation = self._lock_reservation(reservation.pk)
 
             errors = validate_reservation_deposit_rules(
                 locked_reservation,
                 amount,
-                exclude_deposit_id=exclude_deposit_id,
             )
             if errors:
                 raise serializers.ValidationError(errors)
 
-            validated_data["reservation"] = locked_reservation
-            return super().update(instance, validated_data)
+            invoice = ensure_default_invoice_for_reservation(locked_reservation.id)
+            if invoice is None:
+                raise serializers.ValidationError(
+                    {"reservation": "No fue posible obtener la factura activa de la reserva."}
+                )
+
+            payment = Payment.objects.create(
+                invoice=invoice,
+                payment_method=validated_data["payment_method"],
+                amount=amount,
+                reference=validated_data.get("reference"),
+                notes=validated_data.get("notes"),
+                is_active=True,
+            )
+            self._apply_payment_date(payment, deposit_date)
+            return payment
+
+    def update(self, instance, validated_data):
+        reservation = validated_data.pop(
+            "reservation",
+            getattr(getattr(instance, "invoice", None), "reservation", None),
+        )
+        amount = validated_data.get("amount", instance.amount)
+        deposit_date = validated_data.pop("deposit_date", None)
+        validated_data.pop("status", None)
+
+        if reservation is None:
+            raise serializers.ValidationError({"reservation": "Reservation is required."})
+
+        with transaction.atomic():
+            locked_reservation = self._lock_reservation(reservation.pk)
+
+            errors = validate_reservation_deposit_rules(
+                locked_reservation,
+                amount,
+                exclude_payment_id=instance.id,
+            )
+            if errors:
+                raise serializers.ValidationError(errors)
+
+            target_invoice = instance.invoice
+            if getattr(target_invoice, "reservation_id", None) != locked_reservation.id:
+                target_invoice = ensure_default_invoice_for_reservation(locked_reservation.id)
+                if target_invoice is None:
+                    raise serializers.ValidationError(
+                        {"reservation": "No fue posible obtener la factura activa de la reserva."}
+                    )
+
+            instance.invoice = target_invoice
+            if "payment_method" in validated_data:
+                instance.payment_method = validated_data["payment_method"]
+            if "amount" in validated_data:
+                instance.amount = validated_data["amount"]
+            if "reference" in validated_data:
+                instance.reference = validated_data["reference"]
+            if "notes" in validated_data:
+                instance.notes = validated_data["notes"]
+            instance.save()
+            self._apply_payment_date(instance, deposit_date)
+            return instance
 
 
 class ReservationBusinessRulesMixin:
@@ -583,7 +739,7 @@ class ReservationDetailSerializer(ReservationBusinessRulesMixin, serializers.Mod
 
     rooms_detail = ReservationRoomSerializer(many=True, read_only=True)
     guests = ReservationGuestSerializer(many=True, read_only=True)
-    deposits = ReservationDepositSerializer(many=True, read_only=True)
+    deposits = serializers.SerializerMethodField()
     policies = ReservationPolicySummarySerializer(many=True, read_only=True)
 
     total_rooms = serializers.IntegerField(read_only=True)
@@ -691,6 +847,24 @@ class ReservationDetailSerializer(ReservationBusinessRulesMixin, serializers.Mod
         )
 
 
+    def get_deposits(self, obj):
+        payments = (
+            Payment.objects.filter(
+                invoice__reservation=obj,
+                invoice__is_active=True,
+                is_active=True,
+            )
+            .select_related("invoice", "payment_method")
+            .prefetch_related("refunds__status")
+            .order_by("-id")
+        )
+        return ReservationDepositSerializer(
+            payments,
+            many=True,
+            context=self.context,
+        ).data
+
+
 class ReservationWriteSerializer(serializers.ModelSerializer):
     package = serializers.PrimaryKeyRelatedField(
         queryset=Package.objects.all(),
@@ -769,6 +943,11 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
         attrs.pop("status", None)
         attrs.pop("real_check_in", None)
         attrs.pop("real_check_out", None)
+
+        if self.instance and getattr(self.instance, "real_check_in", None) is not None:
+            raise serializers.ValidationError(
+                {"reservation": "No puedes editar una reserva que ya tiene check-in registrado."}
+            )
 
         expected_check_in = attrs.get(
             "expected_check_in",

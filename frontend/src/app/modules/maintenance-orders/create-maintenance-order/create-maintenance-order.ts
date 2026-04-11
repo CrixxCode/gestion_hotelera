@@ -36,6 +36,7 @@ export class CreateMaintenanceOrder implements OnChanges {
       description: ['', [Validators.maxLength(3000)]],
       priority: ['', [Validators.required]],
       status: ['', [Validators.required]],
+      estimated_completed_at: [''],
       completed_at: ['']
     });
   }
@@ -122,6 +123,7 @@ export class CreateMaintenanceOrder implements OnChanges {
       description: String(raw.description || '').trim(),
       priority: priorityCode,
       status: statusCode,
+      estimated_completed_at: this.normalizeDateTime(raw.estimated_completed_at),
       completed_at: isCompleted ? this.normalizeDateTime(raw.completed_at) || this.toDateTimeLocal(new Date()) : null
     };
 

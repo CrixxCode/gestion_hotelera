@@ -3,6 +3,8 @@ from django.dispatch import receiver
 
 from apps.reservations.models import Reservation, ReservationRoom
 from apps.reservations.services import (
+    sync_client_stay_metrics_by_id,
+    sync_client_stay_metrics_for_reservation,
     sync_client_status_by_id,
     sync_client_status_for_reservation,
     sync_room_status_for_reservation,
@@ -51,11 +53,19 @@ def sync_room_status_on_reservation_room_delete(sender, instance, **kwargs):
 @receiver(post_save, sender=Reservation)
 def sync_room_status_on_reservation_save(sender, instance, **kwargs):
     sync_room_status_for_reservation(instance)
-    sync_client_status_by_id(getattr(instance, "_previous_client_id", None))
+    previous_client_id = getattr(instance, "_previous_client_id", None)
+    current_client_id = getattr(instance, "client_id", None)
+
+    if previous_client_id and previous_client_id != current_client_id:
+        sync_client_status_by_id(previous_client_id)
+        sync_client_stay_metrics_by_id(previous_client_id)
+
     sync_client_status_for_reservation(instance)
+    sync_client_stay_metrics_for_reservation(instance)
 
 
 @receiver(post_delete, sender=Reservation)
 def sync_room_status_on_reservation_delete(sender, instance, **kwargs):
     sync_room_status_for_reservation(instance)
     sync_client_status_for_reservation(instance)
+    sync_client_stay_metrics_for_reservation(instance)

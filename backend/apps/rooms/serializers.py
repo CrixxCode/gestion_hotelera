@@ -182,6 +182,7 @@ class MaintenanceOrderSerializer(serializers.ModelSerializer):
             "status",
             "status_label",
             "reported_at",
+            "estimated_completed_at",
             "completed_at",
         )
         read_only_fields = ("id", "reported_at")
@@ -290,6 +291,7 @@ class RoomPanelSerializer(serializers.ModelSerializer):
             "status": maintenance.status_code,
             "status_label": maintenance.get_status_display(),
             "reported_at": maintenance.reported_at,
+            "estimated_completed_at": maintenance.estimated_completed_at,
             "completed_at": maintenance.completed_at,
         }
 

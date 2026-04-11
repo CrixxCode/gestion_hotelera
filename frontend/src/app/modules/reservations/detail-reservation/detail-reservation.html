@@ -228,23 +228,15 @@
           class="btn btn-primary"
           *ngIf="canRunPrimaryAction"
           (click)="runPrimaryAction()"
-          [disabled]="actionLoading || paymentLoading">
+          [disabled]="actionLoading">
           {{ primaryActionLabel }}
-        </button>
-        <button
-          type="button"
-          class="btn btn-success"
-          *ngIf="showAddPaymentAction"
-          (click)="addPayment()"
-          [disabled]="actionLoading || paymentLoading">
-          {{ paymentLoading ? 'Registrando pago...' : 'Agregar pago' }}
         </button>
         <button
           type="button"
           class="btn btn-secondary"
           *ngIf="showEditAction"
           (click)="requestEdit()"
-          [disabled]="actionLoading || paymentLoading">
+          [disabled]="actionLoading">
           Editar reserva
         </button>
         <button
@@ -252,15 +244,108 @@
           class="btn btn-danger-outline"
           *ngIf="showCancelAction"
           (click)="cancelReservation()"
-          [disabled]="actionLoading || paymentLoading">
+          [disabled]="actionLoading">
           {{ actionLoading ? 'Procesando...' : 'Cancelar reserva' }}
         </button>
-        <button type="button" class="btn btn-secondary" (click)="closeDrawer()" [disabled]="actionLoading || paymentLoading">
+        <button type="button" class="btn btn-secondary" (click)="closeDrawer()" [disabled]="actionLoading">
           Cerrar
         </button>
       </ng-template>
     </footer>
   </aside>
+</div>
+
+<div
+  class="checkout-inventory-overlay"
+  *ngIf="showCheckoutInventoryModal"
+  (click)="closeCheckoutInventoryModal(); $event.stopPropagation()">
+  <article class="checkout-inventory-modal" (click)="$event.stopPropagation()">
+    <header class="checkout-inventory-head">
+      <div>
+        <h3>Revision de inventario en check-out</h3>
+        <p>{{ reservationCodeLabel }} - registra cantidades finales por item.</p>
+      </div>
+      <button
+        type="button"
+        class="checkout-inventory-close"
+        title="Cerrar"
+        (click)="closeCheckoutInventoryModal()"
+        [disabled]="actionLoading">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </svg>
+      </button>
+    </header>
+
+    <div class="checkout-inventory-body">
+      <p class="state-msg" *ngIf="checkoutInventoryLoading">Cargando inventario de las habitaciones...</p>
+      <p class="state-msg error" *ngIf="!checkoutInventoryLoading && checkoutInventoryError">{{ checkoutInventoryError }}</p>
+
+      <ng-container *ngIf="!checkoutInventoryLoading && hasCheckoutInventoryLines">
+        <div class="checkout-inventory-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Habitacion</th>
+                <th>Item</th>
+                <th>Referencia</th>
+                <th>Revisado</th>
+                <th>Diferencia</th>
+                <th>Notas</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let line of checkoutInventoryLines; trackBy: trackByCheckoutInventoryLine">
+                <td>{{ line.roomLabel }}</td>
+                <td>{{ line.itemLabel }}</td>
+                <td>{{ line.expectedQuantity }}</td>
+                <td>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    class="checkout-qty-input"
+                    [ngModel]="line.reviewedQuantity"
+                    (ngModelChange)="updateCheckoutInventoryQuantity(line, $event)" />
+                </td>
+                <td>
+                  <span class="difference-badge" [ngClass]="getCheckoutDifferenceClass(line)">
+                    {{ getCheckoutDifferenceLabel(line) }}
+                  </span>
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    class="checkout-notes-input"
+                    placeholder="Observaciones"
+                    [ngModel]="line.notes"
+                    (ngModelChange)="updateCheckoutInventoryNotes(line, $event)" />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ng-container>
+
+      <p class="state-msg" *ngIf="!checkoutInventoryLoading && !hasCheckoutInventoryLines">
+        No hay items de inventario activos asociados a las habitaciones de esta reserva.
+      </p>
+    </div>
+
+    <footer class="checkout-inventory-footer">
+      <button type="button" class="btn btn-secondary" (click)="closeCheckoutInventoryModal()" [disabled]="actionLoading">
+        Cancelar
+      </button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        (click)="submitCheckOutWithInventoryReview()"
+        [disabled]="actionLoading || checkoutInventoryLoading">
+        {{ actionLoading ? 'Procesando...' : 'Confirmar check-out' }}
+      </button>
+    </footer>
+  </article>
 </div>
 
 <div class="guest-modal-overlay" *ngIf="showGuestsModal" (click)="closeGuestsModal(); $event.stopPropagation()">

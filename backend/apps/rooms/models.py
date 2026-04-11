@@ -125,6 +125,7 @@ class MaintenanceOrder(models.Model):
         limit_choices_to={"group": MasterData.Group.MAINTENANCE_STATUS},
     )
     reported_at = models.DateTimeField(auto_now_add=True)
+    estimated_completed_at = models.DateTimeField(blank=True, null=True)
     completed_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:

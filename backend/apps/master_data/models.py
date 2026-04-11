@@ -32,6 +32,7 @@ class MasterData(models.Model):
         INVOICE_STATUS = "INVOICE_STATUS", "Invoice status"
         
         CREDIT_NOTE_STATUS = "CREDIT_NOTE_STATUS", "Credit note status"
+        PAYMENT_REFUND_STATUS = "PAYMENT_REFUND_STATUS", "Payment refund status"
         
         PROMOTION_DISCOUNT_TYPE = "PROMOTION_DISCOUNT_TYPE", "Promotion discount type"
         

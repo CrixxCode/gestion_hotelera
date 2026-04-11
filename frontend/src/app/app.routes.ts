@@ -10,6 +10,10 @@ import { RolesComponent } from './components/pages/roles/roles';
 import { RecursosComponent } from './components/pages/recursos/recursos';
 import { HotelSettings } from './components/pages/hotel-settings/hotel-settings';
 import { MasterDataComponent } from './components/pages/master-data/master-data';
+import { ForbiddenPage } from './components/pages/forbidden/forbidden';
+import { NotFoundPage } from './components/pages/not-found/not-found';
+import { authChildGuard } from './guards/auth.guard';
+import { permissionChildGuard } from './guards/permission.guard';
 
 const loadClientsComponent = () => import('./modules/clients/list-clients/list-clients').then((m) => m.ListClients);
 const loadReservationsComponent = () =>
@@ -24,6 +28,8 @@ const loadServicesComponent = () =>
 const loadBillingComponent = () => import('./modules/billing/list-bill/list-bill').then((m) => m.ListBill);
 const loadPaymentsComponent = () =>
   import('./modules/payments/list-payments/list-payments').then((m) => m.ListPayments);
+const loadPaymentRefundsComponent = () =>
+  import('./modules/payments/list-payment-refunds/list-payment-refunds').then((m) => m.ListPaymentRefunds);
 const loadIncomeConsolidatedComponent = () =>
   import('./modules/income-consolidated/list-income-consolidated/list-income-consolidated').then(
     (m) => m.ListIncomeConsolidated
@@ -53,6 +59,10 @@ const loadMaintenanceOrdersComponent = () =>
   );
 const loadReportsComponent = () =>
   import('./modules/reports/list-reports/list-reports').then((m) => m.ListReports);
+const loadActivityLogComponent = () =>
+  import('./modules/reports/activity-log/activity-log').then((m) => m.ActivityLogPage);
+const loadMyProfileComponent = () =>
+  import('./modules/users/my-profile/my-profile').then((m) => m.MyProfilePage);
 
 export const routes: Routes = [
     {
@@ -76,6 +86,7 @@ export const routes: Routes = [
     {
         path: '',
         component: LayoutMain,
+        canActivateChild: [authChildGuard, permissionChildGuard],
         children: [
             { path: 'usuarios', component: UserList },
             { path: 'dashboard', component: Dashboard },
@@ -94,11 +105,14 @@ export const routes: Routes = [
             { path: 'servicios-consumos', loadComponent: loadServicesComponent },
             { path: 'servicios', redirectTo: 'servicios-consumos', pathMatch: 'full' },
             { path: 'services', redirectTo: 'servicios-consumos', pathMatch: 'full' },
-            { path: 'facturacion', loadComponent: loadBillingComponent },
-            { path: 'facturas', redirectTo: 'facturacion', pathMatch: 'full' },
-            { path: 'billing', redirectTo: 'facturacion', pathMatch: 'full' },
+            { path: 'facturas', loadComponent: loadBillingComponent },
+            { path: 'facturacion', redirectTo: 'facturas', pathMatch: 'full' },
+            { path: 'billing', redirectTo: 'facturas', pathMatch: 'full' },
             { path: 'pagos', loadComponent: loadPaymentsComponent },
             { path: 'payments', redirectTo: 'pagos', pathMatch: 'full' },
+            { path: 'reembolsos', loadComponent: loadPaymentRefundsComponent, data: { breadcrumbLabel: 'Reembolsos' } },
+            { path: 'payment-refunds', redirectTo: 'reembolsos', pathMatch: 'full' },
+            { path: 'refunds', redirectTo: 'reembolsos', pathMatch: 'full' },
             { path: 'consolidado-ingresos', loadComponent: loadIncomeConsolidatedComponent },
             { path: 'control-financiero', loadComponent: loadFinancialControlComponent },
             { path: 'financial-control', redirectTo: 'control-financiero', pathMatch: 'full' },
@@ -123,9 +137,15 @@ export const routes: Routes = [
             { path: 'ordenes-mantenimiento', loadComponent: loadMaintenanceOrdersComponent },
             { path: 'maintenance-orders', redirectTo: 'ordenes-mantenimiento', pathMatch: 'full' },
             { path: 'reportes', loadComponent: loadReportsComponent },
+            { path: 'actividad', loadComponent: loadActivityLogComponent },
+            { path: 'activity-log', redirectTo: 'actividad', pathMatch: 'full' },
             { path: 'reports', redirectTo: 'reportes', pathMatch: 'full' },
+            { path: 'mi-perfil', loadComponent: loadMyProfileComponent, data: { breadcrumbLabel: 'Mi Perfil' } },
             { path: 'hotel-config', component: HotelSettings },
             { path: 'master-data', component: MasterDataComponent },
+            { path: '403', component: ForbiddenPage, data: { breadcrumbLabel: 'Acceso denegado' } },
+            { path: '404', component: NotFoundPage, data: { breadcrumbLabel: 'Pagina no encontrada' } },
+            { path: '**', component: NotFoundPage, data: { breadcrumbLabel: 'Pagina no encontrada' } },
         ]
     },
 ];

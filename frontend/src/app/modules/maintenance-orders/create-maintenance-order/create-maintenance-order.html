@@ -64,9 +64,17 @@
           </label>
 
           <label>
-            <span>Fecha de finalizacion</span>
+            <span>Fecha estimada de finalizacion</span>
+            <input type="datetime-local" formControlName="estimated_completed_at" />
+            <small class="field-hint">Opcional: fecha y hora objetivo para cerrar la orden.</small>
+          </label>
+
+          <label>
+            <span>Fecha real de finalizacion</span>
             <input type="datetime-local" formControlName="completed_at" [disabled]="!shouldShowCompletedAt" />
-            <small class="field-hint" *ngIf="!shouldShowCompletedAt">Se establece automaticamente al marcar como completada.</small>
+            <small class="field-hint" *ngIf="!shouldShowCompletedAt">
+              Se establece automaticamente al marcar como completada.
+            </small>
           </label>
 
           <label class="full">

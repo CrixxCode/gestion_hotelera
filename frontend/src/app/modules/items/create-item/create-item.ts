@@ -36,6 +36,7 @@ export class CreateItem {
       unit_measure: [null as number | null, [Validators.required]],
       stock: [0, [Validators.required, Validators.min(0)]],
       minimum_stock: [0, [Validators.required, Validators.min(0)]],
+      maximum_stock: [0, [Validators.required, Validators.min(0)]],
       cost_price: [0, [Validators.required, Validators.min(0)]],
       sale_price: [0, [Validators.required, Validators.min(0)]],
       description: ['', [Validators.maxLength(2000)]],
@@ -67,6 +68,10 @@ export class CreateItem {
     return this.itemForm.get('minimum_stock');
   }
 
+  get maximum_stock() {
+    return this.itemForm.get('maximum_stock');
+  }
+
   get cost_price() {
     return this.itemForm.get('cost_price');
   }
@@ -89,6 +94,20 @@ export class CreateItem {
     }
 
     const raw = this.itemForm.getRawValue();
+    const stock = this.toNonNegativeInt(raw.stock);
+    const minimumStock = this.toNonNegativeInt(raw.minimum_stock);
+    const maximumStock = this.toNonNegativeInt(raw.maximum_stock);
+
+    if (maximumStock > 0 && minimumStock > maximumStock) {
+      this.errorMessage = 'El stock minimo no puede ser mayor al stock maximo.';
+      return;
+    }
+
+    if (maximumStock > 0 && stock > maximumStock) {
+      this.errorMessage = 'El stock inicial no puede ser mayor al stock maximo.';
+      return;
+    }
+
     const payload: ItemFormPayload = {
       hotel_settings: Number(this.hotelSettingsId),
       item_type: Number(raw.item_type),
@@ -96,8 +115,9 @@ export class CreateItem {
       name: raw.name?.trim() || '',
       sku: this.normalizeNullableString(raw.sku),
       description: raw.description?.trim() || '',
-      stock: this.toNonNegativeInt(raw.stock),
-      minimum_stock: this.toNonNegativeInt(raw.minimum_stock),
+      stock,
+      minimum_stock: minimumStock,
+      maximum_stock: maximumStock,
       cost_price: this.toNonNegativePrice(raw.cost_price),
       sale_price: this.toNonNegativePrice(raw.sale_price),
       is_active: !!raw.is_active

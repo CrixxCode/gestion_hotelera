@@ -4,6 +4,7 @@ from rest_framework.response import Response
 
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
+from apps.reservations.services import sync_room_status_for_room_ids
 from .models import Rate, Amenity, Room, MaintenanceOrder, CleaningTask, RoomType
 from .serializers import (
     RoomTypeSerializer,
@@ -162,7 +163,7 @@ class MaintenanceOrderViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         "status__code",
         "status__name",
     ]
-    ordering_fields = ["id", "reported_at", "completed_at"]
+    ordering_fields = ["id", "reported_at", "estimated_completed_at", "completed_at"]
     ordering = ["-reported_at"]
 
     def get_required_scopes(self):
@@ -202,3 +203,18 @@ class CleaningTaskViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     def get_permissions(self):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
+
+    def perform_create(self, serializer):
+        task = serializer.save()
+        sync_room_status_for_room_ids([task.room_id])
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        previous_room_id = instance.room_id
+        task = serializer.save()
+        sync_room_status_for_room_ids([previous_room_id, task.room_id])
+
+    def perform_destroy(self, instance):
+        room_id = instance.room_id
+        super().perform_destroy(instance)
+        sync_room_status_for_room_ids([room_id])

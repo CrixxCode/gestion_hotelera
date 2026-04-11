@@ -13,6 +13,7 @@ export interface ItemI {
   description?: string | null;
   stock: number;
   minimum_stock: number;
+  maximum_stock: number;
   cost_price: string | number;
   sale_price: string | number;
   is_active: boolean;
@@ -29,6 +30,7 @@ export interface ItemFormPayload {
   description?: string;
   stock: number;
   minimum_stock: number;
+  maximum_stock: number;
   cost_price: number;
   sale_price: number;
   is_active: boolean;

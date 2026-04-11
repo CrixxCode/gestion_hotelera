@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
 
-from .models import Role, Resource, RoleResource, User, UserRole
+from .models import NotificationReadState, Role, Resource, RoleResource, User, UserRole
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
@@ -39,3 +39,9 @@ class UserRoleAdmin(admin.ModelAdmin):
 @admin.register(RoleResource)
 class RoleResourceAdmin(admin.ModelAdmin):
     list_display = ("role", "resource", "granted_at")
+
+
+@admin.register(NotificationReadState)
+class NotificationReadStateAdmin(admin.ModelAdmin):
+    list_display = ("user", "notification_key", "read_at", "updated_at")
+    search_fields = ("user__username", "notification_key")

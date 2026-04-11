@@ -7,14 +7,14 @@ from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
 from apps.clients.models import Client
-from apps.billing.models import Charge
+from apps.billing.models import Charge, Invoice, Payment
+from apps.billing.services import ensure_default_invoice_for_reservation
 from apps.hotel_settings.models import HotelFloor, HotelSettings, ReservationPolicy
 from apps.inventory.models import Item, RoomInventory
 from apps.master_data.models import MasterData
 from apps.packages.models import Package
 from apps.reservations.models import (
     Reservation,
-    ReservationDeposit,
     ReservationInventoryCheck,
     ReservationInventoryCheckLine,
     ReservationRoom,
@@ -612,6 +612,25 @@ class ReservationFlowTestCase(TestCase):
         reservation = clear_serializer.save()
         self.assertEqual(reservation.policies.count(), 0)
 
+    def test_update_reservation_rejects_changes_after_check_in(self):
+        today = timezone.now().date()
+        reservation = self._create_reservation(
+            check_in=today + timedelta(days=1),
+            check_out=today + timedelta(days=3),
+            status=self.reservation_status_in_progress,
+        )
+        reservation.real_check_in = timezone.now()
+        reservation.save(update_fields=["real_check_in"])
+
+        serializer = ReservationWriteSerializer(
+            instance=reservation,
+            data={"notes": "Intento de edicion"},
+            partial=True,
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("reservation", serializer.errors)
+
     def test_detail_serializer_includes_policies(self):
         today = timezone.now().date()
         reservation = self._create_reservation(
@@ -643,12 +662,12 @@ class ReservationFlowTestCase(TestCase):
             adults=2,
             children=0,
         )
-        ReservationDeposit.objects.create(
-            reservation=reservation,
-            deposit_date=today,
+        invoice = ensure_default_invoice_for_reservation(reservation.id)
+        self.assertIsNotNone(invoice)
+        Payment.objects.create(
+            invoice=invoice,
             amount=50000,
             payment_method=self.payment_method_cash,
-            status=self.deposit_status_validated,
         )
 
         data = ReservationListSerializer(instance=reservation).data
@@ -661,7 +680,7 @@ class ReservationFlowTestCase(TestCase):
         self.assertEqual(data["payment_status_label"], "Parcial")
         self.assertTrue(data["can_add_payment"])
         self.assertFalse(data["can_confirm"])
-        self.assertTrue(data["can_check_in"])
+        self.assertFalse(data["can_check_in"])
         self.assertFalse(data["can_check_out"])
         self.assertTrue(data["can_cancel"])
 
@@ -678,12 +697,12 @@ class ReservationFlowTestCase(TestCase):
             adults=2,
             children=0,
         )
-        ReservationDeposit.objects.create(
-            reservation=reservation,
-            deposit_date=today,
+        invoice = ensure_default_invoice_for_reservation(reservation.id)
+        self.assertIsNotNone(invoice)
+        Payment.objects.create(
+            invoice=invoice,
             amount=150000,
             payment_method=self.payment_method_cash,
-            status=self.deposit_status_validated,
         )
 
         serializer = ReservationDepositSerializer(
@@ -748,6 +767,7 @@ class ReservationApiFlowTestCase(APITestCase):
         self.room_status_available = self._md(MasterData.Group.ROOM_STATUS, "DISPONIBLE", "Disponible", 1)
         self._md(MasterData.Group.ROOM_STATUS, "RESERVADA", "Reservada", 2)
         self._md(MasterData.Group.ROOM_STATUS, "OCUPADA", "Ocupada", 3)
+        self.room_status_cleaning = self._md(MasterData.Group.ROOM_STATUS, "LIMPIEZA", "Limpieza", 4)
 
         self.reservation_status_pending = self._md(
             MasterData.Group.RESERVATION_STATUS, "PENDIENTE", "Pendiente", 0
@@ -770,6 +790,9 @@ class ReservationApiFlowTestCase(APITestCase):
         self.cleaning_status_pending = self._md(
             MasterData.Group.CLEANING_STATUS, "PENDIENTE", "Pendiente", 1
         )
+        self.cleaning_status_in_progress = self._md(
+            MasterData.Group.CLEANING_STATUS, "EN_PROCESO", "En proceso", 2
+        )
         self.reservation_origin = self._md(MasterData.Group.RESERVATION_ORIGIN, "WEB", "Web", 1)
         self.payment_method_cash = self._md(MasterData.Group.PAYMENT_METHOD, "EFECTIVO", "Efectivo", 1)
         self.deposit_status_validated = self._md(
@@ -784,7 +807,7 @@ class ReservationApiFlowTestCase(APITestCase):
 
         self.hotel_settings = HotelSettings.objects.create(
             hotel_name="Hotel API Test",
-            check_in_time=(timezone.localtime() + timedelta(hours=1)).time(),
+            check_in_time=time(0, 0),
         )
         self.floor = HotelFloor.objects.create(
             hotel_settings=self.hotel_settings,
@@ -838,7 +861,7 @@ class ReservationApiFlowTestCase(APITestCase):
         self.client = APIClient()
         self.client.force_login(self.user)
 
-    def _create_reservation(self, *, check_in_offset=1, check_out_offset=2, status=None):
+    def _create_reservation(self, *, check_in_offset=0, check_out_offset=1, status=None):
         today = timezone.now().date()
         return Reservation.objects.create(
             client=self.client_model,
@@ -891,6 +914,104 @@ class ReservationApiFlowTestCase(APITestCase):
         self.assertEqual(check_out.data["status_code"], "FINALIZADA")
         self.assertIsNotNone(check_out.data["real_check_out"])
 
+    def test_reservation_update_endpoint_rejects_edits_after_check_in(self):
+        reservation = self._create_reservation(status=self.reservation_status_pending)
+
+        confirm = self.client.post(f"/api/reservations/{reservation.id}/confirm/", data={}, format="json")
+        self.assertEqual(confirm.status_code, 200)
+
+        check_in = self.client.post(f"/api/reservations/{reservation.id}/check-in/", data={}, format="json")
+        self.assertEqual(check_in.status_code, 200)
+
+        response = self.client.patch(
+            f"/api/reservations/{reservation.id}/",
+            data={"notes": "Cambio no permitido"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("check-in", str(response.data).lower())
+
+    def test_check_out_updates_client_type_based_on_total_stay_nights(self):
+        self._md(MasterData.Group.CLIENT_TYPE, "FRECUENTE", "Frecuente", 2)
+        self._md(MasterData.Group.CLIENT_TYPE, "VIP", "VIP", 3)
+
+        reservation = self._create_reservation(
+            check_in_offset=-1,
+            check_out_offset=9,
+            status=self.reservation_status_pending,
+        )
+        self._create_room_line(reservation=reservation, night_rate=100000)
+
+        confirm = self.client.post(f"/api/reservations/{reservation.id}/confirm/", data={}, format="json")
+        self.assertEqual(confirm.status_code, 200)
+
+        check_in = self.client.post(f"/api/reservations/{reservation.id}/check-in/", data={}, format="json")
+        self.assertEqual(check_in.status_code, 200)
+
+        check_out = self.client.post(f"/api/reservations/{reservation.id}/check-out/", data={}, format="json")
+        self.assertEqual(check_out.status_code, 200)
+        self.assertEqual(check_out.data["status_code"], "FINALIZADA")
+        self.room.refresh_from_db()
+        self.assertEqual(self.room.status.code, "LIMPIEZA")
+
+        reservation.refresh_from_db()
+        self.client_model.refresh_from_db()
+
+        self.assertEqual(self.client_model.total_stay_nights, 10)
+        self.assertEqual(self.client_model.client_type.code, "FRECUENTE")
+        self.assertEqual(
+            self.client_model.last_stay,
+            timezone.localtime(reservation.real_check_out).date(),
+        )
+
+        check_out_again = self.client.post(f"/api/reservations/{reservation.id}/check-out/", data={}, format="json")
+        self.assertEqual(check_out_again.status_code, 200)
+
+        self.client_model.refresh_from_db()
+        self.assertEqual(self.client_model.total_stay_nights, 10)
+        self.assertEqual(self.client_model.client_type.code, "FRECUENTE")
+
+    def test_check_in_endpoint_blocks_before_hotel_check_in_time(self):
+        now_local = timezone.localtime()
+        future_candidate = now_local + timedelta(hours=2)
+        check_in_offset = 0
+        future_time = future_candidate.time()
+        if future_candidate.date() != now_local.date():
+            check_in_offset = 1
+            future_time = time(0, 0)
+
+        self.hotel_settings.check_in_time = future_time
+        self.hotel_settings.save(update_fields=["check_in_time"])
+
+        reservation = self._create_reservation(
+            check_in_offset=check_in_offset,
+            check_out_offset=check_in_offset + 1,
+            status=self.reservation_status_pending,
+        )
+        self._create_room_line(reservation=reservation, night_rate=100000)
+
+        confirm = self.client.post(f"/api/reservations/{reservation.id}/confirm/", data={}, format="json")
+        self.assertEqual(confirm.status_code, 200)
+        self.assertFalse(confirm.data["can_check_in"])
+
+        check_in = self.client.post(f"/api/reservations/{reservation.id}/check-in/", data={}, format="json")
+        self.assertEqual(check_in.status_code, 400)
+        self.assertIn("check-in", str(check_in.data.get("detail", "")).lower())
+
+    def test_check_in_endpoint_blocks_when_room_is_not_available(self):
+        reservation = self._create_reservation(status=self.reservation_status_pending)
+        self._create_room_line(reservation=reservation, night_rate=100000)
+
+        confirm = self.client.post(f"/api/reservations/{reservation.id}/confirm/", data={}, format="json")
+        self.assertEqual(confirm.status_code, 200)
+
+        self.room.status = self.room_status_cleaning
+        self.room.save(update_fields=["status"])
+
+        check_in = self.client.post(f"/api/reservations/{reservation.id}/check-in/", data={}, format="json")
+        self.assertEqual(check_in.status_code, 400)
+        self.assertIn("no esta disponible", str(check_in.data.get("detail", "")).lower())
+
     def test_check_out_creates_post_checkout_cleaning_task(self):
         reservation = self._create_reservation(status=self.reservation_status_pending)
         self._create_room_line(reservation=reservation, night_rate=100000)
@@ -939,6 +1060,62 @@ class ReservationApiFlowTestCase(APITestCase):
             CleaningTask.objects.filter(room_id=self.room.id, task_type__code="SALIDA").count(),
             1,
         )
+
+    def test_room_returns_to_available_when_cleaning_task_is_completed(self):
+        reservation = self._create_reservation(status=self.reservation_status_pending)
+        self._create_room_line(reservation=reservation, night_rate=100000)
+
+        confirm = self.client.post(f"/api/reservations/{reservation.id}/confirm/", data={}, format="json")
+        self.assertEqual(confirm.status_code, 200)
+
+        check_in = self.client.post(f"/api/reservations/{reservation.id}/check-in/", data={}, format="json")
+        self.assertEqual(check_in.status_code, 200)
+
+        check_out = self.client.post(f"/api/reservations/{reservation.id}/check-out/", data={}, format="json")
+        self.assertEqual(check_out.status_code, 200)
+
+        self.room.refresh_from_db()
+        self.assertEqual(self.room.status.code, "LIMPIEZA")
+
+        cleaning_task = CleaningTask.objects.filter(
+            room_id=self.room.id,
+            task_type__code="SALIDA",
+            status__code="PENDIENTE",
+        ).first()
+        self.assertIsNotNone(cleaning_task)
+
+        cleaning_task.status = self._md(
+            MasterData.Group.CLEANING_STATUS, "COMPLETADA", "Completada", 3
+        )
+        cleaning_task.save(update_fields=["status"])
+
+        self.room.refresh_from_db()
+        self.assertEqual(self.room.status.code, "DISPONIBLE")
+
+    def test_check_out_marks_default_invoice_as_emitida(self):
+        reservation = self._create_reservation(status=self.reservation_status_pending)
+        self._create_room_line(reservation=reservation, night_rate=100000)
+
+        invoice = (
+            Invoice.objects.filter(reservation=reservation, is_active=True)
+            .order_by("id")
+            .first()
+        )
+        self.assertIsNotNone(invoice)
+        self.assertEqual(invoice.status.code, "BORRADOR")
+
+        confirm = self.client.post(f"/api/reservations/{reservation.id}/confirm/", data={}, format="json")
+        self.assertEqual(confirm.status_code, 200)
+
+        check_in = self.client.post(f"/api/reservations/{reservation.id}/check-in/", data={}, format="json")
+        self.assertEqual(check_in.status_code, 200)
+
+        check_out = self.client.post(f"/api/reservations/{reservation.id}/check-out/", data={}, format="json")
+        self.assertEqual(check_out.status_code, 200)
+        self.assertEqual(check_out.data["status_code"], "FINALIZADA")
+
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status.code, "EMITIDA")
 
     def test_check_in_creates_inventory_snapshot(self):
         reservation = self._create_reservation(status=self.reservation_status_pending)
@@ -1043,12 +1220,12 @@ class ReservationApiFlowTestCase(APITestCase):
         reservation = self._create_reservation(status=self.reservation_status_confirmed)
         self._create_room_line(reservation=reservation, night_rate=100000)
 
-        ReservationDeposit.objects.create(
-            reservation=reservation,
-            deposit_date=timezone.now().date(),
+        invoice = ensure_default_invoice_for_reservation(reservation.id)
+        self.assertIsNotNone(invoice)
+        Payment.objects.create(
+            invoice=invoice,
             amount=150000,
             payment_method=self.payment_method_cash,
-            status=self.deposit_status_validated,
         )
 
         response = self.client.post(

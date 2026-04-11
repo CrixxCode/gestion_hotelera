@@ -44,6 +44,7 @@ IN_HOUSE_RESERVATION_STATUS_CODES = {
 ROOM_STATUS_AVAILABLE = "DISPONIBLE"
 ROOM_STATUS_RESERVED = "RESERVADA"
 ROOM_STATUS_OCCUPIED = "OCUPADA"
+ROOM_STATUS_CLEANING = "LIMPIEZA"
 ROOM_STATUS_BOOKING_BLOCKED_CODES = {
     "MANTENIMIENTO",
     "LIMPIEZA",
@@ -51,6 +52,11 @@ ROOM_STATUS_BOOKING_BLOCKED_CODES = {
 
 CLEANING_TASK_TYPE_CHECK_OUT = "SALIDA"
 CLEANING_STATUS_PENDING = "PENDIENTE"
+CLEANING_STATUS_IN_PROGRESS = "EN_PROCESO"
+CLEANING_ACTIVE_STATUS_CODES = {
+    CLEANING_STATUS_PENDING,
+    CLEANING_STATUS_IN_PROGRESS,
+}
 
 INVENTORY_CHECK_TYPE_CHECK_IN = ReservationInventoryCheck.CheckType.CHECK_IN
 INVENTORY_CHECK_TYPE_CHECK_OUT = ReservationInventoryCheck.CheckType.CHECK_OUT
@@ -108,6 +114,7 @@ PAYMENT_STATUS_LABELS = {
 
 MONEY_ZERO = Decimal("0.00")
 ADULT_AGE_THRESHOLD = 18
+REFUND_IMPACT_STATUS_CODES = {"APROBADO", "PROCESADO"}
 
 
 def _normalize_code(value) -> str:
@@ -494,6 +501,27 @@ def _iter_reservation_deposits(reservation):
     return reservation.deposits.all()
 
 
+def _iter_reservation_invoices(reservation):
+    prefetched = getattr(reservation, "_prefetched_objects_cache", {}).get("invoices")
+    if prefetched is not None:
+        return prefetched
+    return reservation.invoices.all()
+
+
+def _iter_invoice_payments(invoice):
+    prefetched = getattr(invoice, "_prefetched_objects_cache", {}).get("payments")
+    if prefetched is not None:
+        return prefetched
+    return invoice.payments.all()
+
+
+def _iter_payment_refunds(payment):
+    prefetched = getattr(payment, "_prefetched_objects_cache", {}).get("refunds")
+    if prefetched is not None:
+        return prefetched
+    return payment.refunds.all()
+
+
 def _iter_reservation_charges(reservation):
     prefetched = getattr(reservation, "_prefetched_objects_cache", {}).get("charges")
     if prefetched is not None:
@@ -501,7 +529,61 @@ def _iter_reservation_charges(reservation):
     return reservation.charges.all()
 
 
-def get_reservation_financials(reservation, *, exclude_deposit_id: int | None = None) -> dict[str, Decimal]:
+def _build_check_in_datetime(check_in_date, check_in_time) -> datetime:
+    check_in_datetime = datetime.combine(check_in_date, check_in_time or time(0, 0))
+    if timezone.is_naive(check_in_datetime):
+        check_in_datetime = timezone.make_aware(check_in_datetime, timezone.get_current_timezone())
+    return check_in_datetime
+
+
+def _resolve_reservation_check_in_time(reservation) -> time:
+    check_in_times: list[time] = []
+    for reservation_room in _iter_reservation_rooms(reservation):
+        room = getattr(reservation_room, "room", None)
+        hotel_settings = getattr(getattr(room, "floor", None), "hotel_settings", None)
+        room_check_in_time = getattr(hotel_settings, "check_in_time", None)
+        if room_check_in_time is not None:
+            check_in_times.append(room_check_in_time)
+
+    if check_in_times:
+        # In mixed-hotel edge cases, choose the strictest start time.
+        return max(check_in_times)
+    return time(0, 0)
+
+
+def get_reservation_check_in_start_datetime(reservation) -> datetime | None:
+    check_in_date = getattr(reservation, "expected_check_in", None)
+    if not check_in_date:
+        return None
+
+    check_in_time = _resolve_reservation_check_in_time(reservation)
+    return _build_check_in_datetime(check_in_date, check_in_time)
+
+
+def has_reservation_check_in_window_started(reservation) -> bool:
+    if getattr(reservation, "real_check_out", None) is not None:
+        return False
+
+    if getattr(reservation, "real_check_in", None) is not None:
+        return True
+
+    check_in_start_datetime = get_reservation_check_in_start_datetime(reservation)
+    if check_in_start_datetime is None:
+        return False
+
+    return timezone.now() >= check_in_start_datetime
+
+
+def get_reservation_financials(
+    reservation,
+    *,
+    exclude_deposit_id: int | None = None,
+    exclude_payment_id: int | None = None,
+) -> dict[str, Decimal]:
+    if exclude_payment_id is None and exclude_deposit_id is not None:
+        # Compatibilidad hacia atras con llamadas que aun usan exclude_deposit_id.
+        exclude_payment_id = exclude_deposit_id
+
     nights = max(int(getattr(reservation, "total_nights", 0) or 0), 0)
 
     rooms_subtotal = MONEY_ZERO
@@ -532,10 +614,31 @@ def get_reservation_financials(reservation, *, exclude_deposit_id: int | None = 
         total_amount = MONEY_ZERO
 
     total_deposits = MONEY_ZERO
-    for deposit in _iter_reservation_deposits(reservation):
-        if exclude_deposit_id and getattr(deposit, "id", None) == exclude_deposit_id:
+    for invoice in _iter_reservation_invoices(reservation):
+        if not getattr(invoice, "is_active", True):
             continue
-        total_deposits += _to_decimal(getattr(deposit, "amount", 0))
+
+        for payment in _iter_invoice_payments(invoice):
+            if not getattr(payment, "is_active", True):
+                continue
+            if exclude_payment_id and getattr(payment, "id", None) == exclude_payment_id:
+                continue
+
+            total_deposits += _to_decimal(getattr(payment, "amount", 0))
+
+            for refund in _iter_payment_refunds(payment):
+                if not getattr(refund, "is_active", True):
+                    continue
+                refund_status_code = _normalize_code(
+                    getattr(refund, "status_code", None)
+                    or getattr(getattr(refund, "status", None), "code", None)
+                )
+                if refund_status_code not in REFUND_IMPACT_STATUS_CODES:
+                    continue
+                total_deposits -= _to_decimal(getattr(refund, "amount", 0))
+
+    if total_deposits < MONEY_ZERO:
+        total_deposits = MONEY_ZERO
 
     pending_amount = total_amount - total_deposits
     if pending_amount < MONEY_ZERO:
@@ -581,6 +684,8 @@ def get_reservation_flow_permissions(reservation) -> dict[str, bool]:
     status_code = _normalize_code(getattr(reservation, "status_code", None))
     has_check_in = getattr(reservation, "real_check_in", None) is not None
     has_check_out = getattr(reservation, "real_check_out", None) is not None
+    check_in_window_started = has_reservation_check_in_window_started(reservation)
+    rooms_available_for_check_in = _reservation_rooms_available_for_check_in(reservation)
 
     can_confirm = (
         is_reservation_status_pending(status_code)
@@ -589,6 +694,8 @@ def get_reservation_flow_permissions(reservation) -> dict[str, bool]:
     )
     can_check_in = (
         is_reservation_status_confirmed(status_code)
+        and check_in_window_started
+        and rooms_available_for_check_in
         and not has_check_in
         and not has_check_out
     )
@@ -613,6 +720,22 @@ def get_reservation_flow_permissions(reservation) -> dict[str, bool]:
     }
 
 
+def _reservation_rooms_available_for_check_in(reservation) -> bool:
+    room_details = getattr(reservation, "rooms_detail", None)
+    if room_details is None or not hasattr(room_details, "select_related"):
+        return True
+
+    for room_detail in room_details.select_related("room__status").all():
+        room = getattr(room_detail, "room", None)
+        room_status_code = _normalize_code(
+            getattr(getattr(room, "status", None), "code", None)
+        )
+        if room_status_code != ROOM_STATUS_AVAILABLE:
+            return False
+
+    return True
+
+
 def can_add_payment_to_reservation(
     reservation,
     *,
@@ -634,6 +757,7 @@ def validate_reservation_deposit_rules(
     amount,
     *,
     exclude_deposit_id: int | None = None,
+    exclude_payment_id: int | None = None,
 ) -> dict[str, str]:
     errors: dict[str, str] = {}
 
@@ -654,6 +778,7 @@ def validate_reservation_deposit_rules(
     financials = get_reservation_financials(
         reservation,
         exclude_deposit_id=exclude_deposit_id,
+        exclude_payment_id=exclude_payment_id,
     )
 
     if financials["total_amount"] <= MONEY_ZERO:
@@ -700,10 +825,7 @@ def _reservation_check_in_started(reservation, room: Room) -> bool:
 
     hotel_settings = getattr(getattr(room, "floor", None), "hotel_settings", None)
     check_in_time = getattr(hotel_settings, "check_in_time", None) or time(0, 0)
-
-    check_in_datetime = datetime.combine(check_in_date, check_in_time)
-    if timezone.is_naive(check_in_datetime):
-        check_in_datetime = timezone.make_aware(check_in_datetime, timezone.get_current_timezone())
+    check_in_datetime = _build_check_in_datetime(check_in_date, check_in_time)
 
     return timezone.now() >= check_in_datetime
 
@@ -772,8 +894,25 @@ def _get_desired_room_status_code(room: Room) -> str | None:
     return None
 
 
-def sync_room_status_from_reservations(room: Room) -> bool:
+def _room_has_active_cleaning_tasks(room: Room) -> bool:
+    return room.cleaning_tasks.filter(
+        status__code__in=CLEANING_ACTIVE_STATUS_CODES
+    ).exists()
+
+
+def _get_desired_room_status_code_with_operations(room: Room) -> str | None:
     desired_status_code = _get_desired_room_status_code(room)
+    if desired_status_code:
+        return desired_status_code
+
+    if _room_has_active_cleaning_tasks(room):
+        return ROOM_STATUS_CLEANING
+
+    return None
+
+
+def sync_room_status_from_reservations(room: Room) -> bool:
+    desired_status_code = _get_desired_room_status_code_with_operations(room)
     current_status_code = _normalize_code(getattr(room.status, "code", None))
 
     if desired_status_code:
@@ -781,7 +920,7 @@ def sync_room_status_from_reservations(room: Room) -> bool:
             desired_status_code = ROOM_STATUS_OCCUPIED
         return _set_room_status(room, desired_status_code)
 
-    if current_status_code in {ROOM_STATUS_RESERVED, ROOM_STATUS_OCCUPIED}:
+    if current_status_code in {ROOM_STATUS_RESERVED, ROOM_STATUS_OCCUPIED, ROOM_STATUS_CLEANING}:
         return _set_room_status(room, ROOM_STATUS_AVAILABLE)
 
     return False
@@ -900,6 +1039,7 @@ def create_post_checkout_cleaning_tasks(reservation) -> int:
     ]
 
     CleaningTask.objects.bulk_create(tasks_to_create)
+    sync_room_status_for_room_ids(room_ids_to_create)
     return len(tasks_to_create)
 
 
@@ -1264,6 +1404,88 @@ def create_checkout_inventory_comparison(
         "extra_items_count": extra_items_count,
         "lines": response_lines,
     }
+
+
+def _resolve_reservation_stay_nights(*, expected_check_in, expected_check_out) -> int:
+    if not expected_check_in or not expected_check_out:
+        return 0
+
+    try:
+        nights = (expected_check_out - expected_check_in).days
+    except TypeError:
+        return 0
+
+    return max(int(nights), 0)
+
+
+def _to_local_date(value) -> date_cls | None:
+    if value is None:
+        return None
+
+    if isinstance(value, datetime):
+        date_value = value
+        if timezone.is_naive(date_value):
+            date_value = timezone.make_aware(date_value, timezone.get_current_timezone())
+        return timezone.localtime(date_value).date()
+
+    if isinstance(value, date_cls):
+        return value
+
+    return None
+
+
+def sync_client_stay_metrics_by_id(client_id: int | None) -> bool:
+    if not client_id:
+        return False
+
+    client = Client.objects.select_related("client_type").filter(id=client_id).first()
+    if not client:
+        return False
+
+    total_stay_nights = 0
+    last_stay: date_cls | None = None
+
+    completed_stays = client.reservations.filter(
+        real_check_in__isnull=False,
+        real_check_out__isnull=False,
+    ).values_list("expected_check_in", "expected_check_out", "real_check_out")
+
+    for expected_check_in, expected_check_out, real_check_out in completed_stays:
+        total_stay_nights += _resolve_reservation_stay_nights(
+            expected_check_in=expected_check_in,
+            expected_check_out=expected_check_out,
+        )
+
+        stay_date = _to_local_date(real_check_out)
+        if stay_date and (last_stay is None or stay_date > last_stay):
+            last_stay = stay_date
+
+    target_client_type_code = (
+        "VIP"
+        if total_stay_nights >= 30
+        else "FRECUENTE"
+        if total_stay_nights >= 10
+        else "REGULAR"
+    )
+    current_client_type_code = _normalize_code(getattr(client.client_type, "code", None))
+
+    has_metric_changes = (
+        int(client.total_stay_nights or 0) != total_stay_nights
+        or client.last_stay != last_stay
+    )
+    has_type_mismatch = current_client_type_code != target_client_type_code
+
+    if not has_metric_changes and not has_type_mismatch:
+        return False
+
+    client.total_stay_nights = total_stay_nights
+    client.last_stay = last_stay
+    client.save(update_fields=["total_stay_nights", "last_stay", "client_type"])
+    return True
+
+
+def sync_client_stay_metrics_for_reservation(reservation) -> bool:
+    return sync_client_stay_metrics_by_id(getattr(reservation, "client_id", None))
 
 
 def sync_client_status_by_id(client_id: int | None) -> bool:

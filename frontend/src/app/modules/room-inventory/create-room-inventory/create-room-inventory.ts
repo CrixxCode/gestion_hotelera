@@ -1,10 +1,11 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { concatMap, from, toArray } from 'rxjs';
 import { RoomI } from '../../rooms/room-model';
 import { ItemI } from '../../items/item-model';
 import { RoomInventoryService } from '../../../services/room-inventory';
-import { RoomInventoryFormPayload } from '../room-inventory-model';
+import { RoomInventoryFormPayload, RoomInventoryI } from '../room-inventory-model';
 
 @Component({
   selector: 'app-create-room-inventory',
@@ -16,6 +17,7 @@ import { RoomInventoryFormPayload } from '../room-inventory-model';
 export class CreateRoomInventory {
   @Input() rooms: RoomI[] = [];
   @Input() items: ItemI[] = [];
+  @Input() existingAssignments: RoomInventoryI[] = [];
 
   @Output() closed = new EventEmitter<void>();
   @Output() created = new EventEmitter<void>();
@@ -31,11 +33,8 @@ export class CreateRoomInventory {
   ) {
     this.roomInventoryForm = this.fb.group({
       room: [null as number | null, [Validators.required]],
-      item: [null as number | null, [Validators.required]],
-      quantity: [0, [Validators.required, Validators.min(0)]],
-      minimum_quantity: [0, [Validators.required, Validators.min(0)]],
-      notes: ['', [Validators.maxLength(2000)]],
-      is_active: [true]
+      is_active: [true],
+      assignments: this.fb.array([this.buildAssignmentGroup()])
     });
   }
 
@@ -43,16 +42,16 @@ export class CreateRoomInventory {
     return this.roomInventoryForm.get('room');
   }
 
-  get item() {
-    return this.roomInventoryForm.get('item');
+  get is_active() {
+    return this.roomInventoryForm.get('is_active');
   }
 
-  get quantity() {
-    return this.roomInventoryForm.get('quantity');
+  get assignments(): FormArray {
+    return this.roomInventoryForm.get('assignments') as FormArray;
   }
 
-  get minimum_quantity() {
-    return this.roomInventoryForm.get('minimum_quantity');
+  get assignmentControls(): ReturnType<FormBuilder['group']>[] {
+    return this.assignments.controls as ReturnType<FormBuilder['group']>[];
   }
 
   get availableRooms(): RoomI[] {
@@ -67,14 +66,53 @@ export class CreateRoomInventory {
       .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' }));
   }
 
-  get selectedItemLabel(): string {
-    const selectedId = Number(this.item?.value);
+  selectedItemLabel(index: number): string {
+    const selectedId = Number(this.getAssignmentControl(index, 'item')?.value);
     if (!Number.isInteger(selectedId) || selectedId <= 0) return 'Selecciona un item para ver stock disponible.';
 
     const selectedItem = this.items.find((item) => item.id === selectedId);
     if (!selectedItem) return 'Item no encontrado.';
 
     return `Stock general del item: ${this.toNonNegativeInt(selectedItem.stock)} unidades.`;
+  }
+
+  availableItemsForRow(index: number): ItemI[] {
+    const currentId = Number(this.getAssignmentControl(index, 'item')?.value);
+    const selectedRoomId = Number(this.room?.value);
+    const alreadyAssigned = new Set<number>();
+    const selectedByOthers = new Set<number>();
+
+    this.existingAssignments.forEach((record) => {
+      const roomId = Number(record.room);
+      const itemId = Number(record.item);
+      if (roomId === selectedRoomId && Number.isInteger(itemId) && itemId > 0) {
+        alreadyAssigned.add(itemId);
+      }
+    });
+
+    this.assignmentControls.forEach((control, rowIndex) => {
+      if (rowIndex === index) return;
+      const selectedId = Number(control.get('item')?.value);
+      if (Number.isInteger(selectedId) && selectedId > 0) selectedByOthers.add(selectedId);
+    });
+
+    return this.availableItems.filter(
+      (item) => item.id === currentId || (!selectedByOthers.has(item.id) && !alreadyAssigned.has(item.id))
+    );
+  }
+
+  addAssignment(): void {
+    if (this.saving) return;
+    this.assignments.push(this.buildAssignmentGroup());
+  }
+
+  removeAssignment(index: number): void {
+    if (this.saving || this.assignments.length <= 1) return;
+    this.assignments.removeAt(index);
+  }
+
+  trackByIndex(index: number): number {
+    return index;
   }
 
   submit(): void {
@@ -90,23 +128,45 @@ export class CreateRoomInventory {
       return;
     }
 
-    if (this.roomInventoryForm.invalid) {
+    if (this.roomInventoryForm.invalid || !this.assignmentControls.length) {
       this.roomInventoryForm.markAllAsTouched();
       return;
     }
 
-    const raw = this.roomInventoryForm.getRawValue();
-    const payload: RoomInventoryFormPayload = {
-      room: Number(raw.room),
-      item: Number(raw.item),
-      quantity: this.toNonNegativeInt(raw.quantity),
-      minimum_quantity: this.toNonNegativeInt(raw.minimum_quantity),
-      notes: raw.notes?.trim() || '',
-      is_active: !!raw.is_active
-    };
+    const roomId = Number(this.room?.value);
+    const isActive = !!this.is_active?.value;
+    const payloads: RoomInventoryFormPayload[] = this.assignmentControls.map((control) => {
+      const raw = control.getRawValue();
+      return {
+        room: roomId,
+        item: Number(raw.item),
+        quantity: this.toNonNegativeInt(raw.quantity),
+        minimum_quantity: this.toNonNegativeInt(raw.minimum_quantity),
+        notes: raw.notes?.trim() || '',
+        is_active: isActive
+      };
+    });
+
+    const duplicatedItems = this.findDuplicatedItems(payloads);
+    if (duplicatedItems.length) {
+      this.errorMessage = `No puedes repetir items en una misma asignacion: ${duplicatedItems.join(', ')}.`;
+      return;
+    }
+
+    const selectedRoomId = Number(this.room?.value);
+    const alreadyAssignedItems = this.findAlreadyAssignedItems(selectedRoomId, payloads);
+    if (alreadyAssignedItems.length) {
+      this.errorMessage = `Estos items ya existen en la habitacion seleccionada: ${alreadyAssignedItems.join(', ')}.`;
+      return;
+    }
 
     this.saving = true;
-    this.roomInventoryService.createRoomInventory(payload).subscribe({
+    from(payloads)
+      .pipe(
+        concatMap((payload) => this.roomInventoryService.createRoomInventory(payload)),
+        toArray()
+      )
+      .subscribe({
       next: () => {
         this.saving = false;
         this.created.emit();
@@ -116,7 +176,7 @@ export class CreateRoomInventory {
         this.saving = false;
         this.errorMessage = this.extractErrorMessage(error);
       }
-    });
+      });
   }
 
   closeDrawer(): void {
@@ -139,10 +199,76 @@ export class CreateRoomInventory {
     return item.name;
   }
 
+  getAssignmentItemControl(index: number) {
+    return this.getAssignmentControl(index, 'item');
+  }
+
+  getAssignmentQuantityControl(index: number) {
+    return this.getAssignmentControl(index, 'quantity');
+  }
+
+  getAssignmentMinimumControl(index: number) {
+    return this.getAssignmentControl(index, 'minimum_quantity');
+  }
+
+  getAssignmentNotesControl(index: number) {
+    return this.getAssignmentControl(index, 'notes');
+  }
+
   private toNonNegativeInt(value: unknown): number {
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed < 0) return 0;
     return Math.floor(parsed);
+  }
+
+  private buildAssignmentGroup() {
+    return this.fb.group({
+      item: [null as number | null, [Validators.required]],
+      quantity: [0, [Validators.required, Validators.min(0)]],
+      minimum_quantity: [0, [Validators.required, Validators.min(0)]],
+      notes: ['', [Validators.maxLength(2000)]]
+    });
+  }
+
+  private getAssignmentControl(index: number, key: string) {
+    return this.assignmentControls[index]?.get(key) ?? null;
+  }
+
+  private findDuplicatedItems(payloads: RoomInventoryFormPayload[]): string[] {
+    const seen = new Set<number>();
+    const duplicated = new Set<number>();
+
+    for (const payload of payloads) {
+      if (seen.has(payload.item)) duplicated.add(payload.item);
+      seen.add(payload.item);
+    }
+
+    return Array.from(duplicated).map((itemId) => this.getItemNameById(itemId));
+  }
+
+  private findAlreadyAssignedItems(roomId: number, payloads: RoomInventoryFormPayload[]): string[] {
+    const assignedItemIds = new Set<number>();
+    this.existingAssignments.forEach((record) => {
+      const recordRoomId = Number(record.room);
+      const recordItemId = Number(record.item);
+      if (recordRoomId === roomId && Number.isInteger(recordItemId) && recordItemId > 0) {
+        assignedItemIds.add(recordItemId);
+      }
+    });
+
+    const alreadyAssigned = new Set<number>();
+    payloads.forEach((payload) => {
+      if (assignedItemIds.has(payload.item)) {
+        alreadyAssigned.add(payload.item);
+      }
+    });
+
+    return Array.from(alreadyAssigned).map((itemId) => this.getItemNameById(itemId));
+  }
+
+  private getItemNameById(itemId: number): string {
+    const item = this.items.find((entry) => entry.id === itemId);
+    return item?.name?.trim() || `Item #${itemId}`;
   }
 
   private extractErrorMessage(error: unknown): string {

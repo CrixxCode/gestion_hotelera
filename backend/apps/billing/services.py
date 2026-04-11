@@ -6,7 +6,7 @@ from typing import Any
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from apps.billing.models import Charge, Invoice
+from apps.billing.models import Charge, Invoice, PaymentRefund
 from apps.inventory.models import Item
 from apps.master_data.models import MasterData
 from apps.reservations.models import Reservation
@@ -30,6 +30,14 @@ DEFAULT_INVOICE_STATUSES: dict[str, tuple[str, int]] = {
     "EMITIDA": ("Emitida", 2),
     "PAGADA": ("Pagada", 3),
     "ANULADA": ("Anulada", 4),
+}
+
+DEFAULT_PAYMENT_REFUND_STATUSES: dict[str, tuple[str, int]] = {
+    "PENDIENTE": ("Pendiente", 1),
+    "APROBADO": ("Aprobado", 2),
+    "PROCESADO": ("Procesado", 3),
+    "RECHAZADO": ("Rechazado", 4),
+    "ANULADO": ("Anulado", 5),
 }
 
 
@@ -83,6 +91,32 @@ def get_or_create_default_invoice_status(code: str):
         invoice_status.save(update_fields=["is_active"])
 
     return invoice_status
+
+
+def get_or_create_default_payment_refund_status(code: str):
+    normalized_code = str(code or "").strip().upper()
+    if not normalized_code:
+        return None
+
+    name, sort_order = DEFAULT_PAYMENT_REFUND_STATUSES.get(
+        normalized_code,
+        (normalized_code.replace("_", " ").title(), 99),
+    )
+    refund_status, _ = MasterData.objects.get_or_create(
+        group=MasterData.Group.PAYMENT_REFUND_STATUS,
+        code=normalized_code,
+        defaults={
+            "name": name,
+            "sort_order": sort_order,
+            "is_active": True,
+        },
+    )
+
+    if not refund_status.is_active:
+        refund_status.is_active = True
+        refund_status.save(update_fields=["is_active"])
+
+    return refund_status
 
 
 def _to_decimal(value) -> Decimal:
@@ -361,12 +395,27 @@ def ensure_default_invoice_for_reservation(reservation_id: int | None):
 
 
 def _get_invoice_total_paid(invoice: Invoice) -> Decimal:
-    return _to_decimal(
+    total_paid = _to_decimal(
         sum(
             payment.amount
             for payment in invoice.payments.filter(is_active=True).only("amount")
         )
     )
+    total_refunded = _to_decimal(
+        sum(
+            refund.amount
+            for refund in PaymentRefund.objects.filter(
+                payment__invoice=invoice,
+                is_active=True,
+                status__code__in=["APROBADO", "PROCESADO"],
+            ).only("amount")
+        )
+    )
+
+    net_paid = total_paid - total_refunded
+    if net_paid < MONEY_ZERO:
+        return MONEY_ZERO
+    return net_paid
 
 
 def _resolve_invoice_status_code(invoice: Invoice) -> str | None:
@@ -376,10 +425,13 @@ def _resolve_invoice_status_code(invoice: Invoice) -> str | None:
 
     total_paid = _get_invoice_total_paid(invoice)
     total_amount = _to_decimal(invoice.total_amount)
+    has_checkout = getattr(getattr(invoice, "reservation", None), "real_check_out", None) is not None
 
     if total_amount > MONEY_ZERO and total_paid >= total_amount:
         return "PAGADA"
     if total_paid > MONEY_ZERO:
+        return "EMITIDA"
+    if has_checkout:
         return "EMITIDA"
     return "BORRADOR"
 
@@ -415,6 +467,25 @@ def sync_default_invoice_for_reservation(reservation_id: int | None):
         invoice.subtotal = subtotal
         invoice.tax_amount = tax_amount
         invoice.save(update_fields=["subtotal", "tax_amount", "total_amount"])
+
+    sync_invoice_status(invoice)
+    return invoice
+
+
+def issue_default_invoice_for_reservation(reservation_id: int | None):
+    invoice = ensure_default_invoice_for_reservation(reservation_id)
+    if not invoice or not invoice.is_active:
+        return invoice
+
+    current_status_code = str(getattr(getattr(invoice, "status", None), "code", "") or "").strip().upper()
+    if current_status_code == "ANULADA":
+        return invoice
+
+    if current_status_code != "PAGADA":
+        issued_status = get_or_create_default_invoice_status("EMITIDA")
+        if issued_status and invoice.status_id != issued_status.id:
+            invoice.status = issued_status
+            invoice.save(update_fields=["status"])
 
     sync_invoice_status(invoice)
     return invoice

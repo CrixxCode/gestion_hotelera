@@ -20,13 +20,20 @@
 
         <div class="grid two">
           <label>
-            <span>Cliente *</span>
+            <div class="field-head">
+              <span>Cliente *</span>
+              <button type="button" class="field-action" (click)="openCreateClientModal()">
+                <i class="fa-solid fa-user-plus"></i>
+                Agregar cliente
+              </button>
+            </div>
             <select formControlName="client" [class.input-error]="isControlInvalid('client')">
               <option [ngValue]="null">Selecciona cliente</option>
-              <option *ngFor="let client of clients; trackBy: trackById" [ngValue]="client.id">
-                {{ client.full_name || (client.first_name + ' ' + client.last_name) }}
+              <option *ngFor="let client of availableClients; trackBy: trackById" [ngValue]="client.id">
+                {{ getClientOptionLabel(client) }}
               </option>
             </select>
+            <small class="field-help">Si el cliente no existe, registralo desde "Agregar cliente".</small>
             <small class="field-error" *ngIf="getControlError('client') as error">{{ error }}</small>
           </label>
 
@@ -81,6 +88,53 @@
               placeholder="Observaciones para recepcion y operaciones..."
               [class.input-error]="isControlInvalid('notes')"></textarea>
             <small class="field-error" *ngIf="getControlError('notes') as error">{{ error }}</small>
+          </label>
+        </div>
+      </section>
+
+      <section>
+        <h2>Abono inicial (opcional)</h2>
+
+        <div class="grid two">
+          <label>
+            <span>Monto del abono</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              formControlName="initial_deposit_amount"
+              [class.input-error]="isInitialDepositFieldInvalid('amount')"
+              placeholder="0" />
+            <small class="field-help">Si lo dejas en 0, la reserva se crea sin abono inicial.</small>
+            <small class="field-error" *ngIf="getInitialDepositFieldError('amount') as error">{{ error }}</small>
+          </label>
+
+          <label>
+            <span>Metodo de pago <span *ngIf="hasInitialDepositAmount">*</span></span>
+            <select
+              formControlName="initial_deposit_payment_method"
+              [class.input-error]="isInitialDepositFieldInvalid('payment_method')">
+              <option [ngValue]="null">Selecciona metodo</option>
+              <option *ngFor="let method of availablePaymentMethods; trackBy: trackById" [ngValue]="method.id">
+                {{ method.name }}
+              </option>
+            </select>
+            <small class="field-error" *ngIf="getInitialDepositFieldError('payment_method') as error">{{ error }}</small>
+          </label>
+
+          <label>
+            <span>Fecha del abono</span>
+            <input type="date" formControlName="initial_deposit_date" />
+          </label>
+
+          <label>
+            <span>Referencia</span>
+            <input type="text" formControlName="initial_deposit_reference" placeholder="Comprobante o transaccion" />
+          </label>
+
+          <label class="full">
+            <span>Notas del abono</span>
+            <textarea rows="2" formControlName="initial_deposit_notes" placeholder="Detalle opcional del abono..."></textarea>
           </label>
         </div>
       </section>
@@ -276,4 +330,11 @@
       </footer>
     </form>
   </article>
+
+  <app-create-client
+    *ngIf="showCreateClientModal"
+    [asModal]="true"
+    (closed)="closeCreateClientModal()"
+    (created)="onClientCreated($event)">
+  </app-create-client>
 </div>

@@ -179,7 +179,6 @@ export class DetailBill implements OnChanges {
 
   loading = false;
   refreshing = false;
-  issuing = false;
   printing = false;
   removingChargeId: number | null = null;
 
@@ -198,7 +197,6 @@ export class DetailBill implements OnChanges {
   groupedCharges: ChargeGroupI[] = [];
   chargeTypes: MasterDataI[] = [];
   paymentMethods: MasterDataI[] = [];
-  invoiceStatuses: MasterDataI[] = [];
   creditNoteStatuses: MasterDataI[] = [];
   services: ServiceI[] = [];
   packages: PackageI[] = [];
@@ -258,7 +256,9 @@ export class DetailBill implements OnChanges {
   }
 
   get totalPaidAmount(): number {
-    return this.payments.reduce((sum, payment) => sum + this.toNumber(payment.amount), 0);
+    return this.payments
+      .filter((payment) => !!payment.is_active)
+      .reduce((sum, payment) => sum + this.toNumber(payment.amount), 0);
   }
 
   get pendingAmount(): number {
@@ -278,6 +278,18 @@ export class DetailBill implements OnChanges {
 
   get canRegisterPayments(): boolean {
     return !!this.activeInvoice && this.pendingAmount > 0;
+  }
+
+  get isInvoicePaid(): boolean {
+    if (!this.activeInvoice) return false;
+    return this.normalizeCode(this.activeInvoice.status_code) === 'PAGADA';
+  }
+
+  get canManageCharges(): boolean {
+    if (!this.activeInvoice) return false;
+
+    const statusCode = this.normalizeCode(this.activeInvoice.status_code);
+    return statusCode !== 'EMITIDA' && statusCode !== 'PAGADA' && statusCode !== 'ANULADA';
   }
 
   get subtotalAmount(): number {
@@ -333,18 +345,13 @@ export class DetailBill implements OnChanges {
     return `Suite ${roomNumber}`;
   }
 
-  get canIssueInvoice(): boolean {
-    if (!this.activeInvoice) return false;
-    const statusCode = this.normalizeCode(this.activeInvoice.status_code);
-    if (statusCode === 'EMITIDA' || statusCode === 'PAGADA') return false;
-    return true;
-  }
-
   closeDrawer(): void {
     this.closed.emit();
   }
 
   toggleCreateChargeForm(): void {
+    if (!this.showCreateChargeForm && !this.canManageCharges) return;
+
     this.showCreateChargeForm = !this.showCreateChargeForm;
     if (this.showCreateChargeForm) {
       this.showCreatePaymentForm = false;
@@ -397,7 +404,7 @@ export class DetailBill implements OnChanges {
   }
 
   deactivateCharge(charge: ChargeI): void {
-    if (charge.is_automatic) return;
+    if (charge.is_automatic || !this.canManageCharges) return;
 
     openActionConfirmation(this.confirmationService, {
       action: 'remove',
@@ -418,33 +425,6 @@ export class DetailBill implements OnChanges {
             this.errorMessage = this.extractErrorMessage(error, errorActionAlert('remove', 'cargo'));
           }
         });
-      }
-    });
-  }
-
-  issueAndCloseInvoice(): void {
-    if (!this.activeInvoice || this.issuing || !this.canIssueInvoice) return;
-
-    const issuedStatus = this.findInvoiceStatus('EMITIDA');
-    if (!issuedStatus) {
-      this.errorMessage = 'No existe el estado EMITIDA en datos maestros.';
-      return;
-    }
-
-    this.issuing = true;
-    this.errorMessage = '';
-    this.infoMessage = '';
-
-    this.billingService.updateInvoice(this.activeInvoice.id, { status: issuedStatus.id }).subscribe({
-      next: (updatedInvoice) => {
-        this.issuing = false;
-        this.activeInvoice = updatedInvoice;
-        this.invoiceUpdated.emit(updatedInvoice);
-        this.closeDrawer();
-      },
-      error: (error) => {
-        this.issuing = false;
-        this.errorMessage = this.extractErrorMessage(error, 'No fue posible cerrar y facturar.');
       }
     });
   }
@@ -573,9 +553,6 @@ export class DetailBill implements OnChanges {
       chargeTypes: this.masterDataService
         .listMasterData({ group: 'CHARGE_TYPE', is_active: 'true', ordering: 'sort_order,name' })
         .pipe(catchError(() => of([] as MasterDataI[]))),
-      invoiceStatuses: this.masterDataService
-        .listMasterData({ group: 'INVOICE_STATUS', is_active: 'true', ordering: 'sort_order,name' })
-        .pipe(catchError(() => of([] as MasterDataI[]))),
       paymentMethods: this.masterDataService
         .listMasterData({ group: 'PAYMENT_METHOD', is_active: 'true', ordering: 'sort_order,name' })
         .pipe(catchError(() => of([] as MasterDataI[]))),
@@ -583,7 +560,7 @@ export class DetailBill implements OnChanges {
         .listMasterData({ group: 'CREDIT_NOTE_STATUS', is_active: 'true', ordering: 'sort_order,name' })
         .pipe(catchError(() => of([] as MasterDataI[]))),
       payments: this.billingService
-        .listPayments({ invoice: invoiceId, ordering: '-payment_date,-id', is_active: true })
+        .listPayments({ invoice: invoiceId, ordering: '-payment_date,-id', include_inactive: true })
         .pipe(catchError(() => of([] as PaymentI[]))),
       creditNotes: this.billingService
         .listCreditNotes({ invoice: invoiceId, ordering: '-issue_date,-id' })
@@ -600,7 +577,6 @@ export class DetailBill implements OnChanges {
         reservation,
         charges,
         chargeTypes,
-        invoiceStatuses,
         paymentMethods,
         creditNoteStatuses,
         payments,
@@ -612,7 +588,6 @@ export class DetailBill implements OnChanges {
         this.activeInvoice = invoice;
         this.reservation = reservation;
         this.chargeTypes = chargeTypes;
-        this.invoiceStatuses = invoiceStatuses;
         this.paymentMethods = paymentMethods;
         this.creditNoteStatuses = creditNoteStatuses;
         this.services = services.filter((service) => !!service.is_active);
@@ -647,7 +622,7 @@ export class DetailBill implements OnChanges {
         .listPayments({
           invoice: this.activeInvoice.id,
           ordering: '-payment_date,-id',
-          is_active: true
+          include_inactive: true
         })
         .pipe(catchError(() => of([] as PaymentI[]))),
       creditNotes: this.billingService
@@ -684,9 +659,7 @@ export class DetailBill implements OnChanges {
 
   private setPaymentRows(payments: PaymentI[]): void {
     const invoiceId = Number(this.activeInvoice?.id || 0);
-    const filtered = payments
-      .filter((payment) => Number(payment.invoice) === invoiceId)
-      .filter((payment) => !!payment.is_active);
+    const filtered = payments.filter((payment) => Number(payment.invoice) === invoiceId);
 
     this.payments = filtered.sort((a, b) => b.id - a.id);
   }
@@ -782,12 +755,6 @@ export class DetailBill implements OnChanges {
     if (fallbackCode === 'OTRO') return 'Otros cargos';
 
     return fallbackCode;
-  }
-
-  private findInvoiceStatus(code: string): MasterDataI | null {
-    const normalized = this.normalizeCode(code);
-    const match = this.invoiceStatuses.find((status) => this.normalizeCode(status.code) === normalized);
-    return match || null;
   }
 
   private parseDate(value: string | null | undefined): Date | null {

@@ -2,6 +2,12 @@ import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { RoomInventoryI } from '../room-inventory-model';
 
+type RoomInventoryDetailGroup = {
+  key: string;
+  label: string;
+  items: RoomInventoryI[];
+};
+
 @Component({
   selector: 'app-detail-room-inventory',
   standalone: true,
@@ -10,7 +16,7 @@ import { RoomInventoryI } from '../room-inventory-model';
   styleUrls: ['./detail-room-inventory.css']
 })
 export class DetailRoomInventory {
-  @Input() roomInventoryData: RoomInventoryI | null = null;
+  @Input() roomGroup: RoomInventoryDetailGroup | null = null;
 
   @Output() closed = new EventEmitter<void>();
   @Output() statusRequested = new EventEmitter<RoomInventoryI>();
@@ -20,49 +26,95 @@ export class DetailRoomInventory {
     this.closed.emit();
   }
 
-  requestStatusToggle(): void {
-    if (!this.roomInventoryData) return;
-    this.statusRequested.emit(this.roomInventoryData);
+  requestStatusToggle(record: RoomInventoryI): void {
+    this.statusRequested.emit(record);
   }
 
-  requestDelete(): void {
-    if (!this.roomInventoryData) return;
-    this.deleteRequested.emit(this.roomInventoryData);
+  requestDelete(record: RoomInventoryI): void {
+    this.deleteRequested.emit(record);
   }
 
-  getStatusLabel(): string {
-    if (!this.roomInventoryData) return 'Sin estado';
-    return this.roomInventoryData.is_active ? 'Activo' : 'Inactivo';
+  get roomLabel(): string {
+    return this.roomGroup?.label || 'Habitacion no definida';
   }
 
-  getItemLabel(): string {
-    if (!this.roomInventoryData) return 'Item no definido';
-    return this.roomInventoryData.item_name || 'Item no definido';
+  get records(): RoomInventoryI[] {
+    if (!this.roomGroup?.items?.length) return [];
+    return [...this.roomGroup.items].sort((a, b) => this.getItemLabel(a).localeCompare(this.getItemLabel(b), 'es'));
   }
 
-  getRoomLabel(): string {
-    if (!this.roomInventoryData) return 'Habitacion no definida';
-    if (this.roomInventoryData.room_number) return `Habitacion ${this.roomInventoryData.room_number}`;
-    if (typeof this.roomInventoryData.room === 'number' && this.roomInventoryData.room > 0) {
-      return `Habitacion #${this.roomInventoryData.room}`;
-    }
-    return 'Habitacion no definida';
+  get totalItems(): number {
+    return this.records.length;
   }
 
-  getCoverageLabel(): string {
-    const quantity = this.toNonNegativeInt(this.roomInventoryData?.quantity);
-    const minimum = this.toNonNegativeInt(this.roomInventoryData?.minimum_quantity);
-    if (quantity <= 0) return 'Sin stock';
-    if (quantity <= minimum) return 'Bajo minimo';
+  get activeItems(): number {
+    return this.records.filter((record) => record.is_active).length;
+  }
+
+  get lowItems(): number {
+    return this.records.filter((record) => this.resolveCoverageState(record) === 'LOW').length;
+  }
+
+  get outItems(): number {
+    return this.records.filter((record) => this.resolveCoverageState(record) === 'OUT').length;
+  }
+
+  get totalUnits(): number {
+    return this.records.reduce((sum, record) => sum + this.toNonNegativeInt(record.quantity), 0);
+  }
+
+  get latestUpdateLabel(): string {
+    const timestamps = this.records
+      .map((record) => this.toTimestamp(record.updated_at || record.created_at))
+      .filter((timestamp) => Number.isFinite(timestamp)) as number[];
+
+    if (!timestamps.length) return 'Sin registro';
+    return this.formatDate(new Date(Math.max(...timestamps)).toISOString());
+  }
+
+  getCoverageLabel(record: RoomInventoryI): string {
+    const state = this.resolveCoverageState(record);
+    if (state === 'OUT') return 'Sin stock';
+    if (state === 'LOW') return 'Bajo minimo';
     return 'Cobertura normal';
   }
 
-  getCoverageTone(): { bg: string; color: string } {
-    const quantity = this.toNonNegativeInt(this.roomInventoryData?.quantity);
-    const minimum = this.toNonNegativeInt(this.roomInventoryData?.minimum_quantity);
-    if (quantity <= 0) return { bg: '#fef2f2', color: '#b42318' };
-    if (quantity <= minimum) return { bg: '#fff7ed', color: '#c2410c' };
+  getCoverageTone(record: RoomInventoryI): { bg: string; color: string } {
+    const state = this.resolveCoverageState(record);
+    if (state === 'OUT') return { bg: '#fef2f2', color: '#b42318' };
+    if (state === 'LOW') return { bg: '#fff7ed', color: '#c2410c' };
     return { bg: '#dcfce7', color: '#15803d' };
+  }
+
+  getStatusLabel(record: RoomInventoryI): string {
+    return record.is_active ? 'Activo' : 'Inactivo';
+  }
+
+  getStatusTone(record: RoomInventoryI): { bg: string; color: string } {
+    if (record.is_active) return { bg: '#dcfce7', color: '#15803d' };
+    return { bg: '#eef2f7', color: '#64748b' };
+  }
+
+  getItemLabel(record: RoomInventoryI): string {
+    return String(record.item_name || '').trim() || `Item #${record.item || '--'}`;
+  }
+
+  getItemSku(record: RoomInventoryI): string {
+    const sku = String(record.item_sku || '').trim();
+    return sku || 'Sin SKU';
+  }
+
+  getQuantityLabel(record: RoomInventoryI): string {
+    return `${this.toNonNegativeInt(record.quantity)} unid`;
+  }
+
+  getMinimumLabel(record: RoomInventoryI): string {
+    return `${this.toNonNegativeInt(record.minimum_quantity)} unid`;
+  }
+
+  getNotesLabel(record: RoomInventoryI): string {
+    const notes = String(record.notes || '').trim();
+    return notes || 'Sin notas';
   }
 
   formatDate(value: string | undefined): string {
@@ -77,9 +129,27 @@ export class DetailRoomInventory {
     });
   }
 
+  trackByRecord(_: number, record: RoomInventoryI): number {
+    return record.id;
+  }
+
+  private resolveCoverageState(record: RoomInventoryI): 'NORMAL' | 'LOW' | 'OUT' {
+    const quantity = this.toNonNegativeInt(record.quantity);
+    const minimum = this.toNonNegativeInt(record.minimum_quantity);
+    if (quantity <= 0) return 'OUT';
+    if (quantity <= minimum) return 'LOW';
+    return 'NORMAL';
+  }
+
   private toNonNegativeInt(value: unknown): number {
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed < 0) return 0;
     return Math.floor(parsed);
+  }
+
+  private toTimestamp(value: string | undefined): number {
+    if (!value) return Number.NaN;
+    const parsed = new Date(value);
+    return parsed.getTime();
   }
 }

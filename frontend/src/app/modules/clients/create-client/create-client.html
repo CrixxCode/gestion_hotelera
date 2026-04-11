@@ -1,5 +1,5 @@
-﻿<div class="create-overlay" (click)="closeDrawer()">
-  <article class="create-drawer" (click)="$event.stopPropagation()">
+﻿<div class="create-overlay" [class.modal]="asModal" (click)="closeDrawer(); $event.stopPropagation()">
+  <article class="create-drawer" [class.create-modal]="asModal" (click)="$event.stopPropagation()">
     <header class="drawer-head">
       <div>
         <h1>Nuevo cliente</h1>

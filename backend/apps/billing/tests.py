@@ -7,7 +7,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import Resource, Role
-from apps.billing.models import Charge, CreditNote, Invoice, Payment
+from apps.billing.models import Charge, CreditNote, Invoice, Payment, PaymentRefund
 from apps.billing.serializers import ChargeSerializer
 from apps.billing.services import get_or_create_default_charge_type
 from apps.clients.models import Client
@@ -59,6 +59,12 @@ class BillingAutomationTestCase(TestCase):
             "Confirmada",
             1,
         )
+        self.reservation_status_finished = self._md(
+            MasterData.Group.RESERVATION_STATUS,
+            "FINALIZADA",
+            "Finalizada",
+            2,
+        )
         self.reservation_origin = self._md(
             MasterData.Group.RESERVATION_ORIGIN,
             "WEB",
@@ -67,6 +73,24 @@ class BillingAutomationTestCase(TestCase):
         )
         self.service_type = self._md(MasterData.Group.SERVICE_TYPE, "ROOMSERVICE", "Room Service", 1)
         self.payment_method = self._md(MasterData.Group.PAYMENT_METHOD, "EFECTIVO", "Efectivo", 1)
+        self.payment_refund_status_pending = self._md(
+            MasterData.Group.PAYMENT_REFUND_STATUS,
+            "PENDIENTE",
+            "Pendiente",
+            1,
+        )
+        self.payment_refund_status_approved = self._md(
+            MasterData.Group.PAYMENT_REFUND_STATUS,
+            "APROBADO",
+            "Aprobado",
+            2,
+        )
+        self.payment_refund_status_processed = self._md(
+            MasterData.Group.PAYMENT_REFUND_STATUS,
+            "PROCESADO",
+            "Procesado",
+            3,
+        )
 
         self.hotel_settings = HotelSettings.objects.create(hotel_name="Hotel Test")
         self.floor = HotelFloor.objects.create(
@@ -132,6 +156,15 @@ class BillingAutomationTestCase(TestCase):
             invoice=invoice,
             payment_method=self.payment_method,
             amount=Decimal(amount),
+            is_active=True,
+        )
+
+    def _create_refund(self, payment, amount: str, status=None):
+        return PaymentRefund.objects.create(
+            payment=payment,
+            status=status or self.payment_refund_status_pending,
+            amount=Decimal(amount),
+            reason="Prueba de reembolso",
             is_active=True,
         )
 
@@ -225,6 +258,73 @@ class BillingAutomationTestCase(TestCase):
         payment.save(update_fields=["is_active"])
         invoice.refresh_from_db()
         self.assertEqual(invoice.status.code, "BORRADOR")
+
+    def test_keeps_invoice_status_emitida_after_checkout_without_payments(self):
+        invoice = self._get_reservation_invoice()
+        self.assertIsNotNone(invoice)
+        self.assertEqual(invoice.status.code, "BORRADOR")
+
+        now = timezone.now()
+        self.reservation.status = self.reservation_status_finished
+        self.reservation.real_check_in = now - timedelta(days=1)
+        self.reservation.real_check_out = now
+        self.reservation.save(update_fields=["status", "real_check_in", "real_check_out"])
+
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status.code, "EMITIDA")
+
+    def test_processed_refund_reopens_pending_balance(self):
+        invoice = self._get_reservation_invoice()
+        self.assertIsNotNone(invoice)
+
+        payment = self._create_payment(invoice, "25000.00")
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status.code, "PAGADA")
+
+        self._create_refund(payment, "5000.00", status=self.payment_refund_status_processed)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status.code, "EMITIDA")
+
+        self._create_payment(invoice, "5000.00")
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status.code, "PAGADA")
+
+    def test_pending_refund_does_not_impact_invoice_until_admin_approval(self):
+        invoice = self._get_reservation_invoice()
+        self.assertIsNotNone(invoice)
+
+        payment = self._create_payment(invoice, "25000.00")
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status.code, "PAGADA")
+
+        self._create_refund(payment, "5000.00", status=self.payment_refund_status_pending)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status.code, "PAGADA")
+
+        refund = PaymentRefund.objects.filter(payment=payment).order_by("-id").first()
+        self.assertIsNotNone(refund)
+        refund.status = self.payment_refund_status_approved
+        refund.save(update_fields=["status"])
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status.code, "EMITIDA")
+
+    def test_charge_serializer_rejects_new_charge_for_checked_out_reservation(self):
+        now = timezone.now()
+        self.reservation.status = self.reservation_status_finished
+        self.reservation.real_check_in = now - timedelta(days=1)
+        self.reservation.real_check_out = now
+        self.reservation.save(update_fields=["status", "real_check_in", "real_check_out"])
+
+        serializer = ChargeSerializer(
+            data={
+                "reservation": self.reservation.id,
+                "description": "Cargo tardio",
+                "quantity": 1,
+                "unit_price": "10000.00",
+            }
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("reservation", serializer.errors)
 
     def test_creates_and_updates_automatic_room_and_package_charges(self):
         reservation_room = ReservationRoom.objects.create(
@@ -357,6 +457,12 @@ class BillingApiFilterAndPaginationTestCase(TestCase):
             "Emitida",
             1,
         )
+        self.payment_refund_status_pending = self._md(
+            MasterData.Group.PAYMENT_REFUND_STATUS,
+            "PENDIENTE",
+            "Pendiente",
+            1,
+        )
 
         role = Role.objects.create(name="Billing Reader", slug="billing-reader")
         read_keys = ["charges.read", "invoices.read", "payments.read", "credit-notes.read"]
@@ -465,6 +571,20 @@ class BillingApiFilterAndPaginationTestCase(TestCase):
             amount=Decimal("15.00"),
             is_active=False,
         )
+        self.payment_refund_one = PaymentRefund.objects.create(
+            payment=self.payment_one,
+            status=self.payment_refund_status_pending,
+            amount=Decimal("5.00"),
+            reason="Reembolso activo",
+            is_active=True,
+        )
+        self.payment_refund_two = PaymentRefund.objects.create(
+            payment=self.payment_two,
+            status=self.payment_refund_status_pending,
+            amount=Decimal("2.00"),
+            reason="Reembolso inactivo",
+            is_active=False,
+        )
 
         self.credit_note_one = CreditNote.objects.create(
             invoice=self.invoice_one,
@@ -567,6 +687,129 @@ class BillingApiFilterAndPaginationTestCase(TestCase):
         credit_note_ids = {item["id"] for item in payload}
         self.assertIn(self.credit_note_one.id, credit_note_ids)
         self.assertNotIn(self.credit_note_two.id, credit_note_ids)
+
+    def test_payment_refund_filters_by_invoice_and_is_active(self):
+        response = self.client_api.get(
+            "/api/payment-refunds/",
+            {
+                "invoice": self.invoice_one.id,
+                "is_active": "true",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+
+        payload = self._as_list(response)
+        refund_ids = {item["id"] for item in payload}
+        self.assertIn(self.payment_refund_one.id, refund_ids)
+        self.assertNotIn(self.payment_refund_two.id, refund_ids)
+
+    def test_any_read_role_can_register_refund_and_it_starts_pending(self):
+        response = self.client_api.post(
+            "/api/payment-refunds/",
+            {
+                "payment": self.payment_one.id,
+                "amount": "3.00",
+                "reason": "Solicitud operativa",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(str(response.data.get("status_code", "")).upper(), "PENDIENTE")
+
+    def test_non_admin_cannot_approve_refund_even_with_write_scope(self):
+        writer_role = Role.objects.get_or_create(
+            slug="billing-writer",
+            defaults={"name": "Billing Writer"},
+        )[0]
+        write_resources = [
+            Resource.objects.get_or_create(
+                key="payments.write",
+                defaults={"name": "Write payments", "link_backend": "/api/payments/"},
+            )[0],
+            Resource.objects.get_or_create(
+                key="payment-refunds.read",
+                defaults={
+                    "name": "Read payment refunds",
+                    "link_backend": "/api/payment-refunds/",
+                },
+            )[0],
+        ]
+        writer_role.resources.add(*write_resources)
+
+        writer_user = User.objects.create_user(
+            username="billing_writer",
+            email="billing_writer@example.com",
+            password="pass12345",
+        )
+        writer_user.roles.add(writer_role)
+
+        writer_client = APIClient()
+        writer_client.force_login(writer_user)
+
+        response = writer_client.post(f"/api/payment-refunds/{self.payment_refund_one.id}/approve/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_non_admin_cannot_inactivate_payment_even_with_write_scope(self):
+        writer_role = Role.objects.get_or_create(
+            slug="payments-writer",
+            defaults={"name": "Payments Writer"},
+        )[0]
+        write_resource = Resource.objects.get_or_create(
+            key="payments.write",
+            defaults={"name": "Write payments", "link_backend": "/api/payments/"},
+        )[0]
+        writer_role.resources.add(write_resource)
+
+        writer_user = User.objects.create_user(
+            username="payments_writer",
+            email="payments_writer@example.com",
+            password="pass12345",
+        )
+        writer_user.roles.add(writer_role)
+
+        writer_client = APIClient()
+        writer_client.force_login(writer_user)
+
+        response = writer_client.patch(
+            f"/api/payments/{self.payment_one.id}/",
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+
+        self.payment_one.refresh_from_db()
+        self.assertTrue(self.payment_one.is_active)
+
+    def test_admin_can_inactivate_payment_with_write_scope(self):
+        admin_role = Role.objects.get_or_create(
+            slug="admin",
+            defaults={"name": "Administrador"},
+        )[0]
+        write_resource = Resource.objects.get_or_create(
+            key="payments.write",
+            defaults={"name": "Write payments", "link_backend": "/api/payments/"},
+        )[0]
+        admin_role.resources.add(write_resource)
+
+        admin_user = User.objects.create_user(
+            username="payments_admin",
+            email="payments_admin@example.com",
+            password="pass12345",
+        )
+        admin_user.roles.add(admin_role)
+
+        admin_client = APIClient()
+        admin_client.force_login(admin_user)
+
+        response = admin_client.patch(
+            f"/api/payments/{self.payment_one.id}/",
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+
+        self.payment_one.refresh_from_db()
+        self.assertFalse(self.payment_one.is_active)
 
     def test_invoice_pdf_endpoint_returns_pdf_document(self):
         response = self.client_api.get(f"/api/invoices/{self.invoice_one.id}/pdf/")

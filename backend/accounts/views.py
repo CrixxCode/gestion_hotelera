@@ -6,6 +6,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 import logging
 logger = logging.getLogger(__name__)
 from django.utils.decorators import method_decorator
+from django.utils import timezone
 
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
@@ -16,10 +17,11 @@ from rest_framework.throttling import ScopedRateThrottle
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
 
-from .models import Role, Resource, UserRole, RoleResource
+from .models import Role, Resource, UserRole, RoleResource, NotificationReadState
 from .serializers import (
     RegisterSerializer, UserSerializer, RoleSerializer, ResourceSerializer,
-    UserMiniSerializer, PasswordChangeSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer
+    UserMiniSerializer, PasswordChangeSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer,
+    NotificationKeysSerializer
 )
 from django.db import models
 
@@ -444,5 +446,71 @@ class ProfileUpdateView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+
+class NotificationReadStateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        keys = list(
+            NotificationReadState.objects.filter(user=request.user)
+            .order_by("-updated_at")
+            .values_list("notification_key", flat=True)
+        )
+        return Response({"read_keys": keys}, status=status.HTTP_200_OK)
+
+
+class NotificationMarkReadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = NotificationKeysSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        keys = serializer.validated_data["keys"]
+
+        existing_keys = set(
+            NotificationReadState.objects.filter(
+                user=request.user,
+                notification_key__in=keys,
+            ).values_list("notification_key", flat=True)
+        )
+        now = timezone.now()
+
+        pending = [
+            NotificationReadState(
+                user=request.user,
+                notification_key=key,
+                read_at=now,
+            )
+            for key in keys
+            if key not in existing_keys
+        ]
+        if pending:
+            NotificationReadState.objects.bulk_create(pending, ignore_conflicts=True)
+
+        NotificationReadState.objects.filter(
+            user=request.user,
+            notification_key__in=keys,
+        ).update(read_at=now, updated_at=now)
+
+        return Response({"updated": len(keys)}, status=status.HTTP_200_OK)
+
+
+class NotificationMarkUnreadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = NotificationKeysSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        keys = serializer.validated_data["keys"]
+
+        queryset = NotificationReadState.objects.filter(
+            user=request.user,
+            notification_key__in=keys,
+        )
+        removed = queryset.count()
+        queryset.delete()
+
+        return Response({"removed": removed}, status=status.HTTP_200_OK)
     
 

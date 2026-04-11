@@ -37,12 +37,17 @@
       </div>
 
       <div class="category-actions">
-        <button type="button" class="btn btn-dark" (click)="toggleCreateChargeForm()">
+        <button
+          *ngIf="canManageCharges"
+          type="button"
+          class="btn btn-dark"
+          (click)="toggleCreateChargeForm()">
           <i class="fa-solid fa-plus"></i>
           {{ showCreateChargeForm ? 'Ocultar cargo' : 'Agregar cargo' }}
         </button>
 
         <button
+          *ngIf="!isInvoicePaid"
           type="button"
           class="btn btn-success"
           (click)="toggleCreatePaymentForm()"
@@ -86,7 +91,7 @@
       </app-create-bill>
 
       <app-create-payment
-        *ngIf="!loading && showCreatePaymentForm"
+        *ngIf="!loading && showCreatePaymentForm && !isInvoicePaid"
         [invoiceId]="activeInvoice?.id || null"
         [pendingAmount]="pendingAmount"
         [paymentMethods]="paymentMethods"
@@ -96,7 +101,7 @@
 
       <section class="empty-state" *ngIf="!loading && groupedCharges.length === 0">
         <p>Esta factura aun no tiene cargos activos.</p>
-        <button type="button" class="btn btn-dark" (click)="toggleCreateChargeForm()">
+        <button *ngIf="canManageCharges" type="button" class="btn btn-dark" (click)="toggleCreateChargeForm()">
           <i class="fa-solid fa-plus"></i>
           Registrar primer cargo
         </button>
@@ -136,7 +141,7 @@
                 <small>{{ charge.quantity }} x {{ formatCurrency(+charge.unit_price) }}</small>
                 <strong>{{ formatCurrency(+charge.total_amount) }}</strong>
                 <button
-                  *ngIf="!charge.is_automatic"
+                  *ngIf="!charge.is_automatic && canManageCharges"
                   type="button"
                   class="line-remove"
                   title="Retirar cargo"
@@ -168,6 +173,7 @@
         <section class="payments-empty" *ngIf="payments.length === 0">
           <p>Aun no hay pagos registrados en esta factura.</p>
           <button
+            *ngIf="!isInvoicePaid"
             type="button"
             class="btn btn-success"
             (click)="toggleCreatePaymentForm()"
@@ -178,7 +184,7 @@
         </section>
 
         <div class="payments-list" *ngIf="payments.length > 0">
-          <article class="payment-line" *ngFor="let payment of payments; trackBy: trackByPayment">
+          <article class="payment-line" [class.inactive]="!payment.is_active" *ngFor="let payment of payments; trackBy: trackByPayment">
             <div class="payment-left">
               <span
                 class="payment-icon"
@@ -192,6 +198,9 @@
               <div class="payment-meta">
                 <div class="payment-top">
                   <strong>{{ getPaymentMethodLabel(payment) }}</strong>
+                  <span class="payment-chip payment-chip-activity" [class.inactive]="!payment.is_active">
+                    {{ payment.is_active ? 'Activo' : 'Inactivo' }}
+                  </span>
                   <span
                     class="payment-chip"
                     [ngStyle]="{
@@ -237,13 +246,6 @@
 
       <div class="footer-actions">
         <button type="button" class="btn btn-light" (click)="closeDrawer()">Cerrar</button>
-        <button
-          type="button"
-          class="btn btn-dark"
-          [disabled]="issuing || !canIssueInvoice"
-          (click)="issueAndCloseInvoice()">
-          {{ issuing ? 'Procesando...' : 'Cerrar y Facturar' }}
-        </button>
       </div>
     </footer>
   </article>

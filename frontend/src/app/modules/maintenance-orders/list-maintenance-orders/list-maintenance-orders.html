@@ -194,7 +194,10 @@
 
               <div class="progress-row">
                 <strong>{{ getStatusLabel(order) }}</strong>
-                <small>Reportada: {{ formatDateTime(order.reported_at) }}</small>
+                <div class="progress-dates">
+                  <small>Estimada: {{ formatDateTime(order.estimated_completed_at) }}</small>
+                  <small>Real: {{ formatDateTime(order.completed_at) }}</small>
+                </div>
               </div>
 
               <div class="card-foot">
@@ -242,7 +245,8 @@
                 <th>Prioridad</th>
                 <th>Estado</th>
                 <th>Reportada</th>
-                <th>Finalizada</th>
+                <th>Finalizacion estimada</th>
+                <th>Finalizacion real</th>
                 <th>Descripcion</th>
                 <th>Acciones</th>
               </tr>
@@ -275,6 +279,7 @@
                   </span>
                 </td>
                 <td>{{ formatDateTime(order.reported_at) }}</td>
+                <td>{{ formatDateTime(order.estimated_completed_at) }}</td>
                 <td>{{ formatDateTime(order.completed_at) }}</td>
                 <td class="description-cell">{{ getDescriptionLabel(order) }}</td>
                 <td>
@@ -318,4 +323,38 @@
     (statusRequested)="advanceOrderStatus($event)"
     (deleteRequested)="confirmDelete($event)">
   </app-detail-maintenance-order>
+
+  <div
+    class="completion-comment-overlay"
+    *ngIf="showCompletionCommentModal"
+    (click)="closeCompletionCommentModal()">
+    <article class="completion-comment-modal" (click)="$event.stopPropagation()">
+      <header class="completion-comment-head">
+        <h3>Completar mantenimiento</h3>
+        <p>{{ getCompletionOrderCode() }} - {{ getCompletionRoomLabel() }}</p>
+      </header>
+
+      <div class="completion-comment-body">
+        <label for="maintenance-completion-comment-textarea">Comentario de cierre</label>
+        <textarea
+          id="maintenance-completion-comment-textarea"
+          rows="4"
+          maxlength="2000"
+          [(ngModel)]="completionComment"
+          [disabled]="statusUpdateLoading"
+          placeholder="Opcional: detalle final del mantenimiento realizado"></textarea>
+        <small>Se agregara a la descripcion tecnica de la orden.</small>
+        <p class="error" *ngIf="completionCommentError">{{ completionCommentError }}</p>
+      </div>
+
+      <footer class="completion-comment-footer">
+        <button type="button" class="btn btn-light" (click)="closeCompletionCommentModal()" [disabled]="statusUpdateLoading">
+          Cancelar
+        </button>
+        <button type="button" class="btn btn-dark" (click)="submitCompletionWithComment()" [disabled]="statusUpdateLoading">
+          {{ statusUpdateLoading ? 'Guardando...' : 'Completar' }}
+        </button>
+      </footer>
+    </article>
+  </div>
 </div>

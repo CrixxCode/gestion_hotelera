@@ -1,9 +1,16 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
 import { ReservationService } from '../../../services/reservation';
+import { BillingService } from '../../../services/billing';
+import { RoomInventoryService } from '../../../services/room-inventory';
+import { RoomInventoryI } from '../../room-inventory/room-inventory-model';
+import { InvoiceI } from '../../billing/billing-model';
 import {
+  ReservationCheckOutPayloadI,
+  ReservationCheckoutInventoryReviewLinePayloadI,
   ReservationDetailI,
   ReservationGuestI,
   ReservationPolicyI,
@@ -11,10 +18,21 @@ import {
   ReservationVisualStatus
 } from '../reservation-model';
 
+type CheckoutInventoryLine = {
+  key: string;
+  roomId: number;
+  roomLabel: string;
+  itemId: number;
+  itemLabel: string;
+  expectedQuantity: number;
+  reviewedQuantity: number;
+  notes: string;
+};
+
 @Component({
   selector: 'app-detail-reservation',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   templateUrl: './detail-reservation.html',
   styleUrls: ['./detail-reservation.css']
 })
@@ -32,11 +50,21 @@ export class DetailReservation implements OnChanges {
   loading = false;
   errorMessage = '';
   actionLoading = false;
-  paymentLoading = false;
   showGuestsModal = false;
   showPoliciesModal = false;
+  showCheckoutInventoryModal = false;
+  invoicePaymentStatusLabel = '';
+  invoicePaymentStatusCode = '';
+  invoiceStatusLoading = false;
+  checkoutInventoryLoading = false;
+  checkoutInventoryError = '';
+  checkoutInventoryLines: CheckoutInventoryLine[] = [];
 
-  constructor(private reservationService: ReservationService) {}
+  constructor(
+    private reservationService: ReservationService,
+    private billingService: BillingService,
+    private roomInventoryService: RoomInventoryService
+  ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['preloaded'] && this.preloaded && this.preloaded.id === this.reservationId) {
@@ -44,12 +72,16 @@ export class DetailReservation implements OnChanges {
       this.errorMessage = '';
       this.showGuestsModal = false;
       this.showPoliciesModal = false;
+      this.resetCheckoutInventoryModalState();
+      this.loadInvoicePaymentStatus(this.preloaded.id);
       return;
     }
 
     if (changes['reservationId']) {
       this.showGuestsModal = false;
       this.showPoliciesModal = false;
+      this.resetCheckoutInventoryModalState();
+      this.clearInvoicePaymentStatus();
       this.loadReservation();
     }
   }
@@ -170,6 +202,10 @@ export class DetailReservation implements OnChanges {
     return Math.max(0, this.policies.length - this.policySummaryRows.length);
   }
 
+  get hasCheckoutInventoryLines(): boolean {
+    return this.checkoutInventoryLines.length > 0;
+  }
+
   get stayCheckoutLabel(): string {
     if (!this.reservation?.expected_check_out) return 'Sin registro';
     if (this.visualStatus === 'POR_SALIR_HOY') return 'Hoy';
@@ -212,23 +248,14 @@ export class DetailReservation implements OnChanges {
   }
 
   get showEditAction(): boolean {
-    return !['CANCELADA', 'FINALIZADA'].includes(this.visualStatus);
+    if (!this.reservation) return false;
+    if (this.reservation.real_check_in) return false;
+    return !['EN_CURSO', 'POR_SALIR_HOY', 'CANCELADA', 'FINALIZADA'].includes(this.visualStatus);
   }
 
   get showCancelAction(): boolean {
     if (this.visualStatus === 'PENDIENTE') return false;
     return this.canCancel;
-  }
-
-  get showAddPaymentAction(): boolean {
-    if (!this.reservation) return false;
-
-    if (typeof this.reservation.can_add_payment === 'boolean') {
-      return this.reservation.can_add_payment;
-    }
-
-    if (this.totalAmount <= 0) return false;
-    return this.pendingAmount > 0;
   }
 
   get totalNights(): number {
@@ -314,39 +341,36 @@ export class DetailReservation implements OnChanges {
   }
 
   get paymentLabel(): string {
-    if (!this.reservation) return 'Sin datos';
+    if (this.invoiceStatusLoading) return 'Consultando...';
 
-    const backendLabel = String(this.reservation.payment_status_label || '').trim();
-    if (backendLabel) return backendLabel;
+    const invoiceLabel = this.toTrimmedString(this.invoicePaymentStatusLabel);
+    if (invoiceLabel) return invoiceLabel;
 
-    if (this.totalAmount <= 0 && this.totalDeposits <= 0) {
-      return 'Sin cargos';
-    }
-
-    if (this.pendingAmount <= 0 && this.totalAmount > 0) {
-      return 'Pagado';
-    }
-
-    if (this.totalDeposits > 0 && this.pendingAmount > 0) {
-      return 'Parcial';
-    }
-
-    return 'Pendiente';
+    return 'Sin factura';
   }
 
   get paymentTone(): { bg: string; color: string } {
-    const label = this.paymentLabel;
+    const invoiceCode = this.normalizeCode(this.invoicePaymentStatusCode);
+    const invoiceLabel = this.normalizeCode(this.paymentLabel);
 
-    if (label === 'Pagado') {
+    if (invoiceCode === 'PAGADA' || invoiceCode === 'PAGADO' || invoiceLabel === 'PAGADA' || invoiceLabel === 'PAGADO') {
       return { bg: '#dcfce7', color: '#15803d' };
     }
 
-    if (label === 'Parcial') {
+    if (invoiceCode === 'PARCIAL' || invoiceLabel === 'PARCIAL') {
       return { bg: '#dbeafe', color: '#1d4ed8' };
     }
 
-    if (label === 'Pendiente') {
+    if (invoiceCode === 'EMITIDA' || invoiceCode === 'PENDIENTE' || invoiceLabel === 'EMITIDA' || invoiceLabel === 'PENDIENTE') {
       return { bg: '#fef3c7', color: '#b45309' };
+    }
+
+    if (invoiceCode === 'ANULADA' || invoiceLabel === 'ANULADA') {
+      return { bg: '#fee2e2', color: '#b91c1c' };
+    }
+
+    if (invoiceCode === 'BORRADOR' || invoiceLabel === 'BORRADOR') {
+      return { bg: '#e0e7ff', color: '#3730a3' };
     }
 
     return { bg: '#e2e8f0', color: '#475569' };
@@ -420,6 +444,7 @@ export class DetailReservation implements OnChanges {
   closeDrawer(): void {
     this.showGuestsModal = false;
     this.showPoliciesModal = false;
+    this.resetCheckoutInventoryModalState();
     this.closed.emit();
   }
 
@@ -446,79 +471,6 @@ export class DetailReservation implements OnChanges {
     this.editRequested.emit(this.reservation);
   }
 
-  addPayment(): void {
-    if (!this.reservation || this.paymentLoading || !this.showAddPaymentAction) return;
-
-    const paymentMethodId = this.getDefaultPaymentMethodId();
-    if (!paymentMethodId) {
-      this.errorMessage = 'No hay metodos de pago activos configurados.';
-      return;
-    }
-
-    const depositStatusId = this.getDefaultDepositStatusId();
-    if (!depositStatusId) {
-      this.errorMessage = 'No hay estados de deposito activos configurados.';
-      return;
-    }
-
-    const pendingAmount = this.pendingAmount;
-    const promptValue = window.prompt(
-      `Saldo pendiente: ${this.formatCurrency(pendingAmount)}. Ingresa el monto del pago:`,
-      pendingAmount.toFixed(0)
-    );
-
-    if (promptValue === null) return;
-
-    const normalizedAmount = Number(String(promptValue).replace(',', '.').trim());
-    if (Number.isNaN(normalizedAmount) || normalizedAmount <= 0) {
-      this.errorMessage = 'El monto del pago debe ser un numero mayor a cero.';
-      return;
-    }
-
-    if (normalizedAmount > pendingAmount) {
-      this.errorMessage = 'El monto no puede ser mayor al saldo pendiente.';
-      return;
-    }
-
-    this.paymentLoading = true;
-    this.errorMessage = '';
-
-    this.reservationService
-      .createReservationDeposit({
-        reservation: this.reservation.id,
-        deposit_date: this.toIsoDate(new Date()),
-        amount: normalizedAmount,
-        payment_method: paymentMethodId,
-        reference: null,
-        status: depositStatusId,
-        notes: 'Pago registrado desde detalle de la reserva.'
-      })
-      .subscribe({
-        next: () => {
-          if (!this.reservation) {
-            this.paymentLoading = false;
-            return;
-          }
-
-          this.reservationService.getReservationById(this.reservation.id).subscribe({
-            next: (detail) => {
-              this.paymentLoading = false;
-              this.reservation = detail;
-              this.flowChanged.emit(detail);
-            },
-            error: () => {
-              this.paymentLoading = false;
-              this.errorMessage = 'El pago se registro, pero no fue posible actualizar el detalle.';
-            }
-          });
-        },
-        error: () => {
-          this.paymentLoading = false;
-          this.errorMessage = 'No se pudo registrar el pago para esta reserva.';
-        }
-      });
-  }
-
   confirmReservation(): void {
     if (!this.reservation || this.actionLoading || !this.canConfirm) return;
     this.runFlowAction(this.reservationService.confirmReservation(this.reservation.id));
@@ -531,7 +483,7 @@ export class DetailReservation implements OnChanges {
 
   performCheckOut(): void {
     if (!this.reservation || this.actionLoading || !this.canCheckOut) return;
-    this.runFlowAction(this.reservationService.checkOutReservation(this.reservation.id));
+    this.openCheckoutInventoryModal();
   }
 
   cancelReservation(): void {
@@ -556,6 +508,58 @@ export class DetailReservation implements OnChanges {
       default:
         break;
     }
+  }
+
+  openCheckoutInventoryModal(): void {
+    if (!this.reservation || this.actionLoading || !this.canCheckOut) return;
+
+    this.showCheckoutInventoryModal = true;
+    this.checkoutInventoryError = '';
+    this.checkoutInventoryLines = [];
+    this.loadCheckoutInventoryLines();
+  }
+
+  closeCheckoutInventoryModal(): void {
+    if (this.actionLoading) return;
+    this.resetCheckoutInventoryModalState();
+  }
+
+  submitCheckOutWithInventoryReview(): void {
+    if (!this.reservation || this.actionLoading || this.checkoutInventoryLoading) return;
+
+    const payload = this.buildCheckOutPayload();
+    this.runFlowAction(
+      this.reservationService.checkOutReservation(this.reservation.id, payload),
+      () => this.resetCheckoutInventoryModalState(),
+      (message) => {
+        this.checkoutInventoryError = message;
+      }
+    );
+  }
+
+  updateCheckoutInventoryQuantity(line: CheckoutInventoryLine, value: unknown): void {
+    line.reviewedQuantity = this.toNonNegativeInt(value);
+  }
+
+  updateCheckoutInventoryNotes(line: CheckoutInventoryLine, value: unknown): void {
+    line.notes = String(value || '');
+  }
+
+  getCheckoutDifference(line: CheckoutInventoryLine): number {
+    return this.toNonNegativeInt(line.reviewedQuantity) - this.toNonNegativeInt(line.expectedQuantity);
+  }
+
+  getCheckoutDifferenceClass(line: CheckoutInventoryLine): string {
+    const diff = this.getCheckoutDifference(line);
+    if (diff === 0) return 'is-balanced';
+    return diff < 0 ? 'is-missing' : 'is-extra';
+  }
+
+  getCheckoutDifferenceLabel(line: CheckoutInventoryLine): string {
+    const diff = this.getCheckoutDifference(line);
+    if (diff === 0) return 'Sin diferencia';
+    if (diff < 0) return `Faltan ${Math.abs(diff)}`;
+    return `Sobrante ${diff}`;
   }
 
   formatCurrency(value: number): string {
@@ -635,15 +639,179 @@ export class DetailReservation implements OnChanges {
     return item.id;
   }
 
+  trackByCheckoutInventoryLine(_: number, line: CheckoutInventoryLine): string {
+    return line.key;
+  }
+
+  private loadCheckoutInventoryLines(): void {
+    if (!this.reservation) {
+      this.checkoutInventoryLoading = false;
+      return;
+    }
+
+    const roomLabelById = this.buildReservationRoomLabelMap(this.reservation);
+    const reservationRoomIds = new Set(roomLabelById.keys());
+    if (reservationRoomIds.size === 0) {
+      this.checkoutInventoryLoading = false;
+      this.checkoutInventoryLines = [];
+      return;
+    }
+
+    this.checkoutInventoryLoading = true;
+    this.checkoutInventoryError = '';
+
+    this.roomInventoryService.listRoomInventory().subscribe({
+      next: (records) => {
+        const lineByKey = new Map<string, CheckoutInventoryLine>();
+
+        records.forEach((record) => {
+          if (!record.is_active) return;
+
+          const roomId = Number(record.room);
+          const itemId = Number(record.item);
+          if (!Number.isFinite(roomId) || roomId <= 0 || !Number.isFinite(itemId) || itemId <= 0) return;
+          if (!reservationRoomIds.has(roomId)) return;
+
+          const key = `${roomId}:${itemId}`;
+          const roomLabel = roomLabelById.get(roomId) || `Hab. ${roomId}`;
+          const itemLabel = this.resolveItemLabel(record, itemId);
+          const quantity = this.toNonNegativeInt(record.quantity);
+          const notes = this.toTrimmedString(record.notes);
+
+          const existing = lineByKey.get(key);
+          if (existing) {
+            existing.expectedQuantity += quantity;
+            existing.reviewedQuantity += quantity;
+            if (!existing.notes && notes) existing.notes = notes;
+            return;
+          }
+
+          lineByKey.set(key, {
+            key,
+            roomId,
+            roomLabel,
+            itemId,
+            itemLabel,
+            expectedQuantity: quantity,
+            reviewedQuantity: quantity,
+            notes
+          });
+        });
+
+        this.checkoutInventoryLines = Array.from(lineByKey.values()).sort((a, b) => {
+          const roomCompare = a.roomLabel.localeCompare(b.roomLabel, 'es-CO', {
+            numeric: true,
+            sensitivity: 'base'
+          });
+          if (roomCompare !== 0) return roomCompare;
+          return a.itemLabel.localeCompare(b.itemLabel, 'es-CO', {
+            numeric: true,
+            sensitivity: 'base'
+          });
+        });
+
+        this.checkoutInventoryLoading = false;
+      },
+      error: () => {
+        this.checkoutInventoryLoading = false;
+        this.checkoutInventoryError =
+          'No fue posible cargar el inventario de las habitaciones. Puedes continuar sin diligenciar esta revision.';
+      }
+    });
+  }
+
+  private buildCheckOutPayload(): ReservationCheckOutPayloadI | Record<string, never> {
+    const inventoryReviewLines: ReservationCheckoutInventoryReviewLinePayloadI[] = this.checkoutInventoryLines.map((line) => ({
+      room: line.roomId,
+      item: line.itemId,
+      quantity: this.toNonNegativeInt(line.reviewedQuantity),
+      notes: this.toTrimmedString(line.notes) || null
+    }));
+
+    if (inventoryReviewLines.length === 0) return {};
+    return { inventory_review: inventoryReviewLines };
+  }
+
+  private buildReservationRoomLabelMap(reservation: ReservationDetailI): Map<number, string> {
+    const map = new Map<number, string>();
+
+    (reservation.rooms_detail || []).forEach((roomLine) => {
+      const roomId = Number(roomLine.room);
+      if (!Number.isFinite(roomId) || roomId <= 0) return;
+
+      const roomNumber = this.toTrimmedString(roomLine.room_number);
+      map.set(roomId, roomNumber ? `Hab. ${roomNumber}` : `Hab. ${roomId}`);
+    });
+
+    return map;
+  }
+
+  private resolveItemLabel(record: RoomInventoryI, itemId: number): string {
+    const itemName = this.toTrimmedString(record.item_name);
+    if (itemName) return itemName;
+
+    const itemSku = this.toTrimmedString(record.item_sku);
+    if (itemSku) return itemSku;
+
+    return `Item #${itemId}`;
+  }
+
+  private resetCheckoutInventoryModalState(): void {
+    this.showCheckoutInventoryModal = false;
+    this.checkoutInventoryLoading = false;
+    this.checkoutInventoryError = '';
+    this.checkoutInventoryLines = [];
+  }
+
+  private clearInvoicePaymentStatus(): void {
+    this.invoicePaymentStatusLabel = '';
+    this.invoicePaymentStatusCode = '';
+    this.invoiceStatusLoading = false;
+  }
+
+  private loadInvoicePaymentStatus(reservationId: number): void {
+    if (!reservationId || !Number.isFinite(reservationId)) {
+      this.clearInvoicePaymentStatus();
+      return;
+    }
+
+    this.invoiceStatusLoading = true;
+    this.invoicePaymentStatusLabel = '';
+    this.invoicePaymentStatusCode = '';
+
+    this.billingService
+      .listInvoices({
+        reservation: reservationId,
+        is_active: true,
+        ordering: '-id'
+      })
+      .subscribe({
+        next: (invoices: InvoiceI[]) => {
+          if (this.reservation?.id !== reservationId) return;
+
+          const invoice = invoices[0] || null;
+          this.invoicePaymentStatusLabel = this.toTrimmedString(invoice?.status_name || '');
+          this.invoicePaymentStatusCode = this.toTrimmedString(invoice?.status_code || '');
+          this.invoiceStatusLoading = false;
+        },
+        error: () => {
+          if (this.reservation?.id !== reservationId) return;
+          this.clearInvoicePaymentStatus();
+        }
+      });
+  }
+
   private loadReservation(): void {
     if (!this.reservationId) {
       this.reservation = null;
+      this.clearInvoicePaymentStatus();
       return;
     }
 
     if (this.preloaded && this.preloaded.id === this.reservationId) {
       this.reservation = this.preloaded;
       this.errorMessage = '';
+      this.loadInvoicePaymentStatus(this.preloaded.id);
       return;
     }
 
@@ -654,15 +822,21 @@ export class DetailReservation implements OnChanges {
       next: (detail) => {
         this.loading = false;
         this.reservation = detail;
+        this.loadInvoicePaymentStatus(detail.id);
       },
       error: () => {
         this.loading = false;
         this.errorMessage = 'No fue posible cargar el detalle de la reserva.';
+        this.clearInvoicePaymentStatus();
       }
     });
   }
 
-  private runFlowAction(action$: Observable<ReservationDetailI>): void {
+  private runFlowAction(
+    action$: Observable<ReservationDetailI>,
+    onSuccess?: (detail: ReservationDetailI) => void,
+    onError?: (message: string) => void
+  ): void {
     this.actionLoading = true;
     this.errorMessage = '';
 
@@ -670,11 +844,15 @@ export class DetailReservation implements OnChanges {
       next: (detail: ReservationDetailI) => {
         this.actionLoading = false;
         this.reservation = detail;
+        this.loadInvoicePaymentStatus(detail.id);
+        onSuccess?.(detail);
         this.flowChanged.emit(detail);
       },
       error: (error: unknown) => {
         this.actionLoading = false;
-        this.errorMessage = this.extractErrorMessage(error);
+        const message = this.extractErrorMessage(error);
+        this.errorMessage = message;
+        onError?.(message);
       }
     });
   }
@@ -728,32 +906,14 @@ export class DetailReservation implements OnChanges {
     return String(value || '').trim().toUpperCase();
   }
 
-  private getDefaultPaymentMethodId(): number | null {
-    const preferredCodes = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'PSE'];
-    for (const code of preferredCodes) {
-      const match = this.paymentMethods.find((method) => this.normalizeCode(method.code) === code);
-      if (match) return match.id;
-    }
-
-    return this.paymentMethods[0]?.id ?? null;
+  private toTrimmedString(value: unknown): string {
+    return String(value || '').trim();
   }
 
-  private getDefaultDepositStatusId(): number | null {
-    const preferredCodes = ['VALIDADO', 'PENDIENTE'];
-    for (const code of preferredCodes) {
-      const match = this.depositStatuses.find((item) => this.normalizeCode(item.code) === code);
-      if (match) return match.id;
-    }
-
-    return this.depositStatuses[0]?.id ?? null;
-  }
-
-  private toIsoDate(date: Date): string {
-    const year = date.getFullYear();
-    const month = `${date.getMonth() + 1}`.padStart(2, '0');
-    const day = `${date.getDate()}`.padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
+  private toNonNegativeInt(value: unknown): number {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) return 0;
+    return Math.floor(parsed);
   }
 
   private resolveStatusStyle(status: ReservationVisualStatus): ReservationStatusStyleI {

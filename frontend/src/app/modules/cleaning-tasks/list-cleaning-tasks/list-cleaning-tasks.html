@@ -307,4 +307,38 @@
     (statusRequested)="advanceTaskStatus($event)"
     (deleteRequested)="confirmDelete($event)">
   </app-detail-cleaning-task>
+
+  <div
+    class="completion-comment-overlay"
+    *ngIf="showCompletionCommentModal"
+    (click)="closeCompletionCommentModal()">
+    <article class="completion-comment-modal" (click)="$event.stopPropagation()">
+      <header class="completion-comment-head">
+        <h3>Completar limpieza</h3>
+        <p>{{ getCompletionTaskCode() }} - {{ getCompletionRoomLabel() }}</p>
+      </header>
+
+      <div class="completion-comment-body">
+        <label for="completion-comment-textarea">Comentario de cierre</label>
+        <textarea
+          id="completion-comment-textarea"
+          rows="4"
+          maxlength="2000"
+          [(ngModel)]="completionComment"
+          [disabled]="statusUpdateLoading"
+          placeholder="Opcional: observaciones finales de la limpieza"></textarea>
+        <small>Se agregara a las notas operativas de la tarea.</small>
+        <p class="error" *ngIf="completionCommentError">{{ completionCommentError }}</p>
+      </div>
+
+      <footer class="completion-comment-footer">
+        <button type="button" class="btn btn-light" (click)="closeCompletionCommentModal()" [disabled]="statusUpdateLoading">
+          Cancelar
+        </button>
+        <button type="button" class="btn btn-dark" (click)="submitCompletionWithComment()" [disabled]="statusUpdateLoading">
+          {{ statusUpdateLoading ? 'Guardando...' : 'Completar' }}
+        </button>
+      </footer>
+    </article>
+  </div>
 </div>

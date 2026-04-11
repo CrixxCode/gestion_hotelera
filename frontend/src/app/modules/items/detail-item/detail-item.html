@@ -69,6 +69,10 @@
             <strong>{{ itemData?.minimum_stock || 0 }}</strong>
           </div>
           <div>
+            <span>Stock maximo</span>
+            <strong>{{ getMaximumStockLabel() }}</strong>
+          </div>
+          <div>
             <span>Estado inventario</span>
             <strong
               class="stock-state"

@@ -12,7 +12,9 @@ import {
   InvoiceCreatePayloadI,
   InvoiceI,
   PaymentCreatePayloadI,
-  PaymentI
+  PaymentI,
+  PaymentRefundCreatePayloadI,
+  PaymentRefundI
 } from '../modules/billing/billing-model';
 
 type DRFPaginated<T> = {
@@ -28,6 +30,7 @@ export class BillingService {
   private readonly invoicesUrl = `${this.apiBase}/api/invoices/`;
   private readonly invoiceChargesUrl = `${this.apiBase}/api/invoice-charges/`;
   private readonly paymentsUrl = `${this.apiBase}/api/payments/`;
+  private readonly paymentRefundsUrl = `${this.apiBase}/api/payment-refunds/`;
   private readonly creditNotesUrl = `${this.apiBase}/api/credit-notes/`;
 
   constructor(
@@ -194,6 +197,7 @@ export class BillingService {
     ordering?: string;
     invoice?: number;
     is_active?: boolean;
+    include_inactive?: boolean;
   }): Observable<PaymentI[]> {
     let params = new HttpParams();
 
@@ -211,6 +215,10 @@ export class BillingService {
 
     if (typeof filters?.is_active === 'boolean') {
       params = params.set('is_active', String(filters.is_active));
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
     }
 
     return this.http
@@ -243,6 +251,104 @@ export class BillingService {
 
   deletePayment(id: number): Observable<void> {
     return this.http.delete<void>(`${this.paymentsUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
+  listPaymentRefunds(filters?: {
+    search?: string;
+    ordering?: string;
+    payment?: number;
+    invoice?: number;
+    status?: number;
+    is_active?: boolean;
+  }): Observable<PaymentRefundI[]> {
+    let params = new HttpParams();
+
+    if (filters?.search?.trim()) {
+      params = params.set('search', filters.search.trim());
+    }
+
+    if (filters?.ordering?.trim()) {
+      params = params.set('ordering', filters.ordering.trim());
+    }
+
+    if (typeof filters?.payment === 'number' && Number.isFinite(filters.payment) && filters.payment > 0) {
+      params = params.set('payment', String(filters.payment));
+    }
+
+    if (typeof filters?.invoice === 'number' && Number.isFinite(filters.invoice) && filters.invoice > 0) {
+      params = params.set('invoice', String(filters.invoice));
+    }
+
+    if (typeof filters?.status === 'number' && Number.isFinite(filters.status) && filters.status > 0) {
+      params = params.set('status', String(filters.status));
+    }
+
+    if (typeof filters?.is_active === 'boolean') {
+      params = params.set('is_active', String(filters.is_active));
+    }
+
+    return this.http
+      .get<PaymentRefundI[] | DRFPaginated<PaymentRefundI>>(this.paymentRefundsUrl, {
+        withCredentials: true,
+        params
+      })
+      .pipe(map((res) => this.unwrapArray<PaymentRefundI>(res)));
+  }
+
+  getPaymentRefundById(id: number): Observable<PaymentRefundI> {
+    return this.http.get<PaymentRefundI>(`${this.paymentRefundsUrl}${id}/`, { withCredentials: true });
+  }
+
+  createPaymentRefund(payload: PaymentRefundCreatePayloadI): Observable<PaymentRefundI> {
+    return this.http.post<PaymentRefundI>(
+      this.paymentRefundsUrl,
+      this.normalizePaymentRefundPayload(payload),
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
+  updatePaymentRefund(id: number, payload: Partial<PaymentRefundCreatePayloadI>): Observable<PaymentRefundI> {
+    return this.http.patch<PaymentRefundI>(
+      `${this.paymentRefundsUrl}${id}/`,
+      this.normalizePaymentRefundPayload(payload),
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
+  approvePaymentRefund(id: number): Observable<PaymentRefundI> {
+    return this.http.post<PaymentRefundI>(
+      `${this.paymentRefundsUrl}${id}/approve/`,
+      {},
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
+  processPaymentRefund(id: number): Observable<PaymentRefundI> {
+    return this.http.post<PaymentRefundI>(
+      `${this.paymentRefundsUrl}${id}/process/`,
+      {},
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
+  rejectPaymentRefund(id: number): Observable<PaymentRefundI> {
+    return this.http.post<PaymentRefundI>(
+      `${this.paymentRefundsUrl}${id}/reject/`,
+      {},
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
+  cancelPaymentRefund(id: number): Observable<PaymentRefundI> {
+    return this.http.post<PaymentRefundI>(
+      `${this.paymentRefundsUrl}${id}/cancel/`,
+      {},
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
+  deletePaymentRefund(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.paymentRefundsUrl}${id}/`, this.auth.buildCsrfRequestOptions());
   }
 
   listCreditNotes(filters?: {
@@ -411,6 +517,43 @@ export class BillingService {
     if (typeof payload.amount === 'number') {
       const amount = Number(payload.amount);
       normalized.amount = Number.isFinite(amount) ? amount : 0;
+    }
+
+    if (payload.reference !== undefined) {
+      normalized.reference = payload.reference ? String(payload.reference).trim() : null;
+    }
+
+    if (payload.notes !== undefined) {
+      normalized.notes = payload.notes ? String(payload.notes).trim() : null;
+    }
+
+    if (typeof payload.is_active === 'boolean') {
+      normalized.is_active = payload.is_active;
+    }
+
+    return normalized;
+  }
+
+  private normalizePaymentRefundPayload(
+    payload: Partial<PaymentRefundCreatePayloadI>
+  ): Partial<PaymentRefundCreatePayloadI> {
+    const normalized: Partial<PaymentRefundCreatePayloadI> = {};
+
+    if (typeof payload.payment === 'number') {
+      normalized.payment = Number(payload.payment);
+    }
+
+    if (typeof payload.status === 'number') {
+      normalized.status = Number(payload.status);
+    }
+
+    if (typeof payload.amount === 'number') {
+      const amount = Number(payload.amount);
+      normalized.amount = Number.isFinite(amount) ? amount : 0;
+    }
+
+    if (typeof payload.reason === 'string') {
+      normalized.reason = payload.reason.trim();
     }
 
     if (payload.reference !== undefined) {

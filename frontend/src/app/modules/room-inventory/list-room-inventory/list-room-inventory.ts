@@ -105,7 +105,7 @@ export class ListRoomInventory implements OnInit {
   selectedRoomFilter = 'ALL';
 
   showCreateDrawer = false;
-  selectedRoomInventory: RoomInventoryI | null = null;
+  selectedRoomGroup: RoomInventoryGroup | null = null;
 
   readonly statusOptions: Array<{ value: RoomInventoryStatusFilter; label: string }> = [
     { value: 'ALL', label: 'Todos' },
@@ -122,8 +122,6 @@ export class ListRoomInventory implements OnInit {
 
   private roomMap = new Map<number, RoomI>();
   private itemMap = new Map<number, ItemI>();
-  private highlightedByGroup = new Map<string, Set<number>>();
-
   constructor(
     private roomInventoryService: RoomInventoryService,
     private roomService: RoomService,
@@ -159,7 +157,7 @@ export class ListRoomInventory implements OnInit {
   loadCatalogData(): void {
     this.loading = true;
     this.errorMessage = '';
-    const selectedId = this.selectedRoomInventory?.id ?? null;
+    const selectedRoomKey = this.selectedRoomGroup?.key ?? null;
 
     forkJoin({
       roomInventory: this.roomInventoryService.listRoomInventory().pipe(catchError(() => of([] as RoomInventoryI[]))),
@@ -172,14 +170,11 @@ export class ListRoomInventory implements OnInit {
         this.rooms = rooms;
         this.items = items;
 
-        if (selectedId) {
-          this.selectedRoomInventory = roomInventory.find((record) => record.id === selectedId) || null;
-        }
-
         this.roomMap = new Map(rooms.map((room) => [room.id, room]));
         this.itemMap = new Map(items.map((item) => [item.id, item]));
         this.roomTabs = this.buildRoomTabs(roomInventory);
         this.applyFilters();
+        this.selectedRoomGroup = selectedRoomKey ? this.buildRoomGroupByKey(selectedRoomKey) : null;
 
         if (!rooms.length) {
           this.infoMessage = 'No hay habitaciones registradas para asignar inventario.';
@@ -271,7 +266,7 @@ export class ListRoomInventory implements OnInit {
   }
 
   openCreateDrawer(): void {
-    this.selectedRoomInventory = null;
+    this.selectedRoomGroup = null;
     this.showCreateDrawer = true;
   }
 
@@ -285,12 +280,20 @@ export class ListRoomInventory implements OnInit {
   }
 
   openDetail(record: RoomInventoryI): void {
+    this.openRoomDetailByKey(this.getRoomKey(record));
+  }
+
+  openRoomDetail(group: RoomInventoryGroup): void {
+    this.openRoomDetailByKey(group.key);
+  }
+
+  private openRoomDetailByKey(roomKey: string): void {
     this.showCreateDrawer = false;
-    this.selectedRoomInventory = record;
+    this.selectedRoomGroup = this.buildRoomGroupByKey(roomKey);
   }
 
   closeDetail(): void {
-    this.selectedRoomInventory = null;
+    this.selectedRoomGroup = null;
   }
 
   toggleRoomInventoryStatus(record: RoomInventoryI): void {
@@ -313,7 +316,7 @@ export class ListRoomInventory implements OnInit {
         this.errorMessage = '';
         this.roomInventoryService.deleteRoomInventory(record.id).subscribe({
           next: () => {
-            if (this.selectedRoomInventory?.id === record.id) {
+            if (this.selectedRoomGroup && this.selectedRoomGroup.key === this.getRoomKey(record)) {
               this.closeDetail();
             }
             this.refreshRoomInventory();
@@ -436,8 +439,54 @@ export class ListRoomInventory implements OnInit {
     return group.tone;
   }
 
-  isHighlighted(groupKey: string, recordId: number): boolean {
-    return this.highlightedByGroup.get(groupKey)?.has(recordId) || false;
+  getRoomTotalItems(group: RoomInventoryGroup): number {
+    return group.items.length;
+  }
+
+  getRoomActiveItems(group: RoomInventoryGroup): number {
+    return group.items.filter((item) => item.is_active).length;
+  }
+
+  getRoomLowCoverageItems(group: RoomInventoryGroup): number {
+    return group.items.filter((item) => this.resolveCoverageState(item) === 'LOW').length;
+  }
+
+  getRoomOutCoverageItems(group: RoomInventoryGroup): number {
+    return group.items.filter((item) => this.resolveCoverageState(item) === 'OUT').length;
+  }
+
+  getRoomTotalUnits(group: RoomInventoryGroup): number {
+    return group.items.reduce((sum, item) => sum + this.toNonNegativeInt(item.quantity), 0);
+  }
+
+  getRoomCoverageLabel(group: RoomInventoryGroup): string {
+    const outCount = this.getRoomOutCoverageItems(group);
+    const lowCount = this.getRoomLowCoverageItems(group);
+
+    if (outCount > 0) return `${outCount} sin stock`;
+    if (lowCount > 0) return `${lowCount} bajo minimo`;
+    return 'Cobertura normal';
+  }
+
+  getRoomCoverageTone(group: RoomInventoryGroup): { bg: string; color: string } {
+    const outCount = this.getRoomOutCoverageItems(group);
+    const lowCount = this.getRoomLowCoverageItems(group);
+
+    if (outCount > 0) return { bg: '#fef2f2', color: '#b42318' };
+    if (lowCount > 0) return { bg: '#fff7ed', color: '#c2410c' };
+    return { bg: '#dcfce7', color: '#15803d' };
+  }
+
+  getRoomItemsPreview(group: RoomInventoryGroup): string {
+    const itemLabels = group.items
+      .map((record) => this.getItemLabel(record))
+      .filter((label) => !!label)
+      .slice(0, 3);
+    const extra = group.items.length - itemLabels.length;
+
+    if (!itemLabels.length) return 'Sin items asignados.';
+    if (extra > 0) return `${itemLabels.join(', ')} y ${extra} mas.`;
+    return itemLabels.join(', ');
   }
 
   trackByRecord(_: number, record: RoomInventoryI): number {
@@ -498,16 +547,22 @@ export class ListRoomInventory implements OnInit {
       a.label.localeCompare(b.label, 'es', { numeric: true })
     );
 
-    this.highlightedByGroup.clear();
-    for (const group of groups) {
-      const sorted = [...group.items].sort(
-        (a, b) => this.toNonNegativeInt(b.quantity) - this.toNonNegativeInt(a.quantity)
-      );
-      const highlighted = sorted.length >= 4 ? 2 : sorted.length ? 1 : 0;
-      this.highlightedByGroup.set(group.key, new Set(sorted.slice(0, highlighted).map((record) => record.id)));
-    }
-
     return groups;
+  }
+
+  private buildRoomGroupByKey(roomKey: string): RoomInventoryGroup | null {
+    const roomRecords = this.roomInventory
+      .filter((record) => this.getRoomKey(record) === roomKey)
+      .sort((a, b) => this.getItemLabel(a).localeCompare(this.getItemLabel(b), 'es', { sensitivity: 'base' }));
+
+    if (!roomRecords.length) return null;
+
+    return {
+      key: roomKey,
+      label: this.getRoomLabel(roomRecords[0]),
+      tone: this.resolveRoomTone(roomKey),
+      items: roomRecords
+    };
   }
 
   private getRoomKey(record: RoomInventoryI): string {

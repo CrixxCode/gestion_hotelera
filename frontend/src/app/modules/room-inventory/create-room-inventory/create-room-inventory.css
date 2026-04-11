@@ -84,6 +84,18 @@ h2 {
   color: #334155;
 }
 
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.section-head h2 {
+  margin: 0;
+}
+
 .grid {
   display: grid;
   gap: 12px;
@@ -164,6 +176,34 @@ textarea:focus {
   font-size: 12px;
 }
 
+.assignments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.assignment-card {
+  border: 1px solid #dce5f3;
+  border-radius: 12px;
+  padding: 12px;
+  background: #f8fbff;
+}
+
+.assignment-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.assignment-head p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
 .feedback {
   margin: 0 0 10px;
   border-radius: 10px;
@@ -210,6 +250,21 @@ textarea:focus {
 .btn-dark {
   background: #0f1f41;
   color: #fff;
+}
+
+.btn-sm {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.btn-danger-outline {
+  background: #fff;
+  color: #b42318;
+  border-color: #fecaca;
+}
+
+.btn i {
+  margin-right: 6px;
 }
 
 .btn:disabled {

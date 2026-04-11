@@ -81,6 +81,7 @@ export class ItemsService {
       description: (payload.description || '').trim(),
       stock: this.toNonNegativeInt(payload.stock),
       minimum_stock: this.toNonNegativeInt(payload.minimum_stock),
+      maximum_stock: this.toNonNegativeInt(payload.maximum_stock),
       cost_price: this.toNonNegativePrice(payload.cost_price),
       sale_price: this.toNonNegativePrice(payload.sale_price),
       is_active: !!payload.is_active
@@ -120,6 +121,10 @@ export class ItemsService {
 
     if (typeof payload.minimum_stock === 'number') {
       normalized.minimum_stock = this.toNonNegativeInt(payload.minimum_stock);
+    }
+
+    if (typeof payload.maximum_stock === 'number') {
+      normalized.maximum_stock = this.toNonNegativeInt(payload.maximum_stock);
     }
 
     if (typeof payload.cost_price === 'number') {

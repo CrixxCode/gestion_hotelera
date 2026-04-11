@@ -34,6 +34,7 @@ class ItemViewSet(viewsets.ModelViewSet):
         "name",
         "stock",
         "minimum_stock",
+        "maximum_stock",
         "cost_price",
         "sale_price",
         "created_at",

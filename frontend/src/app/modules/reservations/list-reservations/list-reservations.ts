@@ -392,6 +392,11 @@ export class ListReservations implements OnInit {
     if (!reservationId) return;
 
     this.ensureReservationDetail(reservationId, (detail) => {
+      if (!this.canEditReservation(detail)) {
+        this.errorMessage = 'No puedes editar una reserva que ya tiene check-in registrado.';
+        return;
+      }
+
       this.showCreateOverlay = false;
       this.selectedReservationId = null;
       this.selectedReservationDetail = null;
@@ -433,6 +438,11 @@ export class ListReservations implements OnInit {
   }
 
   openUpdateFromDetail(detail: ReservationDetailI): void {
+    if (!this.canEditReservation(detail)) {
+      this.errorMessage = 'No puedes editar una reserva que ya tiene check-in registrado.';
+      return;
+    }
+
     this.closeDetail();
     this.openUpdateOverlay(detail);
   }
@@ -722,6 +732,14 @@ export class ListReservations implements OnInit {
     if (visual === 'EN_CURSO' || visual === 'POR_SALIR_HOY') return 'fa-solid fa-arrow-right-from-bracket';
 
     return 'fa-regular fa-eye';
+  }
+
+  canEditReservation(reservation: ReservationI | ReservationDetailI | null | undefined): boolean {
+    if (!reservation) return false;
+    if (reservation.real_check_in) return false;
+
+    const visual = this.getVisualStatus(reservation as ReservationI);
+    return !['EN_CURSO', 'POR_SALIR_HOY', 'CANCELADA', 'FINALIZADA'].includes(visual);
   }
 
   trackByReservation(_: number, reservation: ReservationI): number {

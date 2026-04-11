@@ -9,6 +9,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from accounts.views import (
     CsrfInitView, SessionLoginView, SessionLogoutView, MeSessionView,
+    NotificationReadStateView, NotificationMarkReadView, NotificationMarkUnreadView,
 )
 
 urlpatterns = [
@@ -24,6 +25,9 @@ urlpatterns = [
     path("api/auth/password/reset/", PasswordResetRequestView.as_view(), name="password_reset"),
     path("api/auth/password/reset/confirm/", PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
     path("api/auth/me/update/", ProfileUpdateView.as_view(), name="profile_update"),
+    path("api/auth/notifications/read-state/", NotificationReadStateView.as_view(), name="notifications_read_state"),
+    path("api/auth/notifications/mark-read/", NotificationMarkReadView.as_view(), name="notifications_mark_read"),
+    path("api/auth/notifications/mark-unread/", NotificationMarkUnreadView.as_view(), name="notifications_mark_unread"),
 
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),

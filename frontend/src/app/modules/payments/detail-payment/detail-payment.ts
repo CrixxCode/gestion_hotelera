@@ -1,20 +1,22 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { catchError, forkJoin, of } from 'rxjs';
 import { ConfirmationService } from 'primeng/api';
 import { BillingService } from '../../../services/billing';
+import { AuthService } from '../../../services/auth/auth';
 import { errorActionAlert, successActionAlert } from '../../../services/action-alerts';
 import { openActionConfirmation } from '../../../services/action-confirmations';
-import { InvoiceI, PaymentI } from '../../billing/billing-model';
+import { InvoiceI, PaymentI, PaymentRefundI } from '../../billing/billing-model';
 
 @Component({
   selector: 'app-detail-payment',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ReactiveFormsModule],
   templateUrl: './detail-payment.html',
   styleUrls: ['./detail-payment.css']
 })
-export class DetailPayment implements OnChanges {
+export class DetailPayment implements OnInit, OnChanges {
   @Input() payment: PaymentI | null = null;
 
   @Output() closed = new EventEmitter<void>();
@@ -22,17 +24,35 @@ export class DetailPayment implements OnChanges {
 
   loading = false;
   updating = false;
+  submittingRefund = false;
   errorMessage = '';
   infoMessage = '';
+  isAdmin = false;
 
   activePayment: PaymentI | null = null;
   invoice: InvoiceI | null = null;
   invoicePayments: PaymentI[] = [];
+  invoiceRefunds: PaymentRefundI[] = [];
+  paymentRefunds: PaymentRefundI[] = [];
+  readonly refundForm;
 
   constructor(
     private billingService: BillingService,
-    private confirmationService: ConfirmationService
-  ) {}
+    private confirmationService: ConfirmationService,
+    private fb: FormBuilder,
+    private authService: AuthService
+  ) {
+    this.refundForm = this.fb.nonNullable.group({
+      amount: [0, [Validators.required, Validators.min(1)]],
+      reason: ['', [Validators.required, Validators.maxLength(500)]],
+      reference: ['', [Validators.maxLength(100)]],
+      notes: ['', [Validators.maxLength(1000)]]
+    });
+  }
+
+  ngOnInit(): void {
+    this.loadUserContext();
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['payment']) {
@@ -50,9 +70,43 @@ export class DetailPayment implements OnChanges {
       .reduce((sum, payment) => sum + this.toNumber(payment.amount), 0);
   }
 
+  get totalProcessedRefundAmount(): number {
+    return this.invoiceRefunds
+      .filter((refund) => !!refund.is_active && this.isProcessedRefund(refund))
+      .reduce((sum, refund) => sum + this.toNumber(refund.amount), 0);
+  }
+
+  get netPaidAmount(): number {
+    const net = this.totalPaidAmount - this.totalProcessedRefundAmount;
+    return net > 0 ? net : 0;
+  }
+
   get pendingBalanceAmount(): number {
-    const pending = this.invoiceTotalAmount - this.totalPaidAmount;
+    const pending = this.invoiceTotalAmount - this.netPaidAmount;
     return pending > 0 ? pending : 0;
+  }
+
+  get paymentReservedRefundAmount(): number {
+    return this.paymentRefunds
+      .filter((refund) => !!refund.is_active && !this.isRejectedOrCanceledRefund(refund))
+      .reduce((sum, refund) => sum + this.toNumber(refund.amount), 0);
+  }
+
+  get paymentProcessedRefundAmount(): number {
+    return this.paymentRefunds
+      .filter((refund) => !!refund.is_active && this.isProcessedRefund(refund))
+      .reduce((sum, refund) => sum + this.toNumber(refund.amount), 0);
+  }
+
+  get paymentRefundableAmount(): number {
+    const paymentAmount = this.toNumber(this.activePayment?.amount);
+    const refundable = paymentAmount - this.paymentReservedRefundAmount;
+    return refundable > 0 ? refundable : 0;
+  }
+
+  get canRegisterRefund(): boolean {
+    if (!this.activePayment?.is_active || this.loading || this.submittingRefund || this.updating) return false;
+    return this.paymentRefundableAmount > 0;
   }
 
   get paymentStatusLabel(): string {
@@ -76,7 +130,7 @@ export class DetailPayment implements OnChanges {
   }
 
   deactivatePayment(): void {
-    if (!this.activePayment || !this.activePayment.is_active || this.updating) return;
+    if (!this.isAdmin || !this.activePayment || !this.activePayment.is_active || this.updating) return;
 
     openActionConfirmation(this.confirmationService, {
       action: 'deactivate',
@@ -92,7 +146,7 @@ export class DetailPayment implements OnChanges {
             this.activePayment = updatedPayment;
             this.paymentUpdated.emit(updatedPayment);
             this.infoMessage = successActionAlert('deactivate', 'pago');
-            this.refreshInvoicePayments();
+            this.loadDetail();
           },
           error: (error) => {
             this.updating = false;
@@ -101,6 +155,67 @@ export class DetailPayment implements OnChanges {
         });
       }
     });
+  }
+
+  registerRefund(): void {
+    if (!this.activePayment || !this.canRegisterRefund || this.submittingRefund) return;
+
+    if (this.refundForm.invalid) {
+      this.refundForm.markAllAsTouched();
+      return;
+    }
+
+    const amount = this.toNumber(this.refundForm.value.amount);
+    if (amount <= 0) {
+      this.errorMessage = 'El monto del reembolso debe ser mayor a 0.';
+      return;
+    }
+
+    if (amount > this.paymentRefundableAmount) {
+      this.errorMessage = 'El monto supera el saldo reembolsable de este pago.';
+      return;
+    }
+
+    const reason = String(this.refundForm.value.reason || '').trim();
+    if (!reason) {
+      this.errorMessage = 'Debes indicar el motivo del reembolso.';
+      return;
+    }
+
+    this.submittingRefund = true;
+    this.errorMessage = '';
+    this.infoMessage = '';
+
+    this.billingService
+      .createPaymentRefund({
+        payment: this.activePayment.id,
+        amount: this.roundAmount(amount),
+        reason,
+        reference: this.normalizeOptionalText(this.refundForm.value.reference),
+        notes: this.normalizeOptionalText(this.refundForm.value.notes)
+      })
+      .subscribe({
+        next: () => {
+          this.submittingRefund = false;
+          this.infoMessage = 'Reembolso registrado en estado pendiente. Un administrador debe aprobarlo.';
+          this.loadDetail();
+        },
+        error: (error) => {
+          this.submittingRefund = false;
+          this.errorMessage = this.extractErrorMessage(error, errorActionAlert('register', 'reembolso'));
+        }
+      });
+  }
+
+  resetRefundForm(): void {
+    this.refundForm.reset({
+      amount: this.roundAmount(this.getSuggestedRefundAmount()),
+      reason: '',
+      reference: '',
+      notes: ''
+    });
+    this.refundForm.markAsPristine();
+    this.refundForm.markAsUntouched();
   }
 
   formatCurrency(value: number): string {
@@ -125,11 +240,57 @@ export class DetailPayment implements OnChanges {
     });
   }
 
+  getRefundStatusLabel(refund: PaymentRefundI): string {
+    if (refund.status_name?.trim()) return refund.status_name.trim();
+    const code = String(refund.status_code || '').trim().toUpperCase();
+    if (!code) return 'Sin estado';
+
+    switch (code) {
+      case 'PENDIENTE':
+        return 'Pendiente';
+      case 'APROBADO':
+        return 'Aprobado';
+      case 'PROCESADO':
+        return 'Procesado';
+      case 'RECHAZADO':
+        return 'Rechazado';
+      case 'ANULADO':
+        return 'Anulado';
+      default:
+        return code;
+    }
+  }
+
+  getRefundStatusTone(refund: PaymentRefundI): { bg: string; color: string; dot: string } {
+    const code = String(refund.status_code || '').trim().toUpperCase();
+    switch (code) {
+      case 'PROCESADO':
+        return { bg: '#dcfce7', color: '#166534', dot: '#22c55e' };
+      case 'APROBADO':
+        return { bg: '#dbeafe', color: '#1d4ed8', dot: '#3b82f6' };
+      case 'PENDIENTE':
+        return { bg: '#fef3c7', color: '#92400e', dot: '#f59e0b' };
+      case 'RECHAZADO':
+        return { bg: '#fee2e2', color: '#b42318', dot: '#ef4444' };
+      case 'ANULADO':
+        return { bg: '#e2e8f0', color: '#475569', dot: '#94a3b8' };
+      default:
+        return { bg: '#e2e8f0', color: '#475569', dot: '#94a3b8' };
+    }
+  }
+
+  trackByRefund(_: number, refund: PaymentRefundI): number {
+    return refund.id;
+  }
+
   private loadDetail(): void {
     if (!this.payment) {
       this.activePayment = null;
       this.invoice = null;
       this.invoicePayments = [];
+      this.invoiceRefunds = [];
+      this.paymentRefunds = [];
+      this.resetRefundForm();
       return;
     }
 
@@ -145,15 +306,30 @@ export class DetailPayment implements OnChanges {
       invoice: this.billingService.getInvoiceById(invoiceId).pipe(catchError(() => of(null))),
       invoicePayments: this.billingService
         .listPayments({ invoice: invoiceId, ordering: '-payment_date,-id' })
-        .pipe(catchError(() => of([] as PaymentI[])))
+        .pipe(catchError(() => of([] as PaymentI[]))),
+      invoiceRefunds: this.billingService
+        .listPaymentRefunds({ invoice: invoiceId, ordering: '-refund_date,-id' })
+        .pipe(catchError(() => of([] as PaymentRefundI[])))
     }).subscribe({
-      next: ({ payment, invoice, invoicePayments }) => {
+      next: ({ payment, invoice, invoicePayments, invoiceRefunds }) => {
         this.loading = false;
         this.activePayment = payment;
         this.invoice = invoice;
         this.invoicePayments = invoicePayments
           .filter((row) => Number(row.invoice) === invoiceId)
           .sort((a, b) => b.id - a.id);
+
+        this.invoiceRefunds = invoiceRefunds
+          .filter((row) => Number(row.invoice) === invoiceId)
+          .sort((a, b) => b.id - a.id);
+
+        this.paymentRefunds = this.invoiceRefunds
+          .filter((refund) => Number(refund.payment) === payment.id)
+          .sort((a, b) => b.id - a.id);
+
+        if (!this.submittingRefund) {
+          this.resetRefundForm();
+        }
       },
       error: () => {
         this.loading = false;
@@ -162,18 +338,46 @@ export class DetailPayment implements OnChanges {
     });
   }
 
-  private refreshInvoicePayments(): void {
-    if (!this.activePayment) return;
-    const invoiceId = this.activePayment.invoice;
-
-    this.billingService
-      .listPayments({ invoice: invoiceId, ordering: '-payment_date,-id' })
-      .pipe(catchError(() => of([] as PaymentI[])))
-      .subscribe((payments) => {
-        this.invoicePayments = payments
-          .filter((row) => Number(row.invoice) === invoiceId)
-          .sort((a, b) => b.id - a.id);
+  private loadUserContext(): void {
+    this.authService
+      .getUserInfo()
+      .pipe(catchError(() => of(null)))
+      .subscribe((user) => {
+        const roles = Array.isArray(user?.roles) ? user.roles : [];
+        this.isAdmin = roles.some((role) => {
+          const slug = String((role as { slug?: unknown })?.slug || '')
+            .trim()
+            .toLowerCase();
+          return slug === 'admin';
+        });
       });
+  }
+
+  private isProcessedRefund(refund: PaymentRefundI): boolean {
+    return String(refund.status_code || '').trim().toUpperCase() === 'PROCESADO';
+  }
+
+  private isRejectedOrCanceledRefund(refund: PaymentRefundI): boolean {
+    const code = String(refund.status_code || '').trim().toUpperCase();
+    return code === 'RECHAZADO' || code === 'ANULADO';
+  }
+
+  private getSuggestedRefundAmount(): number {
+    const refundable = this.paymentRefundableAmount;
+    if (refundable <= 0) return 0;
+
+    const pending = this.pendingBalanceAmount;
+    if (pending <= 0) return refundable;
+    return refundable < pending ? refundable : pending;
+  }
+
+  private roundAmount(value: number): number {
+    return Math.round(value * 100) / 100;
+  }
+
+  private normalizeOptionalText(value: unknown): string | null {
+    const normalized = String(value || '').trim();
+    return normalized ? normalized : null;
   }
 
   private toNumber(value: unknown): number {
