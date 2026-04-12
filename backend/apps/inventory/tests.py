@@ -2,35 +2,28 @@ from django.test import TestCase
 from rest_framework import serializers as drf_serializers
 
 from apps.hotel_settings.models import HotelFloor, HotelSettings
-from apps.inventory.models import InventoryMovement, Item, RoomInventory
+from apps.inventory.models import InventoryMovement, InventoryRestockAlert, Item, RoomInventory
 from apps.inventory.serializers import RoomInventorySerializer
 from apps.master_data.models import MasterData
 from apps.rooms.models import Room, RoomType
 
 
 class RoomInventoryAutomaticMovementTestCase(TestCase):
+    def _md(self, group, code, name=None, sort_order=1):
+        return MasterData.objects.update_or_create(
+            group=group,
+            code=code,
+            defaults={
+                "name": name or code.title(),
+                "is_active": True,
+                "sort_order": sort_order,
+            },
+        )[0]
+
     def setUp(self):
-        self.room_status = MasterData.objects.create(
-            group=MasterData.Group.ROOM_STATUS,
-            code="DISPONIBLE",
-            name="Disponible",
-            is_active=True,
-            sort_order=1,
-        )
-        self.item_type = MasterData.objects.create(
-            group=MasterData.Group.ITEM_TYPE,
-            code="AMENITY",
-            name="Amenidad",
-            is_active=True,
-            sort_order=1,
-        )
-        self.unit_measure = MasterData.objects.create(
-            group=MasterData.Group.UNIT_MEASURE,
-            code="UND",
-            name="Unidad",
-            is_active=True,
-            sort_order=1,
-        )
+        self.room_status = self._md(MasterData.Group.ROOM_STATUS, "DISPONIBLE", "Disponible", 1)
+        self.item_type = self._md(MasterData.Group.ITEM_TYPE, "AMENITY", "Amenidad", 1)
+        self.unit_measure = self._md(MasterData.Group.UNIT_MEASURE, "UND", "Unidad", 1)
 
         self.hotel = HotelSettings.objects.create(hotel_name="Hotel Test")
         self.floor = HotelFloor.objects.create(
@@ -153,3 +146,148 @@ class RoomInventoryAutomaticMovementTestCase(TestCase):
             quantity=5,
         ).first()
         self.assertIsNotNone(in_update_movement)
+
+
+class InventoryLowStockAutomationTestCase(TestCase):
+    def _md(self, group, code, name=None, sort_order=1):
+        return MasterData.objects.update_or_create(
+            group=group,
+            code=code,
+            defaults={
+                "name": name or code.title(),
+                "is_active": True,
+                "sort_order": sort_order,
+            },
+        )[0]
+
+    def setUp(self):
+        self.item_type = self._md(MasterData.Group.ITEM_TYPE, "AMENITY", "Amenidad", 1)
+        self.unit_measure = self._md(MasterData.Group.UNIT_MEASURE, "UND", "Unidad", 1)
+        self.out_movement_type = self._md(
+            MasterData.Group.INVENTORY_MOVEMENT_TYPE,
+            "OUT",
+            "Salida de inventario",
+            1,
+        )
+        self.in_movement_type = self._md(
+            MasterData.Group.INVENTORY_MOVEMENT_TYPE,
+            "IN",
+            "Entrada de inventario",
+            2,
+        )
+
+        self.hotel = HotelSettings.objects.create(hotel_name="Hotel Stock")
+        self.item = Item.objects.create(
+            hotel_settings=self.hotel,
+            item_type=self.item_type,
+            unit_measure=self.unit_measure,
+            name="Shampoo",
+            stock=10,
+            minimum_stock=5,
+            maximum_stock=100,
+            cost_price=5000,
+            sale_price=7000,
+            is_active=True,
+        )
+
+    def test_creates_restock_alert_when_stock_goes_below_minimum(self):
+        InventoryMovement.objects.create(
+            item=self.item,
+            movement_type=self.out_movement_type,
+            quantity=6,
+            reference="TEST:LOW_STOCK",
+            notes="Consumo de prueba",
+            is_active=True,
+        )
+
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.stock, 4)
+
+        alert = InventoryRestockAlert.objects.filter(
+            item=self.item,
+            status=InventoryRestockAlert.Status.DRAFT,
+            is_active=True,
+        ).first()
+        self.assertIsNotNone(alert)
+        self.assertEqual(alert.reference, f"LOW_STOCK:{self.item.id}")
+        self.assertEqual(alert.current_stock, 4)
+        self.assertEqual(alert.minimum_stock, 5)
+        self.assertEqual(alert.suggested_quantity, 1)
+
+    def test_updates_existing_draft_alert_without_creating_duplicates(self):
+        InventoryMovement.objects.create(
+            item=self.item,
+            movement_type=self.out_movement_type,
+            quantity=6,
+            reference="TEST:LOW_STOCK:1",
+            notes="Consumo inicial",
+            is_active=True,
+        )
+        first_alert = InventoryRestockAlert.objects.get(item=self.item, status=InventoryRestockAlert.Status.DRAFT)
+
+        InventoryMovement.objects.create(
+            item=self.item,
+            movement_type=self.out_movement_type,
+            quantity=1,
+            reference="TEST:LOW_STOCK:2",
+            notes="Consumo adicional",
+            is_active=True,
+        )
+
+        draft_alerts = InventoryRestockAlert.objects.filter(
+            item=self.item,
+            status=InventoryRestockAlert.Status.DRAFT,
+            is_active=True,
+        )
+        self.assertEqual(draft_alerts.count(), 1)
+
+        draft_alert = draft_alerts.first()
+        self.assertEqual(draft_alert.id, first_alert.id)
+        self.assertEqual(draft_alert.current_stock, 3)
+        self.assertEqual(draft_alert.minimum_stock, 5)
+        self.assertEqual(draft_alert.suggested_quantity, 2)
+
+    def test_resolves_draft_alert_when_stock_recovers(self):
+        InventoryMovement.objects.create(
+            item=self.item,
+            movement_type=self.out_movement_type,
+            quantity=6,
+            reference="TEST:LOW_STOCK:3",
+            notes="Consumo inicial",
+            is_active=True,
+        )
+        self.assertEqual(
+            InventoryRestockAlert.objects.filter(
+                item=self.item,
+                status=InventoryRestockAlert.Status.DRAFT,
+                is_active=True,
+            ).count(),
+            1,
+        )
+
+        InventoryMovement.objects.create(
+            item=self.item,
+            movement_type=self.in_movement_type,
+            quantity=3,
+            reference="TEST:RECOVER_STOCK",
+            notes="Reposicion",
+            is_active=True,
+        )
+
+        self.assertFalse(
+            InventoryRestockAlert.objects.filter(
+                item=self.item,
+                status=InventoryRestockAlert.Status.DRAFT,
+                is_active=True,
+            ).exists()
+        )
+
+        resolved_alert = InventoryRestockAlert.objects.filter(
+            item=self.item,
+            status=InventoryRestockAlert.Status.RESOLVED,
+        ).first()
+        self.assertIsNotNone(resolved_alert)
+        self.assertEqual(resolved_alert.current_stock, 7)
+        self.assertEqual(resolved_alert.minimum_stock, 5)
+        self.assertEqual(resolved_alert.suggested_quantity, 0)
+        self.assertIsNotNone(resolved_alert.resolved_at)

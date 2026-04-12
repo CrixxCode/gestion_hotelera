@@ -3,6 +3,7 @@ from rest_framework import serializers
 from apps.billing.models import Invoice, InvoiceCharge, Charge, Payment, PaymentRefund, CreditNote
 from apps.billing.services import (
     get_or_create_default_charge_type,
+    get_invoice_reconciliation,
     get_or_create_default_payment_refund_status,
 )
 
@@ -174,6 +175,10 @@ class InvoiceSerializer(serializers.ModelSerializer):
     status_name = serializers.CharField(source="status.name", read_only=True)
     status_code = serializers.CharField(source="status.code", read_only=True)
     invoice_charges = InvoiceChargeSerializer(many=True, read_only=True)
+    total_paid = serializers.SerializerMethodField()
+    total_refunded = serializers.SerializerMethodField()
+    net_paid = serializers.SerializerMethodField()
+    pending_balance = serializers.SerializerMethodField()
 
     class Meta:
         model = Invoice
@@ -188,6 +193,10 @@ class InvoiceSerializer(serializers.ModelSerializer):
             "subtotal",
             "tax_amount",
             "total_amount",
+            "total_paid",
+            "total_refunded",
+            "net_paid",
+            "pending_balance",
             "notes",
             "is_active",
             "invoice_charges",
@@ -211,6 +220,22 @@ class InvoiceSerializer(serializers.ModelSerializer):
         if value < 0:
             raise serializers.ValidationError("Tax amount cannot be negative.")
         return value
+
+    @staticmethod
+    def _reconciliation(obj):
+        return get_invoice_reconciliation(obj)
+
+    def get_total_paid(self, obj):
+        return self._reconciliation(obj).get("total_paid")
+
+    def get_total_refunded(self, obj):
+        return self._reconciliation(obj).get("total_refunded")
+
+    def get_net_paid(self, obj):
+        return self._reconciliation(obj).get("net_paid")
+
+    def get_pending_balance(self, obj):
+        return self._reconciliation(obj).get("pending_balance")
     
 class PaymentSerializer(serializers.ModelSerializer):
     payment_method_name = serializers.CharField(source="payment_method.name", read_only=True)

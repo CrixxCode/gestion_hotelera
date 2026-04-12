@@ -57,6 +57,17 @@ CLEANING_ACTIVE_STATUS_CODES = {
     CLEANING_STATUS_PENDING,
     CLEANING_STATUS_IN_PROGRESS,
 }
+CLEANING_PRIORITY_LOW = "BAJA"
+CLEANING_PRIORITY_MEDIUM = "MEDIA"
+CLEANING_PRIORITY_HIGH = "ALTA"
+CLEANING_PRIORITY_URGENT = "URGENTE"
+CLEANING_PREMIUM_ROOM_TYPE_KEYWORDS = (
+    "SUITE",
+    "PRESIDENCIAL",
+    "DELUXE",
+    "PENTHOUSE",
+    "VIP",
+)
 
 INVENTORY_CHECK_TYPE_CHECK_IN = ReservationInventoryCheck.CheckType.CHECK_IN
 INVENTORY_CHECK_TYPE_CHECK_OUT = ReservationInventoryCheck.CheckType.CHECK_OUT
@@ -990,6 +1001,124 @@ def _get_post_checkout_cleaning_status():
     )
 
 
+def _build_active_master_data_catalog(group: str) -> tuple[dict[str, MasterData], MasterData | None]:
+    catalog = list(
+        MasterData.objects.filter(group=group, is_active=True).order_by("sort_order", "id")
+    )
+    by_code = {_normalize_code(item.code): item for item in catalog}
+    default_item = (
+        by_code.get(_normalize_code(CLEANING_PRIORITY_MEDIUM))
+        if group == MasterData.Group.MAINTENANCE_PRIORITY
+        else None
+    )
+    if default_item is None and catalog:
+        default_item = catalog[0]
+    return by_code, default_item
+
+
+def _pick_master_data_from_catalog(
+    by_code: dict[str, MasterData],
+    ordered_codes: Iterable[str],
+    *,
+    default_item: MasterData | None = None,
+) -> MasterData | None:
+    for code in ordered_codes:
+        item = by_code.get(_normalize_code(code))
+        if item is not None:
+            return item
+    return default_item
+
+
+def _safe_positive_int(value: Any) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return parsed if parsed > 0 else 0
+
+
+def _safe_non_negative_int(value: Any) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return parsed if parsed >= 0 else 0
+
+
+def _resolve_post_checkout_cleaning_priority(
+    reservation_room,
+    *,
+    priority_by_code: dict[str, MasterData],
+    default_priority: MasterData | None,
+) -> tuple[MasterData | None, str, int, int | None, str]:
+    room = getattr(reservation_room, "room", None)
+    room_type = getattr(room, "room_type", None)
+
+    adults = _safe_positive_int(getattr(reservation_room, "adults", 0))
+    children = _safe_non_negative_int(getattr(reservation_room, "children", 0))
+    total_guests = adults + children
+
+    capacity = _safe_positive_int(getattr(room_type, "capacity", None)) or None
+    room_type_code = _normalize_code(getattr(room_type, "code", ""))
+    room_type_name = _normalize_code(getattr(room_type, "name", ""))
+    room_type_signature = f"{room_type_code} {room_type_name}".strip()
+    room_type_label = (
+        getattr(room_type, "name", None) or getattr(room_type, "code", None) or "SIN_TIPO"
+    )
+
+    is_premium_room = any(
+        keyword in room_type_signature for keyword in CLEANING_PREMIUM_ROOM_TYPE_KEYWORDS
+    )
+
+    if capacity and total_guests > capacity:
+        ordered_codes = (
+            CLEANING_PRIORITY_URGENT,
+            CLEANING_PRIORITY_HIGH,
+            CLEANING_PRIORITY_MEDIUM,
+            CLEANING_PRIORITY_LOW,
+        )
+        reason = f"sobreocupacion ({total_guests}/{capacity})"
+    elif capacity and total_guests >= max(1, round(capacity * 0.85)):
+        ordered_codes = (
+            CLEANING_PRIORITY_HIGH,
+            CLEANING_PRIORITY_MEDIUM,
+            CLEANING_PRIORITY_LOW,
+        )
+        reason = f"ocupacion alta ({total_guests}/{capacity})"
+    elif is_premium_room:
+        ordered_codes = (
+            CLEANING_PRIORITY_HIGH,
+            CLEANING_PRIORITY_MEDIUM,
+            CLEANING_PRIORITY_LOW,
+        )
+        reason = f"habitacion premium ({room_type_label})"
+    elif capacity and total_guests <= max(1, round(capacity * 0.5)):
+        ordered_codes = (
+            CLEANING_PRIORITY_LOW,
+            CLEANING_PRIORITY_MEDIUM,
+            CLEANING_PRIORITY_HIGH,
+        )
+        reason = f"ocupacion baja ({total_guests}/{capacity})"
+    else:
+        ordered_codes = (
+            CLEANING_PRIORITY_MEDIUM,
+            CLEANING_PRIORITY_HIGH,
+            CLEANING_PRIORITY_LOW,
+        )
+        reason = (
+            f"ocupacion media ({total_guests}/{capacity})"
+            if capacity
+            else "ocupacion sin capacidad configurada"
+        )
+
+    priority = _pick_master_data_from_catalog(
+        priority_by_code,
+        ordered_codes,
+        default_item=default_priority,
+    )
+    return priority, reason, total_guests, capacity, room_type_label
+
+
 def create_post_checkout_cleaning_tasks(reservation) -> int:
     if not reservation or not getattr(reservation, "id", None):
         return 0
@@ -999,8 +1128,12 @@ def create_post_checkout_cleaning_tasks(reservation) -> int:
     if not task_type or not task_status:
         return 0
 
-    room_ids = list(
-        reservation.rooms_detail.values_list("room_id", flat=True).distinct()
+    reservation_rooms = list(
+        reservation.rooms_detail.select_related("room__room_type")
+        .exclude(room_id__isnull=True)
+    )
+    room_ids = sorted(
+        {room_line.room_id for room_line in reservation_rooms if room_line.room_id}
     )
     if not room_ids:
         return 0
@@ -1013,30 +1146,59 @@ def create_post_checkout_cleaning_tasks(reservation) -> int:
         )
     scheduled_for = timezone.localtime(check_out_at).date()
     notes = f"Limpieza post check-out de reserva #{reservation.id}."
+    automation_marker = f"AUTOGEN_CHECKOUT:{reservation.id}"
 
     existing_room_ids = set(
         CleaningTask.objects.filter(
             room_id__in=room_ids,
             task_type_id=task_type.id,
             scheduled_for=scheduled_for,
-            notes=notes,
+        )
+        .filter(
+            Q(notes=notes) | Q(notes__contains=automation_marker),
         ).values_list("room_id", flat=True)
     )
 
-    room_ids_to_create = [room_id for room_id in room_ids if room_id not in existing_room_ids]
-    if not room_ids_to_create:
-        return 0
+    priority_by_code, default_priority = _build_active_master_data_catalog(
+        MasterData.Group.MAINTENANCE_PRIORITY
+    )
 
-    tasks_to_create = [
-        CleaningTask(
-            room_id=room_id,
-            task_type=task_type,
-            status=task_status,
-            scheduled_for=scheduled_for,
-            notes=notes,
+    room_ids_to_create: list[int] = []
+    tasks_to_create: list[CleaningTask] = []
+    for room_line in reservation_rooms:
+        room_id = room_line.room_id
+        if not room_id or room_id in existing_room_ids:
+            continue
+
+        priority, reason, total_guests, capacity, room_type_label = (
+            _resolve_post_checkout_cleaning_priority(
+                room_line,
+                priority_by_code=priority_by_code,
+                default_priority=default_priority,
+            )
         )
-        for room_id in room_ids_to_create
-    ]
+        priority_code = priority.code if priority else "SIN_PRIORIDAD"
+        capacity_label = str(capacity) if capacity else "N/A"
+        task_notes = (
+            f"Limpieza post check-out de reserva #{reservation.id}. "
+            f"[{automation_marker}] Prioridad {priority_code}: {reason}. "
+            f"Tipo {room_type_label}; ocupacion {total_guests}/{capacity_label}."
+        )
+
+        tasks_to_create.append(
+            CleaningTask(
+                room_id=room_id,
+                task_type=task_type,
+                status=task_status,
+                priority=priority,
+                scheduled_for=scheduled_for,
+                notes=task_notes,
+            )
+        )
+        room_ids_to_create.append(room_id)
+
+    if not tasks_to_create:
+        return 0
 
     CleaningTask.objects.bulk_create(tasks_to_create)
     sync_room_status_for_room_ids(room_ids_to_create)

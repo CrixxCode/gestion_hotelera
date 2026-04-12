@@ -168,6 +168,14 @@ class CleaningTask(models.Model):
         related_name="cleaning_tasks_by_status",
         limit_choices_to={"group": MasterData.Group.CLEANING_STATUS},
     )
+    priority = models.ForeignKey(
+        MasterData,
+        on_delete=models.PROTECT,
+        related_name="cleaning_tasks_by_priority",
+        limit_choices_to={"group": MasterData.Group.MAINTENANCE_PRIORITY},
+        blank=True,
+        null=True,
+    )
     scheduled_for = models.DateField(blank=True, null=True)
     completed_at = models.DateTimeField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
@@ -185,11 +193,18 @@ class CleaningTask(models.Model):
     def status_code(self):
         return self.status.code if self.status else None
 
+    @property
+    def priority_code(self):
+        return self.priority.code if self.priority else None
+
     def get_task_type_display(self):
         return self.task_type.name if self.task_type else ""
 
     def get_status_display(self):
         return self.status.name if self.status else ""
+
+    def get_priority_display(self):
+        return self.priority.name if self.priority else ""
 
     def __str__(self):
         return f"{self.room.number} - {self.task_type}"

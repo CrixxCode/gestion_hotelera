@@ -219,14 +219,14 @@ class BillingAutomationTestCase(TestCase):
         invoice.refresh_from_db()
         self.assertEqual(invoice.subtotal, Decimal("225000.00"))
 
-    def test_updates_invoice_status_to_emitida_and_pagada_on_payments(self):
+    def test_updates_invoice_status_to_parcial_and_pagada_on_payments(self):
         invoice = self._get_reservation_invoice()
         self.assertIsNotNone(invoice)
         self.assertEqual(invoice.status.code, "BORRADOR")
 
         self._create_payment(invoice, "5000.00")
         invoice.refresh_from_db()
-        self.assertEqual(invoice.status.code, "EMITIDA")
+        self.assertEqual(invoice.status.code, "PARCIAL")
 
         self._create_payment(invoice, "20000.00")
         invoice.refresh_from_db()
@@ -250,16 +250,16 @@ class BillingAutomationTestCase(TestCase):
             is_active=True,
         )
         invoice.refresh_from_db()
-        self.assertEqual(invoice.status.code, "EMITIDA")
+        self.assertEqual(invoice.status.code, "PARCIAL")
 
         payment = Payment.objects.filter(invoice=invoice, is_active=True).first()
         self.assertIsNotNone(payment)
         payment.is_active = False
         payment.save(update_fields=["is_active"])
         invoice.refresh_from_db()
-        self.assertEqual(invoice.status.code, "BORRADOR")
+        self.assertEqual(invoice.status.code, "PENDIENTE")
 
-    def test_keeps_invoice_status_emitida_after_checkout_without_payments(self):
+    def test_keeps_invoice_status_pendiente_after_checkout_without_payments(self):
         invoice = self._get_reservation_invoice()
         self.assertIsNotNone(invoice)
         self.assertEqual(invoice.status.code, "BORRADOR")
@@ -271,7 +271,7 @@ class BillingAutomationTestCase(TestCase):
         self.reservation.save(update_fields=["status", "real_check_in", "real_check_out"])
 
         invoice.refresh_from_db()
-        self.assertEqual(invoice.status.code, "EMITIDA")
+        self.assertEqual(invoice.status.code, "PENDIENTE")
 
     def test_processed_refund_reopens_pending_balance(self):
         invoice = self._get_reservation_invoice()
@@ -283,7 +283,7 @@ class BillingAutomationTestCase(TestCase):
 
         self._create_refund(payment, "5000.00", status=self.payment_refund_status_processed)
         invoice.refresh_from_db()
-        self.assertEqual(invoice.status.code, "EMITIDA")
+        self.assertEqual(invoice.status.code, "PARCIAL")
 
         self._create_payment(invoice, "5000.00")
         invoice.refresh_from_db()
@@ -306,7 +306,19 @@ class BillingAutomationTestCase(TestCase):
         refund.status = self.payment_refund_status_approved
         refund.save(update_fields=["status"])
         invoice.refresh_from_db()
-        self.assertEqual(invoice.status.code, "EMITIDA")
+        self.assertEqual(invoice.status.code, "PARCIAL")
+
+    def test_processed_full_refund_marks_invoice_as_reembolsada(self):
+        invoice = self._get_reservation_invoice()
+        self.assertIsNotNone(invoice)
+
+        payment = self._create_payment(invoice, "25000.00")
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status.code, "PAGADA")
+
+        self._create_refund(payment, "25000.00", status=self.payment_refund_status_processed)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.status.code, "REEMBOLSADA")
 
     def test_charge_serializer_rejects_new_charge_for_checked_out_reservation(self):
         now = timezone.now()

@@ -1,7 +1,10 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { Router, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { catchError, of } from 'rxjs';
 import { AuthService, MenuItem, MeResponse } from '../../../services/auth/auth';
+import { HotelSettingsService } from '../../../services/hotel-settings';
+import { HotelSettings } from '../../pages/hotel-settings/hotel-setting-model';
 
 @Component({
   selector: 'app-aside',
@@ -11,6 +14,12 @@ import { AuthService, MenuItem, MeResponse } from '../../../services/auth/auth';
   styleUrls: ['./aside.css']
 })
 export class Aside implements OnInit, OnDestroy {
+  readonly defaultBrandLogo = 'logo.png';
+  readonly defaultBrandName = 'HotelManager Pro';
+
+  brandLogo = this.defaultBrandLogo;
+  brandName = this.defaultBrandName;
+
   menu: MenuItem[] = [];
   openGroups: Record<string, boolean> = {};
   currentTime = '';
@@ -19,11 +28,14 @@ export class Aside implements OnInit, OnDestroy {
 
   constructor(
     private authService: AuthService,
+    private hotelSettingsService: HotelSettingsService,
     private router: Router
   ) {}
 
   ngOnInit(): void {
     this.startClock();
+    this.loadBranding();
+
     this.authService.getUserInfo().subscribe({
       next: (user: MeResponse) => {
         const rawMenu = Array.isArray(user.menu) ? user.menu : [];
@@ -53,6 +65,11 @@ export class Aside implements OnInit, OnDestroy {
     if (this.clockTimer) {
       clearInterval(this.clockTimer);
     }
+  }
+
+  @HostListener('window:gh-hotel-brand-updated')
+  onHotelBrandingUpdated(): void {
+    this.loadBranding();
   }
 
   toggleGroup(id: string): void {
@@ -176,5 +193,23 @@ export class Aside implements OnInit, OnDestroy {
 
     updateClock();
     this.clockTimer = setInterval(updateClock, 1000);
+  }
+
+  private loadBranding(): void {
+    this.hotelSettingsService
+      .getCurrentSettings()
+      .pipe(catchError(() => of(null)))
+      .subscribe((settings) => {
+        this.applyBranding(settings);
+      });
+  }
+
+  private applyBranding(settings: HotelSettings | null): void {
+    const hotelName = String(settings?.hotel_name || '').trim();
+    this.brandName = hotelName || this.defaultBrandName;
+
+    const logoPath = String(settings?.logo || '').trim();
+    const resolvedLogo = this.authService.buildMediaUrl(logoPath);
+    this.brandLogo = resolvedLogo || this.defaultBrandLogo;
   }
 }

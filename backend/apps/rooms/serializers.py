@@ -192,8 +192,14 @@ class CleaningTaskSerializer(serializers.ModelSerializer):
     room_number = serializers.CharField(source="room.number", read_only=True)
     task_type = MasterDataCodeField(group=MasterData.Group.CLEANING_TASK_TYPE)
     status = MasterDataCodeField(group=MasterData.Group.CLEANING_STATUS)
+    priority = MasterDataCodeField(
+        group=MasterData.Group.MAINTENANCE_PRIORITY,
+        allow_null=True,
+        required=False,
+    )
     task_type_label = serializers.CharField(source="task_type.name", read_only=True)
     status_label = serializers.CharField(source="status.name", read_only=True)
+    priority_label = serializers.CharField(source="priority.name", read_only=True)
 
     class Meta:
         model = CleaningTask
@@ -205,6 +211,8 @@ class CleaningTaskSerializer(serializers.ModelSerializer):
             "task_type_label",
             "status",
             "status_label",
+            "priority",
+            "priority_label",
             "scheduled_for",
             "completed_at",
             "notes",

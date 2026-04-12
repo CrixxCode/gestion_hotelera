@@ -15,6 +15,7 @@ export interface HotelSettings {
     legal_name?: string;
     slogan?: string;
     description?: string;
+    logo?: string | null;
     stars?: number;
 
     // Redes sociales

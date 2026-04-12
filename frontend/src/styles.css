@@ -10,8 +10,9 @@
 
 /* ===== Scrollbar invisible/flotante con degradado dorado ===== */
 .aside-scroll {
-  scrollbar-gutter: stable both-edges;  /* evita saltos al aparecer la barra */
+  scrollbar-gutter: stable;  /* evita saltos al aparecer la barra sin crear dos franjas */
   overscroll-behavior: contain;
+  background: linear-gradient(180deg, var(--gh-brand) 0%, var(--gh-brand) 52%, var(--gh-brand-secondary, var(--gh-brand-hover)) 100%);
 }
 
 /* Chrome / Edge / Safari */
@@ -72,6 +73,7 @@
   --gh-text-muted: #64748b;
   --gh-text-soft: #94a3b8;
   --gh-brand: #0f1f41;
+  --gh-brand-secondary: #112853;
   --gh-brand-hover: #112853;
   --gh-on-brand: #ffffff;
   --gh-shadow-soft: 0 10px 24px rgba(15, 23, 42, 0.06);
@@ -296,9 +298,9 @@
 }
 
 .gh-view-toggle button.active {
-  background: #0f1f41 !important;
-  border-color: #0f1f41 !important;
-  color: #fff !important;
+  background: var(--gh-brand) !important;
+  border-color: var(--gh-brand) !important;
+  color: var(--gh-on-brand) !important;
 }
 
 .gh-action-group {
@@ -329,9 +331,27 @@
 }
 
 .gh-btn-dark {
-  background: #0f1f41 !important;
-  color: #fff !important;
-  border-color: #0f1f41 !important;
+  background: var(--gh-brand) !important;
+  color: var(--gh-on-brand) !important;
+  border-color: var(--gh-brand) !important;
+}
+
+.gh-btn-dark:hover:not(:disabled),
+.btn.btn-primary:hover:not(:disabled),
+.btn-primary:hover:not(:disabled),
+.btn.btn-dark:hover:not(:disabled),
+.btn-dark:hover:not(:disabled) {
+  background: var(--gh-brand-hover) !important;
+  border-color: var(--gh-brand-hover) !important;
+}
+
+.btn.btn-primary,
+.btn-primary,
+.btn.btn-dark,
+.btn-dark {
+  background: var(--gh-brand) !important;
+  border-color: var(--gh-brand) !important;
+  color: var(--gh-on-brand) !important;
 }
 
 .gh-btn:disabled {
@@ -414,6 +434,7 @@
   --gh-text-muted: #94a3b8;
   --gh-text-soft: #94a3b8;
   --gh-brand: #1e3a8a;
+  --gh-brand-secondary: #1d4ed8;
   --gh-brand-hover: #1d4ed8;
   --gh-on-brand: #f8fafc;
   --gh-shadow-soft: 0 10px 24px rgba(2, 6, 23, 0.45);

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.inventory.models import Item, InventoryMovement, RoomInventory
+from apps.inventory.models import InventoryMovement, InventoryRestockAlert, Item, RoomInventory
 
 
 @admin.register(Item)
@@ -50,3 +50,21 @@ class RoomInventoryAdmin(admin.ModelAdmin):
     )
     search_fields = ("room__number", "item__name", "notes")
     list_filter = ("is_active",)
+
+
+@admin.register(InventoryRestockAlert)
+class InventoryRestockAlertAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "item",
+        "status",
+        "current_stock",
+        "minimum_stock",
+        "suggested_quantity",
+        "reference",
+        "is_active",
+        "created_at",
+        "resolved_at",
+    )
+    search_fields = ("item__name", "reference", "notes")
+    list_filter = ("status", "is_active", "created_at", "resolved_at")

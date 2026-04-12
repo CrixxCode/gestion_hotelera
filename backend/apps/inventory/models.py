@@ -218,3 +218,42 @@ class RoomInventory(models.Model):
 
     def __str__(self):
         return f"{self.room} - {self.item.name}"
+
+
+class InventoryRestockAlert(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Borrador"
+        RESOLVED = "RESOLVED", "Resuelta"
+
+    item = models.ForeignKey(
+        Item,
+        on_delete=models.CASCADE,
+        related_name="restock_alerts",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT,
+        db_index=True,
+    )
+    reference = models.CharField(max_length=120, db_index=True)
+    current_stock = models.PositiveIntegerField(default=0)
+    minimum_stock = models.PositiveIntegerField(default=0)
+    suggested_quantity = models.PositiveIntegerField(default=0)
+    notes = models.TextField(blank=True, null=True)
+    resolved_at = models.DateTimeField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "inventory_restock_alert"
+        ordering = ["-id"]
+        indexes = [
+            models.Index(fields=["item", "status", "is_active"]),
+        ]
+
+    def __str__(self):
+        return f"Restock alert #{self.id} - {self.item.name}"

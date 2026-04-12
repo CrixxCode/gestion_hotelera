@@ -5,8 +5,8 @@
     (click)="toggleAside()"></div>
 
   <!-- ASIDE con animación -->
-  <aside class="fixed md:static top-0 left-0 h-screen bg-gradient-to-b from-[#111827] to-[#1F2937]
-           text-[#F9FAFB] shadow-2xl z-30 md:z-auto
+  <aside class="fixed md:static top-0 left-0 h-screen
+           shadow-2xl z-30 md:z-auto
            transition-all duration-300 ease-in-out transform
            overflow-hidden shrink-0" [class.w-64]="isAsideOpen()" [class.w-0]="!isAsideOpen() && !isMobile"
     [class.-translate-x-full]="!isAsideOpen() && isMobile" [class.translate-x-0]="isAsideOpen() && isMobile">

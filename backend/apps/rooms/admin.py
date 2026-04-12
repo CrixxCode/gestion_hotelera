@@ -42,7 +42,13 @@ class MaintenanceOrderAdmin(admin.ModelAdmin):
 
 @admin.register(CleaningTask)
 class CleaningTaskAdmin(admin.ModelAdmin):
-    list_display = ("id", "room", "task_type", "status", "scheduled_for")
-    list_filter = ("status", "task_type", "room__floor")
-    search_fields = ("room__number", "notes", "task_type__code", "status__code")
+    list_display = ("id", "room", "task_type", "status", "priority", "scheduled_for")
+    list_filter = ("status", "task_type", "priority", "room__floor")
+    search_fields = (
+        "room__number",
+        "notes",
+        "task_type__code",
+        "status__code",
+        "priority__code",
+    )
 

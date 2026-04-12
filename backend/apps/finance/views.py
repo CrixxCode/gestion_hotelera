@@ -11,17 +11,21 @@ from accounts.soft_delete import LogicalDeleteViewSetMixin
 from apps.finance.models import (
     Expense,
     FinancialControlConfig,
+    OperationalAlert,
     FinancialStatementSnapshot,
 )
 from apps.finance.serializers import (
     ExpenseSerializer,
     FinancialControlConfigSerializer,
+    OperationalAlertSerializer,
     FinancialStatementSnapshotSerializer,
 )
 from apps.hotel_settings.models import HotelSettings
 from apps.finance.services import (
     build_financial_dashboard,
     build_financial_statements,
+    sync_operational_alerts_for_all_hotels,
+    sync_operational_alerts_for_hotel,
     build_what_if_scenario,
     parse_decimal_param,
     resolve_period,
@@ -102,6 +106,64 @@ class FinancialControlConfigViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
+
+
+class OperationalAlertViewSet(viewsets.ModelViewSet):
+    queryset = OperationalAlert.objects.select_related("hotel_settings").order_by("-triggered_at", "-id")
+    serializer_class = OperationalAlertSerializer
+    pagination_class = None
+    permission_classes = [HasResourcePermission]
+    required_scopes = ["financial_control.read"]
+
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["hotel_settings", "alert_type", "severity", "status", "is_active"]
+    search_fields = ["title", "message", "hotel_settings__hotel_name", "alert_type"]
+    ordering_fields = [
+        "id",
+        "alert_type",
+        "severity",
+        "status",
+        "metric_value",
+        "threshold_value",
+        "triggered_at",
+        "resolved_at",
+        "updated_at",
+        "created_at",
+    ]
+    ordering = ["-triggered_at", "-id"]
+
+    def get_required_scopes(self):
+        if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            return ["financial_control.write"]
+        return self.required_scopes
+
+    def get_permissions(self):
+        self.required_scopes = self.get_required_scopes()
+        return super().get_permissions()
+
+    @action(detail=False, methods=["post"], url_path="sync")
+    def sync(self, request):
+        try:
+            raw_hotel_settings = (
+                request.data.get("hotel_settings")
+                if isinstance(request.data, dict)
+                else None
+            )
+            if raw_hotel_settings is None:
+                raw_hotel_settings = request.query_params.get("hotel_settings")
+
+            if raw_hotel_settings in (None, ""):
+                payload = sync_operational_alerts_for_all_hotels()
+                return Response(payload, status=status.HTTP_200_OK)
+
+            hotel_settings_id = int(raw_hotel_settings)
+            payload = sync_operational_alerts_for_hotel(hotel_settings_id=hotel_settings_id)
+            return Response(payload, status=status.HTTP_200_OK)
+        except (TypeError, ValueError):
+            return Response(
+                {"hotel_settings": "hotel_settings must be a valid integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class FinancialStatementSnapshotViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):

@@ -29,7 +29,7 @@ export class HotelSettingsService {
   /**
    * Crear configuración inicial del hotel
    */
-  createSettings(payload: Partial<HotelSettings>): Observable<HotelSettings> {
+  createSettings(payload: Partial<HotelSettings> | FormData): Observable<HotelSettings> {
     return this.http.post<HotelSettings>(
       this.settingsUrl,
       payload,
@@ -40,7 +40,7 @@ export class HotelSettingsService {
   /**
    * Actualizar configuración existente
    */
-  updateSettings(id: number, payload: Partial<HotelSettings>): Observable<HotelSettings> {
+  updateSettings(id: number, payload: Partial<HotelSettings> | FormData): Observable<HotelSettings> {
     return this.http.patch<HotelSettings>(
       `${this.settingsUrl}${id}/`,
       payload,

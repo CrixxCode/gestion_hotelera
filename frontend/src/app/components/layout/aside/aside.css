@@ -4,11 +4,12 @@
 }
 
 .aside-container {
-  --aside-bg-top: #08142f;
-  --aside-bg-bottom: #152647;
+  --aside-bg-top: var(--gh-brand);
+  --aside-bg-mid: var(--gh-brand);
+  --aside-bg-bottom: var(--gh-brand-secondary, var(--gh-brand-hover));
   --aside-text: #f3f5f8;
   --aside-muted: #b4c1d8;
-  --aside-active: #4d5a6e;
+  --aside-active: rgba(255, 255, 255, 0.16);
   --aside-gold: #e5b72e;
 
   height: 100%;
@@ -60,7 +61,7 @@
   font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: 0.2px;
-  color: #e9edf5;
+  color: var(--gh-on-brand);
 }
 
 .menu-root {

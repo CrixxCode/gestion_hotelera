@@ -10,7 +10,7 @@ from apps.clients.models import Client
 from apps.billing.models import Charge, Invoice, Payment
 from apps.billing.services import ensure_default_invoice_for_reservation
 from apps.hotel_settings.models import HotelFloor, HotelSettings, ReservationPolicy
-from apps.inventory.models import Item, RoomInventory
+from apps.inventory.models import InventoryMovement, Item, RoomInventory
 from apps.master_data.models import MasterData
 from apps.packages.models import Package
 from apps.reservations.models import (
@@ -26,6 +26,8 @@ from apps.reservations.serializers import (
     ReservationRoomSerializer,
     ReservationWriteSerializer,
 )
+from apps.inventory.services import apply_checkout_consumption_inventory
+from apps.reservations.services import create_post_checkout_cleaning_tasks
 from apps.rooms.models import CleaningTask, Rate, Room, RoomType
 
 User = get_user_model()
@@ -793,6 +795,18 @@ class ReservationApiFlowTestCase(APITestCase):
         self.cleaning_status_in_progress = self._md(
             MasterData.Group.CLEANING_STATUS, "EN_PROCESO", "En proceso", 2
         )
+        self.cleaning_priority_low = self._md(
+            MasterData.Group.MAINTENANCE_PRIORITY, "BAJA", "Baja", 1
+        )
+        self.cleaning_priority_medium = self._md(
+            MasterData.Group.MAINTENANCE_PRIORITY, "MEDIA", "Media", 2
+        )
+        self.cleaning_priority_high = self._md(
+            MasterData.Group.MAINTENANCE_PRIORITY, "ALTA", "Alta", 3
+        )
+        self.cleaning_priority_urgent = self._md(
+            MasterData.Group.MAINTENANCE_PRIORITY, "URGENTE", "Urgente", 4
+        )
         self.reservation_origin = self._md(MasterData.Group.RESERVATION_ORIGIN, "WEB", "Web", 1)
         self.payment_method_cash = self._md(MasterData.Group.PAYMENT_METHOD, "EFECTIVO", "Efectivo", 1)
         self.deposit_status_validated = self._md(
@@ -871,14 +885,26 @@ class ReservationApiFlowTestCase(APITestCase):
             expected_check_out=today + timedelta(days=check_out_offset),
         )
 
-    def _create_room_line(self, reservation: Reservation, night_rate=100000):
+    def _create_room_line(
+        self,
+        reservation: Reservation,
+        night_rate=100000,
+        *,
+        adults=2,
+        children=0,
+    ):
         return ReservationRoom.objects.create(
             reservation=reservation,
             room=self.room,
             night_rate=night_rate,
-            adults=2,
-            children=0,
+            adults=adults,
+            children=children,
         )
+
+    def _mark_reservation_as_checked_in(self, reservation: Reservation):
+        reservation.status = self.reservation_status_in_progress
+        reservation.real_check_in = timezone.now() - timedelta(hours=1)
+        reservation.save(update_fields=["status", "real_check_in"])
 
     def test_reservations_list_is_paginated(self):
         for index in range(25):
@@ -1013,14 +1039,24 @@ class ReservationApiFlowTestCase(APITestCase):
         self.assertIn("no esta disponible", str(check_in.data.get("detail", "")).lower())
 
     def test_check_out_creates_post_checkout_cleaning_task(self):
+        standard_type = RoomType.objects.create(
+            code="STD",
+            name="Standard",
+            capacity=2,
+            bed_count=1,
+            bed_type="Queen",
+            is_active=True,
+            sort_order=1,
+        )
+        self.room.room_type = standard_type
+        self.room.save(update_fields=["room_type"])
+
         reservation = self._create_reservation(status=self.reservation_status_pending)
         self._create_room_line(reservation=reservation, night_rate=100000)
 
         confirm = self.client.post(f"/api/reservations/{reservation.id}/confirm/", data={}, format="json")
         self.assertEqual(confirm.status_code, 200)
-
-        check_in = self.client.post(f"/api/reservations/{reservation.id}/check-in/", data={}, format="json")
-        self.assertEqual(check_in.status_code, 200)
+        self._mark_reservation_as_checked_in(reservation)
 
         check_out = self.client.post(f"/api/reservations/{reservation.id}/check-out/", data={}, format="json")
         self.assertEqual(check_out.status_code, 200)
@@ -1035,8 +1071,10 @@ class ReservationApiFlowTestCase(APITestCase):
         task = tasks.first()
         self.assertIsNotNone(task)
         self.assertEqual(task.status.code, "PENDIENTE")
+        self.assertEqual(task.priority.code, "ALTA")
         self.assertEqual(task.scheduled_for, expected_scheduled_for)
         self.assertIn(f"#{reservation.id}", task.notes or "")
+        self.assertIn("AUTOGEN_CHECKOUT", task.notes or "")
 
         checkout_inventory_check = ReservationInventoryCheck.objects.filter(
             reservation=reservation,
@@ -1056,6 +1094,65 @@ class ReservationApiFlowTestCase(APITestCase):
 
         check_out_again = self.client.post(f"/api/reservations/{reservation.id}/check-out/", data={}, format="json")
         self.assertEqual(check_out_again.status_code, 200)
+        self.assertEqual(
+            CleaningTask.objects.filter(room_id=self.room.id, task_type__code="SALIDA").count(),
+            1,
+        )
+
+    def test_check_out_assigns_low_cleaning_priority_for_low_occupancy(self):
+        family_type = RoomType.objects.create(
+            code="FAM",
+            name="Familiar",
+            capacity=4,
+            bed_count=2,
+            bed_type="Twin",
+            is_active=True,
+            sort_order=2,
+        )
+        self.room.room_type = family_type
+        self.room.save(update_fields=["room_type"])
+
+        reservation = self._create_reservation(status=self.reservation_status_pending)
+        self._create_room_line(
+            reservation=reservation,
+            night_rate=100000,
+            adults=1,
+            children=0,
+        )
+
+        self.client.post(f"/api/reservations/{reservation.id}/confirm/", data={}, format="json")
+        self._mark_reservation_as_checked_in(reservation)
+        check_out = self.client.post(f"/api/reservations/{reservation.id}/check-out/", data={}, format="json")
+
+        self.assertEqual(check_out.status_code, 200)
+        task = CleaningTask.objects.filter(room_id=self.room.id, task_type__code="SALIDA").first()
+        self.assertIsNotNone(task)
+        self.assertEqual(task.priority.code, "BAJA")
+        self.assertIn("ocupacion baja", task.notes or "")
+
+    def test_post_checkout_cleaning_task_creation_is_idempotent(self):
+        standard_type = RoomType.objects.create(
+            code="STD",
+            name="Standard",
+            capacity=2,
+            bed_count=1,
+            bed_type="Queen",
+            is_active=True,
+            sort_order=1,
+        )
+        self.room.room_type = standard_type
+        self.room.save(update_fields=["room_type"])
+
+        reservation = self._create_reservation(status=self.reservation_status_finished)
+        self._create_room_line(reservation=reservation, night_rate=100000)
+        reservation.real_check_out = timezone.now()
+        reservation.save(update_fields=["real_check_out"])
+
+        created_first = create_post_checkout_cleaning_tasks(reservation)
+        created_second = create_post_checkout_cleaning_tasks(reservation)
+
+        self.assertEqual(created_first, 1)
+        self.assertEqual(created_second, 0)
         self.assertEqual(
             CleaningTask.objects.filter(room_id=self.room.id, task_type__code="SALIDA").count(),
             1,
@@ -1092,7 +1189,7 @@ class ReservationApiFlowTestCase(APITestCase):
         self.room.refresh_from_db()
         self.assertEqual(self.room.status.code, "DISPONIBLE")
 
-    def test_check_out_marks_default_invoice_as_emitida(self):
+    def test_check_out_marks_default_invoice_as_pendiente(self):
         reservation = self._create_reservation(status=self.reservation_status_pending)
         self._create_room_line(reservation=reservation, night_rate=100000)
 
@@ -1107,15 +1204,14 @@ class ReservationApiFlowTestCase(APITestCase):
         confirm = self.client.post(f"/api/reservations/{reservation.id}/confirm/", data={}, format="json")
         self.assertEqual(confirm.status_code, 200)
 
-        check_in = self.client.post(f"/api/reservations/{reservation.id}/check-in/", data={}, format="json")
-        self.assertEqual(check_in.status_code, 200)
+        self._mark_reservation_as_checked_in(reservation)
 
         check_out = self.client.post(f"/api/reservations/{reservation.id}/check-out/", data={}, format="json")
         self.assertEqual(check_out.status_code, 200)
         self.assertEqual(check_out.data["status_code"], "FINALIZADA")
 
         invoice.refresh_from_db()
-        self.assertEqual(invoice.status.code, "EMITIDA")
+        self.assertEqual(invoice.status.code, "PENDIENTE")
 
     def test_check_in_creates_inventory_snapshot(self):
         reservation = self._create_reservation(status=self.reservation_status_pending)
@@ -1151,8 +1247,7 @@ class ReservationApiFlowTestCase(APITestCase):
         confirm = self.client.post(f"/api/reservations/{reservation.id}/confirm/", data={}, format="json")
         self.assertEqual(confirm.status_code, 200)
 
-        check_in = self.client.post(f"/api/reservations/{reservation.id}/check-in/", data={}, format="json")
-        self.assertEqual(check_in.status_code, 200)
+        self._mark_reservation_as_checked_in(reservation)
 
         check_out = self.client.post(
             f"/api/reservations/{reservation.id}/check-out/",
@@ -1199,6 +1294,33 @@ class ReservationApiFlowTestCase(APITestCase):
         self.assertEqual(shortage_charge.quantity, 2)
         self.assertEqual(shortage_charge.unit_price, self.towel_item.sale_price)
         self.assertEqual(shortage_charge.charge_type.code, "INVENTARIO_FALTANTE")
+
+        self.towel_item.refresh_from_db()
+        self.assertEqual(self.towel_item.stock, 98)
+
+        check_id = check_out.data["inventory_comparison"]["check_id"]
+        consumption_movement = InventoryMovement.objects.filter(
+            item=self.towel_item,
+            movement_type__code="LOSS",
+            reference=f"ROOM_CONSUMPTION:{check_id}:{self.room.id}:{self.towel_item.id}",
+        ).first()
+        self.assertIsNotNone(consumption_movement)
+        self.assertEqual(consumption_movement.quantity, 2)
+
+        apply_checkout_consumption_inventory(
+            reservation,
+            inventory_comparison=check_out.data["inventory_comparison"],
+        )
+        self.towel_item.refresh_from_db()
+        self.assertEqual(self.towel_item.stock, 98)
+        self.assertEqual(
+            InventoryMovement.objects.filter(
+                item=self.towel_item,
+                movement_type__code="LOSS",
+                reference=f"ROOM_CONSUMPTION:{check_id}:{self.room.id}:{self.towel_item.id}",
+            ).count(),
+            1,
+        )
         self.assertFalse(shortage_charge.is_automatic)
 
     def test_cancel_endpoint_blocks_confirm_after_cancellation(self):

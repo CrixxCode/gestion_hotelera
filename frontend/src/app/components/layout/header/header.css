@@ -1,0 +1,45 @@
+:host {
+  display: block;
+}
+
+.app-header-shell {
+  background: transparent !important;
+  border-bottom: 1px solid var(--gh-border-strong) !important;
+  color: var(--gh-text-strong);
+}
+
+.app-header-shell .header-menu-btn {
+  background: var(--gh-brand);
+  color: var(--gh-on-brand, #ffffff);
+  border: 1px solid var(--gh-brand);
+}
+
+.app-header-shell .header-menu-btn:hover {
+  background: var(--gh-brand-hover);
+  border-color: var(--gh-brand-hover);
+}
+
+.app-header-shell .header-notification-btn {
+  color: var(--gh-text-muted);
+}
+
+.app-header-shell .header-notification-btn:hover {
+  background: var(--gh-surface-soft);
+  color: var(--gh-text-strong);
+}
+
+.app-header-shell .header-user-name {
+  color: var(--gh-text-strong) !important;
+}
+
+.app-header-shell .header-user-role {
+  color: var(--gh-brand-secondary, var(--gh-brand-hover)) !important;
+}
+
+.app-header-shell .header-avatar {
+  border-color: var(--gh-brand-secondary, var(--gh-brand-hover)) !important;
+}
+
+.app-header-shell .header-chevron {
+  color: var(--gh-text-muted) !important;
+}

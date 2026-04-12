@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
 from apps.billing.models import Payment
+from apps.inventory.services import apply_checkout_consumption_inventory
 from apps.reservations.models import (
     Reservation,
     ReservationRoom,
@@ -413,6 +414,10 @@ class ReservationViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
                     reservation,
                     inventory_review_lines=inventory_review_lines,
                     created_by=request.user,
+                )
+                apply_checkout_consumption_inventory(
+                    reservation,
+                    inventory_comparison=inventory_comparison,
                 )
                 from apps.billing.services import (
                     create_inventory_missing_charges_for_checkout,

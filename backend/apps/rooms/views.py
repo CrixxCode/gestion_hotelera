@@ -177,7 +177,11 @@ class MaintenanceOrderViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 
 
 class CleaningTaskViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
-    queryset = CleaningTask.objects.select_related("room", "task_type", "status").all().order_by("-created_at")
+    queryset = (
+        CleaningTask.objects.select_related("room", "task_type", "status", "priority")
+        .all()
+        .order_by("-created_at")
+    )
     serializer_class = CleaningTaskSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -191,8 +195,17 @@ class CleaningTaskViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         "task_type__name",
         "status__code",
         "status__name",
+        "priority__code",
+        "priority__name",
     ]
-    ordering_fields = ["id", "scheduled_for", "created_at", "completed_at"]
+    ordering_fields = [
+        "id",
+        "scheduled_for",
+        "created_at",
+        "completed_at",
+        "priority__sort_order",
+        "priority__code",
+    ]
     ordering = ["-created_at"]
 
     def get_required_scopes(self):

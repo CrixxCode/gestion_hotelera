@@ -3,6 +3,7 @@ from rest_framework import serializers
 from apps.finance.models import (
     Expense,
     FinancialControlConfig,
+    OperationalAlert,
     FinancialStatementSnapshot,
 )
 from apps.master_data.models import MasterData
@@ -79,10 +80,48 @@ class FinancialControlConfigSerializer(serializers.ModelSerializer):
             "fontur_rate_per_thousand",
             "break_even_warning_pct",
             "break_even_optimal_pct",
+            "operational_high_occupancy_threshold_pct",
+            "operational_low_availability_threshold_rooms",
+            "operational_revenue_drop_threshold_pct",
+            "operational_high_refunds_threshold_count",
+            "operational_revenue_window_days",
+            "operational_refund_window_days",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ("id", "created_at", "updated_at")
+
+
+class OperationalAlertSerializer(serializers.ModelSerializer):
+    hotel_name = serializers.CharField(source="hotel_settings.hotel_name", read_only=True)
+
+    class Meta:
+        model = OperationalAlert
+        fields = [
+            "id",
+            "hotel_settings",
+            "hotel_name",
+            "alert_type",
+            "severity",
+            "status",
+            "title",
+            "message",
+            "metric_value",
+            "threshold_value",
+            "metadata",
+            "is_active",
+            "triggered_at",
+            "resolved_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = (
+            "id",
+            "hotel_name",
+            "triggered_at",
+            "created_at",
+            "updated_at",
+        )
 
 
 class FinancialStatementSnapshotSerializer(serializers.ModelSerializer):

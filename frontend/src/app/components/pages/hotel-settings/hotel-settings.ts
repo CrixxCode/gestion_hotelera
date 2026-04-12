@@ -79,6 +79,10 @@ type FinancialConfigForm = {
 export class HotelSettings implements OnInit {
   private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
   private readonly floorsUrl = `${this.apiBase}/api/hotel-floors/`;
+  private readonly themePrimaryStorageKey = 'gh_theme_primary';
+  private readonly themeSecondaryStorageKey = 'gh_theme_secondary';
+  private readonly defaultThemePrimaryColor = '#0f1f41';
+  private readonly defaultThemeSecondaryColor = '#112853';
 
   loading = true;
   saving = false;
@@ -114,6 +118,9 @@ export class HotelSettings implements OnInit {
 
   private initialSnapshot = '';
   private readonly defaultDistrictName = 'Riohacha';
+  themePrimaryColor = this.defaultThemePrimaryColor;
+  themeSecondaryColor = this.defaultThemeSecondaryColor;
+  selectedLogoFile: File | null = null;
 
   readonly tabs: Array<{ key: SettingsTab; label: string; icon: string }> = [
     { key: 'general', label: 'Información General', icon: 'fa-solid fa-building' },
@@ -154,6 +161,7 @@ export class HotelSettings implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.loadThemeCustomization();
     this.resolvePermissions();
     this.loadCurrentSettings();
   }
@@ -227,6 +235,7 @@ export class HotelSettings implements OnInit {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0] ?? null;
     if (!file) return;
+    this.selectedLogoFile = file;
     this.successMessage = `Logo seleccionado: ${file.name}`;
   }
 
@@ -420,7 +429,7 @@ export class HotelSettings implements OnInit {
     }
 
     this.saving = true;
-    const payload = this.buildPayload();
+    const payload = this.buildSavePayload();
     const save$ = this.settingsId
       ? this.settingsSvc.updateSettings(this.settingsId, payload)
       : this.settingsSvc.createSettings(payload);
@@ -439,7 +448,9 @@ export class HotelSettings implements OnInit {
       .subscribe({
         next: (fresh) => {
           this.saving = false;
+          this.selectedLogoFile = null;
           this.applySettings(fresh);
+          this.notifyBrandingUpdated();
           this.initialSnapshot = this.currentSnapshot();
           this.successMessage = successActionAlert('save', 'configuracion del hotel');
         },
@@ -479,14 +490,18 @@ export class HotelSettings implements OnInit {
           .subscribe({
             next: (fresh) => {
               this.saving = false;
+              this.selectedLogoFile = null;
               this.applySettings(fresh);
+              this.notifyBrandingUpdated();
               this.initialSnapshot = this.currentSnapshot();
               this.successMessage = successActionAlert('delete', 'configuracion del hotel');
             },
             error: (error) => {
               this.saving = false;
               if (error?.status === 404) {
+                this.selectedLogoFile = null;
                 this.applySettings(null);
+                this.notifyBrandingUpdated();
                 this.initialSnapshot = this.currentSnapshot();
                 this.successMessage = 'No habia configuracion activa.';
                 return;
@@ -507,6 +522,24 @@ export class HotelSettings implements OnInit {
     this.form.tax_rate = 19;
     this.form.system_language = 'es';
     this.form.timezone = 'America/Bogota';
+  }
+
+  onThemeColorsChanged(): void {
+    this.themePrimaryColor = this.normalizeThemeColor(this.themePrimaryColor, this.defaultThemePrimaryColor);
+    this.themeSecondaryColor = this.normalizeThemeColor(this.themeSecondaryColor, this.defaultThemeSecondaryColor);
+    this.persistThemeCustomization();
+    this.applyThemeCustomization();
+  }
+
+  resetThemeColors(): void {
+    this.themePrimaryColor = this.defaultThemePrimaryColor;
+    this.themeSecondaryColor = this.defaultThemeSecondaryColor;
+    this.persistThemeCustomization();
+    this.applyThemeCustomization();
+  }
+
+  get themeOnPrimaryColor(): string {
+    return this.resolveOnBrandColor(this.themePrimaryColor);
   }
 
   resetFinancialConfigForm(): void {
@@ -1078,6 +1111,20 @@ export class HotelSettings implements OnInit {
     };
   }
 
+  private buildSavePayload(): Partial<HotelSettingsModel> | FormData {
+    const payload = this.buildPayload();
+    if (!this.selectedLogoFile) return payload;
+
+    const formData = new FormData();
+    for (const [key, value] of Object.entries(payload)) {
+      if (value === undefined || value === null) continue;
+      formData.append(key, String(value));
+    }
+
+    formData.append('logo', this.selectedLogoFile);
+    return formData;
+  }
+
   private validateBeforeSave(): string | null {
     if (!(this.form.hotel_name || '').trim()) {
       return 'El nombre comercial del hotel es obligatorio.';
@@ -1265,6 +1312,61 @@ export class HotelSettings implements OnInit {
     return fallback;
   }
 
+  private loadThemeCustomization(): void {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const storedPrimary = localStorage.getItem(this.themePrimaryStorageKey);
+      const storedSecondary = localStorage.getItem(this.themeSecondaryStorageKey);
+
+      this.themePrimaryColor = this.normalizeThemeColor(storedPrimary, this.defaultThemePrimaryColor);
+      this.themeSecondaryColor = this.normalizeThemeColor(storedSecondary, this.defaultThemeSecondaryColor);
+      this.applyThemeCustomization();
+    } catch {
+      this.themePrimaryColor = this.defaultThemePrimaryColor;
+      this.themeSecondaryColor = this.defaultThemeSecondaryColor;
+    }
+  }
+
+  private persistThemeCustomization(): void {
+    if (typeof window === 'undefined') return;
+
+    try {
+      localStorage.setItem(this.themePrimaryStorageKey, this.themePrimaryColor);
+      localStorage.setItem(this.themeSecondaryStorageKey, this.themeSecondaryColor);
+    } catch {
+      // Ignore write errors for restricted browser contexts.
+    }
+  }
+
+  private applyThemeCustomization(): void {
+    if (typeof document === 'undefined') return;
+
+    const root = document.documentElement;
+    root.style.setProperty('--gh-brand', this.themePrimaryColor);
+    root.style.setProperty('--gh-brand-hover', this.themeSecondaryColor);
+    root.style.setProperty('--gh-brand-secondary', this.themeSecondaryColor);
+    root.style.setProperty('--gh-on-brand', this.resolveOnBrandColor(this.themePrimaryColor));
+  }
+
+  private normalizeThemeColor(value: string | null | undefined, fallback: string): string {
+    const candidate = String(value || '').trim();
+    return /^#[\da-fA-F]{6}$/.test(candidate) ? candidate.toLowerCase() : fallback;
+  }
+
+  private resolveOnBrandColor(hexColor: string): string {
+    const normalized = this.normalizeThemeColor(hexColor, this.defaultThemePrimaryColor).slice(1);
+    const red = parseInt(normalized.slice(0, 2), 16) / 255;
+    const green = parseInt(normalized.slice(2, 4), 16) / 255;
+    const blue = parseInt(normalized.slice(4, 6), 16) / 255;
+
+    const linearize = (channel: number): number =>
+      channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
+
+    const luminance = 0.2126 * linearize(red) + 0.7152 * linearize(green) + 0.0722 * linearize(blue);
+    return luminance > 0.45 ? '#0f172a' : '#ffffff';
+  }
+
   private buildDefaultForm(): SettingsForm {
     return {
       hotel_name: '',
@@ -1327,6 +1429,11 @@ export class HotelSettings implements OnInit {
     if (!settings || typeof settings !== 'object') return null;
     const value = (settings as Record<string, unknown>)['updated_at'];
     return typeof value === 'string' ? value : null;
+  }
+
+  private notifyBrandingUpdated(): void {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new Event('gh-hotel-brand-updated'));
   }
 }
 

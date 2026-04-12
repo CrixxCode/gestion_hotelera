@@ -96,6 +96,14 @@
   font-size: 14px;
 }
 
+.theme-color-input {
+  width: 52px;
+  height: 38px;
+  padding: 2px;
+  cursor: pointer;
+  background: var(--gh-surface);
+}
+
 .settings-footer {
   padding-left: 24px;
   padding-right: 24px;

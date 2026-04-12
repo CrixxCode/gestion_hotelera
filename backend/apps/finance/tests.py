@@ -2,13 +2,20 @@ from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.test import TestCase
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.billing.models import Charge, Invoice
+from apps.billing.models import Charge, Invoice, Payment, PaymentRefund
 from apps.clients.models import Client
-from apps.finance.models import Expense, FinancialControlConfig, FinancialStatementSnapshot
+from apps.finance.models import (
+    Expense,
+    FinancialControlConfig,
+    FinancialStatementSnapshot,
+    OperationalAlert,
+)
+from apps.finance.services import sync_operational_alerts_for_hotel
 from apps.hotel_settings.models import HotelFloor, HotelSettings
 from apps.master_data.models import MasterData
 from apps.reservations.models import Reservation, ReservationRoom
@@ -675,4 +682,256 @@ class FinancialControlApiTests(APITestCase):
                 )
             ),
             Decimal("60000.00"),
+        )
+
+
+class OperationalAlertsAutomationTests(TestCase):
+    def _md(self, group, code, name, sort_order=1):
+        return MasterData.objects.update_or_create(
+            group=group,
+            code=code,
+            defaults={"name": name, "is_active": True, "sort_order": sort_order},
+        )[0]
+
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_superuser(
+            username="ops_alert_admin",
+            email="ops_alert@test.local",
+            password="test-pass-123",
+        )
+
+        self.document_type = self._md(MasterData.Group.DOCUMENT_TYPE, "CC", "Cedula")
+        self.client_type = self._md(MasterData.Group.CLIENT_TYPE, "REGULAR", "Regular")
+        self.client_status = self._md(MasterData.Group.CLIENT_STATUS, "ACTIVO", "Activo")
+        self.reservation_status = self._md(MasterData.Group.RESERVATION_STATUS, "FINALIZADA", "Finalizada")
+        self.reservation_origin = self._md(MasterData.Group.RESERVATION_ORIGIN, "WEB", "Web")
+        self.invoice_status = self._md(MasterData.Group.INVOICE_STATUS, "PAGADA", "Pagada")
+        self.payment_method = self._md(MasterData.Group.PAYMENT_METHOD, "EFECTIVO", "Efectivo")
+        self.refund_status_approved = self._md(
+            MasterData.Group.PAYMENT_REFUND_STATUS,
+            "APROBADO",
+            "Aprobado",
+        )
+
+        self.room_status_available = self._md(MasterData.Group.ROOM_STATUS, "DISPONIBLE", "Disponible")
+        self.room_status_occupied = self._md(MasterData.Group.ROOM_STATUS, "OCUPADA", "Ocupada")
+        self.room_status_reserved = self._md(MasterData.Group.ROOM_STATUS, "RESERVADA", "Reservada")
+
+        self.hotel = HotelSettings.objects.create(
+            hotel_name="Hotel Alertas",
+            legal_name="Hotel Alertas SAS",
+            city="Riohacha",
+            currency="COP",
+        )
+        self.floor = HotelFloor.objects.create(
+            hotel_settings=self.hotel,
+            floor_number=1,
+            name="Piso 1",
+            prefix="1",
+            room_count=3,
+        )
+        self.room_type = RoomType.objects.create(code="STD", name="Estandar")
+        self.room_1 = Room.objects.create(
+            number="101",
+            room_type=self.room_type,
+            floor=self.floor,
+            status=self.room_status_available,
+        )
+        self.room_2 = Room.objects.create(
+            number="102",
+            room_type=self.room_type,
+            floor=self.floor,
+            status=self.room_status_available,
+        )
+        self.room_3 = Room.objects.create(
+            number="103",
+            room_type=self.room_type,
+            floor=self.floor,
+            status=self.room_status_available,
+        )
+
+        self.client_obj = Client.objects.create(
+            document_type=self.document_type,
+            document_number="123456789",
+            first_name="Ana",
+            last_name="Diaz",
+            email="ana.alert@test.local",
+            phone="3000000000",
+            country="CO",
+            client_type=self.client_type,
+            status=self.client_status,
+        )
+
+        today = timezone.localdate()
+        self.reservation = Reservation.objects.create(
+            client=self.client_obj,
+            status=self.reservation_status,
+            origin=self.reservation_origin,
+            expected_check_in=today - timedelta(days=1),
+            expected_check_out=today + timedelta(days=1),
+            created_by=self.user,
+        )
+        ReservationRoom.objects.create(
+            reservation=self.reservation,
+            room=self.room_1,
+            night_rate=Decimal("120000.00"),
+            adults=2,
+            children=0,
+        )
+
+        Invoice.objects.filter(reservation=self.reservation).update(is_active=False)
+        Charge.objects.filter(reservation=self.reservation).update(is_active=False)
+
+        FinancialControlConfig.objects.create(
+            hotel_settings=self.hotel,
+            district_name="Riohacha",
+            tourism_law_enabled=True,
+            tourism_law_preferential_rate=Decimal("9.00"),
+            standard_income_tax_rate=Decimal("35.00"),
+            has_iva_exemption=False,
+            iva_rate=Decimal("19.00"),
+            ica_rate_per_thousand=Decimal("9.6600"),
+            fontur_rate_per_thousand=Decimal("2.5000"),
+            break_even_warning_pct=Decimal("90.00"),
+            break_even_optimal_pct=Decimal("110.00"),
+            operational_high_occupancy_threshold_pct=Decimal("60.00"),
+            operational_low_availability_threshold_rooms=1,
+            operational_revenue_drop_threshold_pct=Decimal("20.00"),
+            operational_high_refunds_threshold_count=1,
+            operational_revenue_window_days=7,
+            operational_refund_window_days=7,
+        )
+
+    def _create_invoice(self, *, invoice_number: str, total_amount: Decimal, issue_date):
+        invoice = Invoice.objects.create(
+            reservation=self.reservation,
+            status=self.invoice_status,
+            invoice_number=invoice_number,
+            subtotal=total_amount,
+            tax_amount=Decimal("0.00"),
+            total_amount=total_amount,
+            is_active=True,
+        )
+        issue_datetime = datetime.combine(
+            issue_date,
+            time(9, 0),
+            tzinfo=timezone.get_current_timezone(),
+        )
+        Invoice.objects.filter(id=invoice.id).update(issue_date=issue_datetime)
+        invoice.refresh_from_db()
+        return invoice
+
+    def test_sync_creates_occupancy_and_availability_alerts(self):
+        Room.objects.filter(id=self.room_1.id).update(status=self.room_status_occupied)
+        Room.objects.filter(id=self.room_2.id).update(status=self.room_status_reserved)
+
+        result = sync_operational_alerts_for_hotel(
+            hotel_settings_id=self.hotel.id,
+            alert_types={
+                OperationalAlert.AlertType.HIGH_OCCUPANCY,
+                OperationalAlert.AlertType.LOW_AVAILABILITY,
+            },
+        )
+
+        self.assertEqual(result["created"], 2)
+        self.assertTrue(
+            OperationalAlert.objects.filter(
+                hotel_settings=self.hotel,
+                alert_type=OperationalAlert.AlertType.HIGH_OCCUPANCY,
+                status=OperationalAlert.Status.OPEN,
+            ).exists()
+        )
+        self.assertTrue(
+            OperationalAlert.objects.filter(
+                hotel_settings=self.hotel,
+                alert_type=OperationalAlert.AlertType.LOW_AVAILABILITY,
+                status=OperationalAlert.Status.OPEN,
+            ).exists()
+        )
+
+    def test_sync_creates_revenue_drop_alert(self):
+        today = timezone.localdate()
+        self._create_invoice(
+            invoice_number="FAC-OPS-0001",
+            total_amount=Decimal("1000000.00"),
+            issue_date=today - timedelta(days=10),
+        )
+        self._create_invoice(
+            invoice_number="FAC-OPS-0002",
+            total_amount=Decimal("500000.00"),
+            issue_date=today - timedelta(days=1),
+        )
+
+        result = sync_operational_alerts_for_hotel(
+            hotel_settings_id=self.hotel.id,
+            alert_types={OperationalAlert.AlertType.REVENUE_DROP},
+        )
+
+        self.assertGreaterEqual(result["created"] + result["updated"], 1)
+        alert = OperationalAlert.objects.filter(
+            hotel_settings=self.hotel,
+            alert_type=OperationalAlert.AlertType.REVENUE_DROP,
+            status=OperationalAlert.Status.OPEN,
+        ).first()
+        self.assertIsNotNone(alert)
+        self.assertIn("Caida de ingresos", alert.title)
+
+    def test_refund_signal_creates_high_refunds_alert(self):
+        invoice = self._create_invoice(
+            invoice_number="FAC-OPS-0003",
+            total_amount=Decimal("400000.00"),
+            issue_date=timezone.localdate() - timedelta(days=1),
+        )
+        payment = Payment.objects.create(
+            invoice=invoice,
+            payment_method=self.payment_method,
+            amount=Decimal("400000.00"),
+            is_active=True,
+        )
+
+        PaymentRefund.objects.create(
+            payment=payment,
+            status=self.refund_status_approved,
+            amount=Decimal("100000.00"),
+            reason="Prueba de alto volumen",
+            is_active=True,
+        )
+
+        self.assertTrue(
+            OperationalAlert.objects.filter(
+                hotel_settings=self.hotel,
+                alert_type=OperationalAlert.AlertType.HIGH_REFUNDS,
+                status=OperationalAlert.Status.OPEN,
+            ).exists()
+        )
+
+    def test_sync_resolves_occupancy_alert_when_metric_recovers(self):
+        Room.objects.filter(id=self.room_1.id).update(status=self.room_status_occupied)
+        Room.objects.filter(id=self.room_2.id).update(status=self.room_status_reserved)
+        sync_operational_alerts_for_hotel(
+            hotel_settings_id=self.hotel.id,
+            alert_types={
+                OperationalAlert.AlertType.HIGH_OCCUPANCY,
+                OperationalAlert.AlertType.LOW_AVAILABILITY,
+            },
+        )
+
+        Room.objects.filter(id=self.room_1.id).update(status=self.room_status_available)
+        Room.objects.filter(id=self.room_2.id).update(status=self.room_status_available)
+        result = sync_operational_alerts_for_hotel(
+            hotel_settings_id=self.hotel.id,
+            alert_types={
+                OperationalAlert.AlertType.HIGH_OCCUPANCY,
+                OperationalAlert.AlertType.LOW_AVAILABILITY,
+            },
+        )
+
+        self.assertGreaterEqual(result["resolved"], 2)
+        self.assertFalse(
+            OperationalAlert.objects.filter(
+                hotel_settings=self.hotel,
+                alert_type=OperationalAlert.AlertType.HIGH_OCCUPANCY,
+                status=OperationalAlert.Status.OPEN,
+            ).exists()
         )

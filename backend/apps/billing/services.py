@@ -27,9 +27,13 @@ DEFAULT_CHARGE_TYPES: dict[str, tuple[str, int]] = {
 
 DEFAULT_INVOICE_STATUSES: dict[str, tuple[str, int]] = {
     "BORRADOR": ("Borrador", 1),
-    "EMITIDA": ("Emitida", 2),
-    "PAGADA": ("Pagada", 3),
-    "ANULADA": ("Anulada", 4),
+    "PENDIENTE": ("Pendiente", 2),
+    "PARCIAL": ("Parcial", 3),
+    "PAGADA": ("Pagada", 4),
+    "REEMBOLSADA": ("Reembolsada", 5),
+    "ANULADA": ("Anulada", 6),
+    # Compatibilidad con catalogos existentes.
+    "EMITIDA": ("Emitida", 7),
 }
 
 DEFAULT_PAYMENT_REFUND_STATUSES: dict[str, tuple[str, int]] = {
@@ -394,7 +398,21 @@ def ensure_default_invoice_for_reservation(reservation_id: int | None):
     return _get_existing_default_invoice(reservation_id)
 
 
-def _get_invoice_total_paid(invoice: Invoice) -> Decimal:
+def get_invoice_reconciliation(invoice: Invoice | None) -> dict[str, Decimal | bool]:
+    if not invoice:
+        return {
+            "total_amount": MONEY_ZERO,
+            "total_paid": MONEY_ZERO,
+            "total_refunded": MONEY_ZERO,
+            "net_paid": MONEY_ZERO,
+            "pending_balance": MONEY_ZERO,
+            "fully_refunded": False,
+        }
+
+    total_amount = _to_decimal(invoice.total_amount)
+    if total_amount < MONEY_ZERO:
+        total_amount = MONEY_ZERO
+
     total_paid = _to_decimal(
         sum(
             payment.amount
@@ -414,8 +432,31 @@ def _get_invoice_total_paid(invoice: Invoice) -> Decimal:
 
     net_paid = total_paid - total_refunded
     if net_paid < MONEY_ZERO:
-        return MONEY_ZERO
-    return net_paid
+        net_paid = MONEY_ZERO
+
+    pending_balance = total_amount - net_paid
+    if pending_balance < MONEY_ZERO:
+        pending_balance = MONEY_ZERO
+
+    fully_refunded = (
+        total_paid > MONEY_ZERO
+        and net_paid == MONEY_ZERO
+        and total_refunded >= total_paid
+    )
+
+    return {
+        "total_amount": total_amount,
+        "total_paid": total_paid,
+        "total_refunded": total_refunded,
+        "net_paid": net_paid,
+        "pending_balance": pending_balance,
+        "fully_refunded": fully_refunded,
+    }
+
+
+def _get_invoice_total_paid(invoice: Invoice) -> Decimal:
+    snapshot = get_invoice_reconciliation(invoice)
+    return _to_decimal(snapshot.get("net_paid"))
 
 
 def _resolve_invoice_status_code(invoice: Invoice) -> str | None:
@@ -423,16 +464,30 @@ def _resolve_invoice_status_code(invoice: Invoice) -> str | None:
     if current_status_code == "ANULADA":
         return None
 
-    total_paid = _get_invoice_total_paid(invoice)
-    total_amount = _to_decimal(invoice.total_amount)
-    has_checkout = getattr(getattr(invoice, "reservation", None), "real_check_out", None) is not None
+    snapshot = get_invoice_reconciliation(invoice)
+    total_amount = _to_decimal(snapshot.get("total_amount"))
+    total_paid = _to_decimal(snapshot.get("total_paid"))
+    net_paid = _to_decimal(snapshot.get("net_paid"))
+    fully_refunded = bool(snapshot.get("fully_refunded"))
 
-    if total_amount > MONEY_ZERO and total_paid >= total_amount:
+    has_checkout = getattr(getattr(invoice, "reservation", None), "real_check_out", None) is not None
+    is_draft = current_status_code in {"", "BORRADOR"}
+
+    if total_amount <= MONEY_ZERO:
+        if fully_refunded:
+            return "REEMBOLSADA"
+        if has_checkout or not is_draft:
+            return "PAGADA"
+        return "BORRADOR"
+
+    if net_paid >= total_amount:
         return "PAGADA"
-    if total_paid > MONEY_ZERO:
-        return "EMITIDA"
-    if has_checkout:
-        return "EMITIDA"
+    if fully_refunded:
+        return "REEMBOLSADA"
+    if net_paid > MONEY_ZERO:
+        return "PARCIAL"
+    if has_checkout or not is_draft or total_paid > MONEY_ZERO:
+        return "PENDIENTE"
     return "BORRADOR"
 
 
@@ -481,10 +536,10 @@ def issue_default_invoice_for_reservation(reservation_id: int | None):
     if current_status_code == "ANULADA":
         return invoice
 
-    if current_status_code != "PAGADA":
-        issued_status = get_or_create_default_invoice_status("EMITIDA")
-        if issued_status and invoice.status_id != issued_status.id:
-            invoice.status = issued_status
+    if current_status_code in {"BORRADOR", "EMITIDA"}:
+        pending_status = get_or_create_default_invoice_status("PENDIENTE")
+        if pending_status and invoice.status_id != pending_status.id:
+            invoice.status = pending_status
             invoice.save(update_fields=["status"])
 
     sync_invoice_status(invoice)

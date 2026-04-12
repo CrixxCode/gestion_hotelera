@@ -12,7 +12,7 @@
 
 .welcome-banner {
   border-radius: 16px;
-  background: linear-gradient(106deg, #121f3f 0%, #2a3552 100%);
+  background: linear-gradient(106deg, var(--gh-brand) 0%, var(--gh-brand-secondary, var(--gh-brand-hover)) 100%);
   color: #f8fafc;
   padding: 18px 24px;
   display: flex;

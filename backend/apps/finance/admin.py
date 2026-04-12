@@ -1,6 +1,11 @@
 from django.contrib import admin
 
-from apps.finance.models import Expense, FinancialControlConfig, FinancialStatementSnapshot
+from apps.finance.models import (
+    Expense,
+    FinancialControlConfig,
+    FinancialStatementSnapshot,
+    OperationalAlert,
+)
 
 
 @admin.register(Expense)
@@ -36,6 +41,10 @@ class FinancialControlConfigAdmin(admin.ModelAdmin):
         "tourism_law_preferential_rate",
         "standard_income_tax_rate",
         "has_iva_exemption",
+        "operational_high_occupancy_threshold_pct",
+        "operational_low_availability_threshold_rooms",
+        "operational_revenue_drop_threshold_pct",
+        "operational_high_refunds_threshold_count",
         "updated_at",
     )
     search_fields = ("hotel_settings__hotel_name", "district_name")
@@ -57,3 +66,21 @@ class FinancialStatementSnapshotAdmin(admin.ModelAdmin):
     )
     search_fields = ("hotel_settings__hotel_name", "notes")
     list_filter = ("hotel_settings", "period_year", "period_month", "is_active")
+
+
+@admin.register(OperationalAlert)
+class OperationalAlertAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "hotel_settings",
+        "alert_type",
+        "severity",
+        "status",
+        "metric_value",
+        "threshold_value",
+        "triggered_at",
+        "resolved_at",
+        "is_active",
+    )
+    search_fields = ("hotel_settings__hotel_name", "title", "message")
+    list_filter = ("alert_type", "severity", "status", "is_active", "triggered_at")

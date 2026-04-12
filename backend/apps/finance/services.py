@@ -7,15 +7,17 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 
-from apps.billing.models import Charge, CreditNote, Invoice
+from apps.billing.models import Charge, CreditNote, Invoice, PaymentRefund
 from apps.finance.models import (
     MONEY_ZERO,
     Expense,
     FinancialControlConfig,
+    OperationalAlert,
     FinancialStatementSnapshot,
 )
 from apps.hotel_settings.models import HotelSettings
@@ -40,6 +42,9 @@ CANCELLED_RESERVATION_STATUS_CODES = {
 
 ROOM_CHARGE_CODES = {"HABITACION", "ROOM"}
 PACKAGE_CHARGE_CODES = {"PAQUETE", "PACKAGE"}
+AVAILABLE_ROOM_STATUS_CODES = {"DISPONIBLE"}
+OCCUPIED_ROOM_STATUS_CODES = {"OCUPADA", "RESERVADA"}
+REFUND_ALERT_STATUS_CODES = {"APROBADO", "PROCESADO"}
 
 
 @dataclass(frozen=True)
@@ -1348,3 +1353,446 @@ def _to_float(
     quantizer = Decimal("1").scaleb(-places)
     rounded = _to_decimal(value).quantize(quantizer, rounding=ROUND_HALF_UP)
     return float(rounded)
+
+
+def sync_operational_alerts_for_hotel(
+    *,
+    hotel_settings_id: int | None,
+    as_of_date: date | None = None,
+    alert_types: set[str] | None = None,
+) -> dict[str, Any]:
+    result = {
+        "created": 0,
+        "updated": 0,
+        "resolved": 0,
+        "skipped": 0,
+        "evaluated_types": [],
+    }
+    if not hotel_settings_id:
+        result["skipped"] = 1
+        return result
+    if not HotelSettings.objects.filter(id=hotel_settings_id).exists():
+        result["skipped"] = 1
+        return result
+
+    selected_types = _resolve_operational_alert_types(alert_types)
+    if not selected_types:
+        result["skipped"] = 1
+        return result
+
+    config = _resolve_operational_alert_thresholds(hotel_settings_id=hotel_settings_id)
+    reference_date = as_of_date or timezone.localdate()
+    result["evaluated_types"] = sorted(selected_types)
+    room_metrics: dict[str, Any] | None = None
+    if {
+        OperationalAlert.AlertType.HIGH_OCCUPANCY,
+        OperationalAlert.AlertType.LOW_AVAILABILITY,
+    } & selected_types:
+        room_metrics = _build_operational_room_metrics(hotel_settings_id=hotel_settings_id)
+
+    if OperationalAlert.AlertType.HIGH_OCCUPANCY in selected_types:
+        room_metrics = room_metrics or _build_operational_room_metrics(hotel_settings_id=hotel_settings_id)
+        high_occupancy_threshold = _to_decimal(config["high_occupancy_threshold_pct"])
+        high_occupancy_triggered = (
+            int(room_metrics["total_rooms"]) > 0
+            and _to_decimal(room_metrics["occupancy_rate_pct"]) >= high_occupancy_threshold
+        )
+        high_occupancy_severity = (
+            OperationalAlert.Severity.CRITICAL
+            if _to_decimal(room_metrics["occupancy_rate_pct"]) >= high_occupancy_threshold + Decimal("10.00")
+            else OperationalAlert.Severity.WARNING
+        )
+        high_occupancy_message = (
+            f"Ocupacion alta detectada: {room_metrics['occupied_rooms']}/{room_metrics['total_rooms']} "
+            f"habitaciones ({room_metrics['occupancy_rate_pct']}%). "
+            f"Umbral configurado: {high_occupancy_threshold}%."
+        )
+        _merge_operational_sync_result(
+            result,
+            _sync_operational_alert_state(
+                hotel_settings_id=hotel_settings_id,
+                alert_type=OperationalAlert.AlertType.HIGH_OCCUPANCY,
+                title="Ocupacion alta",
+                message=high_occupancy_message,
+                severity=high_occupancy_severity,
+                is_triggered=high_occupancy_triggered,
+                metric_value=_to_decimal(room_metrics["occupancy_rate_pct"]),
+                threshold_value=high_occupancy_threshold,
+                metadata={
+                    "occupied_rooms": int(room_metrics["occupied_rooms"]),
+                    "total_rooms": int(room_metrics["total_rooms"]),
+                    "available_rooms": int(room_metrics["available_rooms"]),
+                },
+            ),
+        )
+
+    if OperationalAlert.AlertType.LOW_AVAILABILITY in selected_types:
+        room_metrics = room_metrics or _build_operational_room_metrics(hotel_settings_id=hotel_settings_id)
+        low_availability_threshold = int(config["low_availability_threshold_rooms"])
+        low_availability_triggered = (
+            int(room_metrics["total_rooms"]) > 0
+            and int(room_metrics["available_rooms"]) <= low_availability_threshold
+        )
+        low_availability_severity = (
+            OperationalAlert.Severity.CRITICAL
+            if int(room_metrics["available_rooms"]) <= max(low_availability_threshold - 1, 0)
+            else OperationalAlert.Severity.WARNING
+        )
+        low_availability_message = (
+            f"Baja disponibilidad detectada: {room_metrics['available_rooms']} habitaciones disponibles "
+            f"de {room_metrics['total_rooms']}. "
+            f"Umbral configurado: <= {low_availability_threshold}."
+        )
+        _merge_operational_sync_result(
+            result,
+            _sync_operational_alert_state(
+                hotel_settings_id=hotel_settings_id,
+                alert_type=OperationalAlert.AlertType.LOW_AVAILABILITY,
+                title="Baja disponibilidad",
+                message=low_availability_message,
+                severity=low_availability_severity,
+                is_triggered=low_availability_triggered,
+                metric_value=_to_decimal(room_metrics["available_rooms"]),
+                threshold_value=_to_decimal(low_availability_threshold),
+                metadata={
+                    "available_rooms": int(room_metrics["available_rooms"]),
+                    "total_rooms": int(room_metrics["total_rooms"]),
+                },
+            ),
+        )
+
+    if OperationalAlert.AlertType.REVENUE_DROP in selected_types:
+        revenue_window_days = int(config["revenue_window_days"])
+        revenue_drop_threshold = _to_decimal(config["revenue_drop_threshold_pct"])
+        revenue_metrics = _build_operational_revenue_drop_metrics(
+            hotel_settings_id=hotel_settings_id,
+            reference_date=reference_date,
+            window_days=revenue_window_days,
+        )
+        drop_pct = revenue_metrics["drop_pct"]
+        revenue_drop_triggered = (
+            drop_pct is not None
+            and _to_decimal(drop_pct) >= revenue_drop_threshold
+        )
+        revenue_drop_severity = (
+            OperationalAlert.Severity.CRITICAL
+            if drop_pct is not None and _to_decimal(drop_pct) >= revenue_drop_threshold + Decimal("10.00")
+            else OperationalAlert.Severity.WARNING
+        )
+        revenue_drop_message = (
+            f"Caida de ingresos de {drop_pct if drop_pct is not None else Decimal('0.00')}% "
+            f"en los ultimos {revenue_window_days} dias. "
+            f"Ingreso actual: {revenue_metrics['current_revenue']}, "
+            f"periodo previo: {revenue_metrics['previous_revenue']}. "
+            f"Umbral configurado: >= {revenue_drop_threshold}%."
+        )
+        _merge_operational_sync_result(
+            result,
+            _sync_operational_alert_state(
+                hotel_settings_id=hotel_settings_id,
+                alert_type=OperationalAlert.AlertType.REVENUE_DROP,
+                title="Caida de ingresos",
+                message=revenue_drop_message,
+                severity=revenue_drop_severity,
+                is_triggered=revenue_drop_triggered,
+                metric_value=_to_decimal(drop_pct if drop_pct is not None else Decimal("0.00")),
+                threshold_value=revenue_drop_threshold,
+                metadata={
+                    "current_revenue": _to_float(_to_decimal(revenue_metrics["current_revenue"])),
+                    "previous_revenue": _to_float(_to_decimal(revenue_metrics["previous_revenue"])),
+                    "window_days": revenue_window_days,
+                },
+            ),
+        )
+
+    if OperationalAlert.AlertType.HIGH_REFUNDS in selected_types:
+        refund_window_days = int(config["refund_window_days"])
+        high_refunds_threshold = int(config["high_refunds_threshold_count"])
+        refund_metrics = _build_operational_refund_metrics(
+            hotel_settings_id=hotel_settings_id,
+            reference_date=reference_date,
+            window_days=refund_window_days,
+        )
+        high_refunds_triggered = int(refund_metrics["refund_count"]) >= high_refunds_threshold
+        high_refunds_severity = (
+            OperationalAlert.Severity.CRITICAL
+            if int(refund_metrics["refund_count"]) >= max(high_refunds_threshold * 2, high_refunds_threshold + 1)
+            else OperationalAlert.Severity.WARNING
+        )
+        high_refunds_message = (
+            f"Se detectaron {refund_metrics['refund_count']} reembolsos en los ultimos "
+            f"{refund_window_days} dias. "
+            f"Umbral configurado: >= {high_refunds_threshold}."
+        )
+        _merge_operational_sync_result(
+            result,
+            _sync_operational_alert_state(
+                hotel_settings_id=hotel_settings_id,
+                alert_type=OperationalAlert.AlertType.HIGH_REFUNDS,
+                title="Alto volumen de reembolsos",
+                message=high_refunds_message,
+                severity=high_refunds_severity,
+                is_triggered=high_refunds_triggered,
+                metric_value=_to_decimal(refund_metrics["refund_count"]),
+                threshold_value=_to_decimal(high_refunds_threshold),
+                metadata={
+                    "refund_count": int(refund_metrics["refund_count"]),
+                    "window_days": refund_window_days,
+                },
+            ),
+        )
+
+    return result
+
+
+def sync_operational_alerts_for_all_hotels(
+    *,
+    as_of_date: date | None = None,
+    alert_types: set[str] | None = None,
+) -> dict[str, Any]:
+    results = {
+        "hotels_processed": 0,
+        "created": 0,
+        "updated": 0,
+        "resolved": 0,
+        "skipped": 0,
+    }
+    hotel_ids = list(HotelSettings.objects.order_by("id").values_list("id", flat=True))
+    for hotel_settings_id in hotel_ids:
+        sync_result = sync_operational_alerts_for_hotel(
+            hotel_settings_id=hotel_settings_id,
+            as_of_date=as_of_date,
+            alert_types=alert_types,
+        )
+        results["hotels_processed"] += 1
+        results["created"] += int(sync_result.get("created", 0))
+        results["updated"] += int(sync_result.get("updated", 0))
+        results["resolved"] += int(sync_result.get("resolved", 0))
+        results["skipped"] += int(sync_result.get("skipped", 0))
+
+    return results
+
+
+def _resolve_operational_alert_types(alert_types: set[str] | None) -> set[str]:
+    valid_types = {
+        OperationalAlert.AlertType.HIGH_OCCUPANCY,
+        OperationalAlert.AlertType.LOW_AVAILABILITY,
+        OperationalAlert.AlertType.REVENUE_DROP,
+        OperationalAlert.AlertType.HIGH_REFUNDS,
+    }
+    if not alert_types:
+        return valid_types
+
+    normalized = {str(value or "").strip().upper() for value in alert_types}
+    return {alert_type for alert_type in normalized if alert_type in valid_types}
+
+
+def _resolve_operational_alert_thresholds(*, hotel_settings_id: int) -> dict[str, Any]:
+    config = FinancialControlConfig.objects.filter(hotel_settings_id=hotel_settings_id).first()
+    return {
+        "high_occupancy_threshold_pct": _to_decimal(
+            getattr(config, "operational_high_occupancy_threshold_pct", Decimal("85.00"))
+        ),
+        "low_availability_threshold_rooms": int(
+            getattr(config, "operational_low_availability_threshold_rooms", 3) or 0
+        ),
+        "revenue_drop_threshold_pct": _to_decimal(
+            getattr(config, "operational_revenue_drop_threshold_pct", Decimal("20.00"))
+        ),
+        "high_refunds_threshold_count": int(
+            getattr(config, "operational_high_refunds_threshold_count", 5) or 1
+        ),
+        "revenue_window_days": max(
+            int(getattr(config, "operational_revenue_window_days", 7) or 7),
+            1,
+        ),
+        "refund_window_days": max(
+            int(getattr(config, "operational_refund_window_days", 7) or 7),
+            1,
+        ),
+    }
+
+
+def _build_operational_room_metrics(*, hotel_settings_id: int) -> dict[str, Any]:
+    room_queryset = Room.objects.filter(floor__hotel_settings_id=hotel_settings_id)
+    total_rooms = room_queryset.count()
+    available_rooms = room_queryset.filter(status__code__in=AVAILABLE_ROOM_STATUS_CODES).count()
+    occupied_rooms = room_queryset.filter(status__code__in=OCCUPIED_ROOM_STATUS_CODES).count()
+
+    occupancy_rate_pct = Decimal("0.00")
+    if total_rooms > 0:
+        occupancy_rate_pct = (Decimal(occupied_rooms) / Decimal(total_rooms)) * Decimal("100.00")
+
+    return {
+        "total_rooms": total_rooms,
+        "available_rooms": available_rooms,
+        "occupied_rooms": occupied_rooms,
+        "occupancy_rate_pct": _to_decimal(occupancy_rate_pct).quantize(
+            Decimal("0.01"),
+            rounding=ROUND_HALF_UP,
+        ),
+    }
+
+
+def _build_operational_revenue_drop_metrics(
+    *,
+    hotel_settings_id: int,
+    reference_date: date,
+    window_days: int,
+) -> dict[str, Any]:
+    current_start = reference_date - timedelta(days=max(window_days - 1, 0))
+    current_end = reference_date
+    previous_end = current_start - timedelta(days=1)
+    previous_start = previous_end - timedelta(days=max(window_days - 1, 0))
+
+    try:
+        current_dashboard = build_financial_dashboard(
+            hotel_settings_id=hotel_settings_id,
+            start_date=current_start,
+            end_date=current_end,
+        )
+        previous_dashboard = build_financial_dashboard(
+            hotel_settings_id=hotel_settings_id,
+            start_date=previous_start,
+            end_date=previous_end,
+        )
+    except ValidationError:
+        return {
+            "current_revenue": MONEY_ZERO,
+            "previous_revenue": MONEY_ZERO,
+            "drop_pct": None,
+        }
+
+    current_revenue = _to_decimal(current_dashboard["summary"]["revenue"])
+    previous_revenue = _to_decimal(previous_dashboard["summary"]["revenue"])
+    if previous_revenue <= MONEY_ZERO:
+        drop_pct = None
+    else:
+        drop_pct = ((previous_revenue - current_revenue) / previous_revenue) * Decimal("100.00")
+        if drop_pct < MONEY_ZERO:
+            drop_pct = MONEY_ZERO
+        drop_pct = _to_decimal(drop_pct).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    return {
+        "current_revenue": current_revenue,
+        "previous_revenue": previous_revenue,
+        "drop_pct": drop_pct,
+    }
+
+
+def _build_operational_refund_metrics(
+    *,
+    hotel_settings_id: int,
+    reference_date: date,
+    window_days: int,
+) -> dict[str, Any]:
+    window_start = reference_date - timedelta(days=max(window_days - 1, 0))
+    reservation_ids = _reservation_ids_queryset(hotel_settings_id=hotel_settings_id)
+    refund_count = PaymentRefund.objects.filter(
+        is_active=True,
+        refund_date__date__gte=window_start,
+        refund_date__date__lte=reference_date,
+        status__code__in=REFUND_ALERT_STATUS_CODES,
+        payment__invoice__reservation_id__in=reservation_ids,
+    ).count()
+
+    return {"refund_count": refund_count}
+
+
+def _sync_operational_alert_state(
+    *,
+    hotel_settings_id: int,
+    alert_type: str,
+    title: str,
+    message: str,
+    severity: str,
+    is_triggered: bool,
+    metric_value: Decimal | None,
+    threshold_value: Decimal | None,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, int]:
+    sync_result = {"created": 0, "updated": 0, "resolved": 0}
+    now = timezone.now()
+
+    with transaction.atomic():
+        open_alerts = list(
+            OperationalAlert.objects.select_for_update()
+            .filter(
+                hotel_settings_id=hotel_settings_id,
+                alert_type=alert_type,
+                status=OperationalAlert.Status.OPEN,
+                is_active=True,
+            )
+            .order_by("-triggered_at", "-id")
+        )
+
+        if is_triggered:
+            if open_alerts:
+                primary = open_alerts[0]
+                primary.title = title
+                primary.message = message
+                primary.severity = severity
+                primary.metric_value = metric_value
+                primary.threshold_value = threshold_value
+                primary.metadata = metadata or {}
+                primary.resolved_at = None
+                primary.save(
+                    update_fields=[
+                        "title",
+                        "message",
+                        "severity",
+                        "metric_value",
+                        "threshold_value",
+                        "metadata",
+                        "resolved_at",
+                        "updated_at",
+                    ]
+                )
+                sync_result["updated"] += 1
+            else:
+                OperationalAlert.objects.create(
+                    hotel_settings_id=hotel_settings_id,
+                    alert_type=alert_type,
+                    severity=severity,
+                    status=OperationalAlert.Status.OPEN,
+                    title=title,
+                    message=message,
+                    metric_value=metric_value,
+                    threshold_value=threshold_value,
+                    metadata=metadata or {},
+                    is_active=True,
+                )
+                sync_result["created"] += 1
+
+            duplicate_ids = [row.id for row in open_alerts[1:]]
+            if duplicate_ids:
+                sync_result["resolved"] += OperationalAlert.objects.filter(id__in=duplicate_ids).update(
+                    status=OperationalAlert.Status.RESOLVED,
+                    resolved_at=now,
+                    updated_at=now,
+                    message="Alerta duplicada cerrada automaticamente por consolidacion.",
+                )
+            return sync_result
+
+        if open_alerts:
+            open_ids = [row.id for row in open_alerts]
+            sync_result["resolved"] += OperationalAlert.objects.filter(id__in=open_ids).update(
+                status=OperationalAlert.Status.RESOLVED,
+                resolved_at=now,
+                metric_value=metric_value,
+                threshold_value=threshold_value,
+                metadata=metadata or {},
+                message=(
+                    f"{title} resuelta automaticamente. "
+                    f"Metric value={metric_value}, threshold={threshold_value}."
+                ),
+                updated_at=now,
+            )
+
+    return sync_result
+
+
+def _merge_operational_sync_result(base: dict[str, Any], updates: dict[str, int]) -> None:
+    base["created"] = int(base.get("created", 0)) + int(updates.get("created", 0))
+    base["updated"] = int(base.get("updated", 0)) + int(updates.get("updated", 0))
+    base["resolved"] = int(base.get("resolved", 0)) + int(updates.get("resolved", 0))

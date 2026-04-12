@@ -150,6 +150,20 @@ class FinancialControlConfig(models.Model):
         decimal_places=2,
         default=Decimal("110.00"),
     )
+    operational_high_occupancy_threshold_pct = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("85.00"),
+    )
+    operational_low_availability_threshold_rooms = models.PositiveIntegerField(default=3)
+    operational_revenue_drop_threshold_pct = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal("20.00"),
+    )
+    operational_high_refunds_threshold_count = models.PositiveIntegerField(default=5)
+    operational_revenue_window_days = models.PositiveIntegerField(default=7)
+    operational_refund_window_days = models.PositiveIntegerField(default=7)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -169,10 +183,17 @@ class FinancialControlConfig(models.Model):
             "fontur_rate_per_thousand": self.fontur_rate_per_thousand,
             "break_even_warning_pct": self.break_even_warning_pct,
             "break_even_optimal_pct": self.break_even_optimal_pct,
+            "operational_high_occupancy_threshold_pct": self.operational_high_occupancy_threshold_pct,
+            "operational_revenue_drop_threshold_pct": self.operational_revenue_drop_threshold_pct,
         }
         for field_name, value in rate_fields.items():
             if value is not None and value < 0:
                 errors[field_name] = "This value cannot be negative."
+            if value is not None and field_name in {
+                "operational_high_occupancy_threshold_pct",
+                "operational_revenue_drop_threshold_pct",
+            } and value > Decimal("100.00"):
+                errors[field_name] = "This value cannot be greater than 100."
 
         if (
             self.break_even_warning_pct is not None
@@ -183,11 +204,83 @@ class FinancialControlConfig(models.Model):
                 "Optimal threshold must be greater than or equal to warning threshold."
             )
 
+        if self.operational_revenue_window_days < 1:
+            errors["operational_revenue_window_days"] = "This value must be greater than or equal to 1."
+
+        if self.operational_refund_window_days < 1:
+            errors["operational_refund_window_days"] = "This value must be greater than or equal to 1."
+
+        if self.operational_high_refunds_threshold_count < 1:
+            errors["operational_high_refunds_threshold_count"] = (
+                "This value must be greater than or equal to 1."
+            )
+
         if errors:
             raise ValidationError(errors)
 
     def __str__(self):
         return f"Financial config - {self.hotel_settings.hotel_name}"
+
+
+class OperationalAlert(models.Model):
+    class AlertType(models.TextChoices):
+        HIGH_OCCUPANCY = "HIGH_OCCUPANCY", "High occupancy"
+        LOW_AVAILABILITY = "LOW_AVAILABILITY", "Low availability"
+        REVENUE_DROP = "REVENUE_DROP", "Revenue drop"
+        HIGH_REFUNDS = "HIGH_REFUNDS", "High refunds"
+
+    class Severity(models.TextChoices):
+        WARNING = "WARNING", "Warning"
+        CRITICAL = "CRITICAL", "Critical"
+
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "Open"
+        RESOLVED = "RESOLVED", "Resolved"
+
+    hotel_settings = models.ForeignKey(
+        HotelSettings,
+        on_delete=models.CASCADE,
+        related_name="operational_alerts",
+    )
+    alert_type = models.CharField(
+        max_length=30,
+        choices=AlertType.choices,
+        db_index=True,
+    )
+    severity = models.CharField(
+        max_length=15,
+        choices=Severity.choices,
+        default=Severity.WARNING,
+        db_index=True,
+    )
+    status = models.CharField(
+        max_length=15,
+        choices=Status.choices,
+        default=Status.OPEN,
+        db_index=True,
+    )
+
+    title = models.CharField(max_length=180)
+    message = models.TextField()
+    metric_value = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    threshold_value = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    triggered_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "operational_alert"
+        ordering = ["-triggered_at", "-id"]
+        indexes = [
+            models.Index(fields=["hotel_settings", "status", "alert_type", "is_active"]),
+        ]
+
+    def __str__(self):
+        return f"{self.hotel_settings.hotel_name} - {self.alert_type} - {self.status}"
 
 
 class FinancialStatementSnapshot(models.Model):
