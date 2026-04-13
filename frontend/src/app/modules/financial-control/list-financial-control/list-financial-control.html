@@ -80,6 +80,123 @@
     </button>
   </section>
 
+  <section class="module-card config-section" *ngIf="activeTab === 'config'">
+    <div class="section-head">
+      <div>
+        <h2>Configuracion de alertas operacionales</h2>
+        <p>Define umbrales para ocupacion, disponibilidad, ingresos y reembolsos.</p>
+      </div>
+    </div>
+
+    <section class="state-message" *ngIf="!selectedHotelSettingsId">
+      <p class="info">Selecciona un hotel en los filtros para configurar los umbrales de alertas operacionales.</p>
+    </section>
+
+    <div class="config-form" *ngIf="selectedHotelSettingsId">
+      <div class="form-group-section">
+        <h3>Umbrales de ocupacion y disponibilidad</h3>
+        
+        <label class="gh-filter-field">
+          <span>Umbral ocupacion alta (%)</span>
+          <input 
+            type="number" 
+            step="0.01" 
+            min="0" 
+            max="100"
+            class="gh-filter-input" 
+            [(ngModel)]="configForm.operationalHighOccupancyThresholdPct"
+            placeholder="Ej: 85" />
+          <small>Por defecto: 85%. Genera alerta cuando ocupacion supera este valor.</small>
+        </label>
+
+        <label class="gh-filter-field">
+          <span>Habitaciones disponibles minimo</span>
+          <input 
+            type="number" 
+            step="1" 
+            min="1"
+            class="gh-filter-input" 
+            [(ngModel)]="configForm.operationalLowAvailabilityThresholdRooms"
+            placeholder="Ej: 3" />
+          <small>Por defecto: 3. Genera alerta cuando hay menos de este numero de habitaciones disponibles.</small>
+        </label>
+      </div>
+
+      <div class="form-group-section">
+        <h3>Umbrales de ingresos</h3>
+        
+        <label class="gh-filter-field">
+          <span>Caida ingresos (%)</span>
+          <input 
+            type="number" 
+            step="0.01" 
+            min="0" 
+            max="100"
+            class="gh-filter-input" 
+            [(ngModel)]="configForm.operationalRevenueDropThresholdPct"
+            placeholder="Ej: 20" />
+          <small>Por defecto: 20%. Genera alerta cuando los ingresos caen por este porcentaje.</small>
+        </label>
+
+        <label class="gh-filter-field">
+          <span>Ventana de dias para ingresos</span>
+          <input 
+            type="number" 
+            step="1" 
+            min="1"
+            class="gh-filter-input" 
+            [(ngModel)]="configForm.operationalRevenueWindowDays"
+            placeholder="Ej: 7" />
+          <small>Por defecto: 7 dias. Periodo para evaluar cambios en ingresos.</small>
+        </label>
+      </div>
+
+      <div class="form-group-section">
+        <h3>Umbrales de reembolsos</h3>
+        
+        <label class="gh-filter-field">
+          <span>Reembolsos altos (cantidad)</span>
+          <input 
+            type="number" 
+            step="1" 
+            min="1"
+            class="gh-filter-input" 
+            [(ngModel)]="configForm.operationalHighRefundsThresholdCount"
+            placeholder="Ej: 5" />
+          <small>Por defecto: 5. Genera alerta cuando la cantidad de reembolsos supera este numero.</small>
+        </label>
+
+        <label class="gh-filter-field">
+          <span>Ventana de dias para reembolsos</span>
+          <input 
+            type="number" 
+            step="1" 
+            min="1"
+            class="gh-filter-input" 
+            [(ngModel)]="configForm.operationalRefundWindowDays"
+            placeholder="Ej: 7" />
+          <small>Por defecto: 7 dias. Periodo para evaluar reembolsos.</small>
+        </label>
+      </div>
+
+      <div class="config-actions">
+        <button 
+          type="button" 
+          class="gh-btn gh-btn-dark" 
+          (click)="saveConfiguration()"
+          [disabled]="savingConfig">
+          <i class="fa-solid fa-floppy-disk"></i>
+          Guardar configuracion
+        </button>
+      </div>
+
+      <div class="inline-messages">
+        <p class="error" *ngIf="configValidationError">{{ configValidationError }}</p>
+        <p class="info" *ngIf="configSaveMessage && !configValidationError">{{ configSaveMessage }}</p>
+      </div>
+    </div>
+  </section>
+
   <section class="module-card" *ngIf="activeTab === 'dashboard'">
     <div class="section-head">
       <div>

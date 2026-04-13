@@ -523,6 +523,105 @@ th {
   background: var(--gh-surface-soft);
 }
 
+/* Configuration Section Styles */
+.config-section {
+  margin-top: 20px;
+  border: 1px solid var(--gh-border-strong);
+  overflow: hidden;
+}
+
+.config-section .section-head {
+  background: var(--gh-surface-soft);
+  border-bottom: 1px solid var(--gh-border);
+  padding: 16px 24px;
+}
+
+.config-section .section-head h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.config-section .section-head p {
+  margin: 4px 0 0;
+  color: var(--gh-text-muted);
+  font-size: 13px;
+}
+
+.config-form {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.form-group-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group-section h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gh-text-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--gh-border);
+}
+
+.gh-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gh-filter-field span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gh-text-strong);
+}
+
+.gh-filter-field small {
+  font-size: 12px;
+  color: var(--gh-text-muted);
+  line-height: 1.4;
+}
+
+.config-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--gh-border);
+}
+
+.inline-messages {
+  margin-top: 12px;
+}
+
+.inline-messages p {
+  margin: 8px 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.inline-messages .error {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+}
+
+.inline-messages .info {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
 td {
   padding: 10px;
   border-bottom: 1px solid var(--gh-border-soft);

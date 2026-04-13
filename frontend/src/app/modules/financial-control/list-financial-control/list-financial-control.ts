@@ -8,7 +8,7 @@ import { FinancialControlConfigPayload, FinancialControlService } from '../../..
 
 type CardTone = 'blue' | 'green' | 'amber' | 'red' | 'gray';
 type TrafficTone = 'green' | 'yellow' | 'red' | 'gray';
-type FinancialTab = 'dashboard' | 'what_if' | 'statements';
+type FinancialTab = 'dashboard' | 'what_if' | 'statements' | 'config';
 
 type HotelConfigOption = {
   id: number;
@@ -32,6 +32,12 @@ type FinancialControlConfigRecord = {
   fonturRatePerThousand: number;
   breakEvenWarningPct: number;
   breakEvenOptimalPct: number;
+  operationalHighOccupancyThresholdPct: number;
+  operationalLowAvailabilityThresholdRooms: number;
+  operationalRevenueDropThresholdPct: number;
+  operationalHighRefundsThresholdCount: number;
+  operationalRevenueWindowDays: number;
+  operationalRefundWindowDays: number;
 };
 
 type FinancialControlConfigForm = {
@@ -45,6 +51,12 @@ type FinancialControlConfigForm = {
   fonturRatePerThousand: number | null;
   breakEvenWarningPct: number | null;
   breakEvenOptimalPct: number | null;
+  operationalHighOccupancyThresholdPct: number | null;
+  operationalLowAvailabilityThresholdRooms: number | null;
+  operationalRevenueDropThresholdPct: number | null;
+  operationalHighRefundsThresholdCount: number | null;
+  operationalRevenueWindowDays: number | null;
+  operationalRefundWindowDays: number | null;
 };
 
 type SummaryCard = {
@@ -188,6 +200,7 @@ export class ListFinancialControl implements OnInit {
     { key: 'dashboard', label: 'Dashboard', icon: 'fa-solid fa-chart-line' },
     { key: 'what_if', label: 'What-if', icon: 'fa-solid fa-flask' },
     { key: 'statements', label: 'Estados Financieros', icon: 'fa-solid fa-file-invoice' },
+    { key: 'config', label: 'Configuracion de Alertas', icon: 'fa-solid fa-sliders' },
   ];
 
   private readonly currencyFormatter = new Intl.NumberFormat('es-CO', {
@@ -274,6 +287,11 @@ export class ListFinancialControl implements OnInit {
 
   selectTab(tab: FinancialTab): void {
     this.activeTab = tab;
+    if (tab === 'config') {
+      this.configValidationError = '';
+      this.configSaveMessage = '';
+      this.syncConfigFormWithSelection();
+    }
   }
 
   onHotelFilterChange(): void {
@@ -396,6 +414,64 @@ export class ListFinancialControl implements OnInit {
           this.whatIfError = this.extractHttpErrorMessage(error, 'No fue posible calcular el escenario.');
         },
       });
+  }
+
+  toggleConfigSection(): void {
+    this.configValidationError = '';
+    this.configSaveMessage = '';
+    if (this.selectedHotelSettingsId) {
+      this.syncConfigFormWithSelection();
+    }
+  }
+
+  saveConfiguration(): void {
+    if (!this.selectedHotelSettingsId) {
+      this.configValidationError = 'Debes seleccionar un hotel.';
+      return;
+    }
+
+    this.configValidationError = '';
+    this.configSaveMessage = '';
+
+    const payloadResult = this.buildConfigPayload(this.selectedHotelSettingsId);
+    if (payloadResult.error) {
+      this.configValidationError = payloadResult.error;
+      return;
+    }
+
+    const existingConfig = this.selectedConfigRecord;
+    const updatePayload: Partial<FinancialControlConfigPayload> = { ...payloadResult.payload };
+    delete updatePayload.hotel_settings;
+
+    const request$ = existingConfig
+      ? this.financialControlService.updateConfig(existingConfig.id, updatePayload)
+      : this.financialControlService.createConfig(payloadResult.payload);
+
+    this.savingConfig = true;
+    request$.subscribe({
+      next: (payload) => {
+        this.savingConfig = false;
+        const parsed = this.parseConfigRecord(payload);
+        if (parsed) {
+          this.upsertConfigRecord(parsed);
+          this.selectedHotelSettingsId = parsed.hotelSettingsId;
+          this.syncConfigFormWithSelection();
+          this.configSaveMessage = existingConfig
+            ? 'Configuracion financiera actualizada.'
+            : 'Configuracion financiera creada.';
+        } else {
+          this.configSaveMessage = 'Configuracion guardada. Actualiza para ver los cambios.';
+          this.loadConfigsAndBootstrap();
+        }
+      },
+      error: (error) => {
+        this.savingConfig = false;
+        this.configValidationError = this.extractHttpErrorMessage(
+          error,
+          'No fue posible guardar la configuracion financiera.'
+        );
+      },
+    });
   }
 
   private loadConfigsAndBootstrap(): void {
@@ -935,6 +1011,12 @@ export class ListFinancialControl implements OnInit {
       fonturRatePerThousand: this.getNumber(item, ['fontur_rate_per_thousand']),
       breakEvenWarningPct: this.getNumber(item, ['break_even_warning_pct']),
       breakEvenOptimalPct: this.getNumber(item, ['break_even_optimal_pct']),
+      operationalHighOccupancyThresholdPct: this.getNumber(item, ['operational_high_occupancy_threshold_pct']),
+      operationalLowAvailabilityThresholdRooms: this.getNumber(item, ['operational_low_availability_threshold_rooms']),
+      operationalRevenueDropThresholdPct: this.getNumber(item, ['operational_revenue_drop_threshold_pct']),
+      operationalHighRefundsThresholdCount: this.getNumber(item, ['operational_high_refunds_threshold_count']),
+      operationalRevenueWindowDays: this.getNumber(item, ['operational_revenue_window_days']),
+      operationalRefundWindowDays: this.getNumber(item, ['operational_refund_window_days']),
     };
   }
 
@@ -950,6 +1032,12 @@ export class ListFinancialControl implements OnInit {
       fonturRatePerThousand: null,
       breakEvenWarningPct: null,
       breakEvenOptimalPct: null,
+      operationalHighOccupancyThresholdPct: null,
+      operationalLowAvailabilityThresholdRooms: null,
+      operationalRevenueDropThresholdPct: null,
+      operationalHighRefundsThresholdCount: null,
+      operationalRevenueWindowDays: null,
+      operationalRefundWindowDays: null,
     };
   }
 
@@ -982,6 +1070,12 @@ export class ListFinancialControl implements OnInit {
       fonturRatePerThousand: existing.fonturRatePerThousand,
       breakEvenWarningPct: existing.breakEvenWarningPct,
       breakEvenOptimalPct: existing.breakEvenOptimalPct,
+      operationalHighOccupancyThresholdPct: existing.operationalHighOccupancyThresholdPct,
+      operationalLowAvailabilityThresholdRooms: existing.operationalLowAvailabilityThresholdRooms,
+      operationalRevenueDropThresholdPct: existing.operationalRevenueDropThresholdPct,
+      operationalHighRefundsThresholdCount: existing.operationalHighRefundsThresholdCount,
+      operationalRevenueWindowDays: existing.operationalRevenueWindowDays,
+      operationalRefundWindowDays: existing.operationalRefundWindowDays,
     };
   }
 
@@ -1065,6 +1159,54 @@ export class ListFinancialControl implements OnInit {
     );
     if (optimalRateError) return { payload, error: optimalRateError };
 
+    const occupancyThresholdError = this.appendOptionalNonNegativeNumber(
+      payload,
+      'operational_high_occupancy_threshold_pct',
+      this.configForm.operationalHighOccupancyThresholdPct,
+      'Umbral ocupacion alta'
+    );
+    if (occupancyThresholdError) return { payload, error: occupancyThresholdError };
+
+    const availabilityThresholdError = this.appendOptionalPositiveInteger(
+      payload,
+      'operational_low_availability_threshold_rooms',
+      this.configForm.operationalLowAvailabilityThresholdRooms,
+      'Umbral habitaciones disponibles'
+    );
+    if (availabilityThresholdError) return { payload, error: availabilityThresholdError };
+
+    const revenueDropError = this.appendOptionalNonNegativeNumber(
+      payload,
+      'operational_revenue_drop_threshold_pct',
+      this.configForm.operationalRevenueDropThresholdPct,
+      'Umbral caida ingresos'
+    );
+    if (revenueDropError) return { payload, error: revenueDropError };
+
+    const refundsThresholdError = this.appendOptionalPositiveInteger(
+      payload,
+      'operational_high_refunds_threshold_count',
+      this.configForm.operationalHighRefundsThresholdCount,
+      'Umbral reembolsos altos'
+    );
+    if (refundsThresholdError) return { payload, error: refundsThresholdError };
+
+    const revenueWindowError = this.appendOptionalPositiveInteger(
+      payload,
+      'operational_revenue_window_days',
+      this.configForm.operationalRevenueWindowDays,
+      'Ventana dias ingresos'
+    );
+    if (revenueWindowError) return { payload, error: revenueWindowError };
+
+    const refundWindowError = this.appendOptionalPositiveInteger(
+      payload,
+      'operational_refund_window_days',
+      this.configForm.operationalRefundWindowDays,
+      'Ventana dias reembolsos'
+    );
+    if (refundWindowError) return { payload, error: refundWindowError };
+
     const selectedConfig = this.selectedConfigRecord;
     const effectiveWarning =
       payload.break_even_warning_pct !== undefined
@@ -1100,7 +1242,9 @@ export class ListFinancialControl implements OnInit {
       | 'ica_rate_per_thousand'
       | 'fontur_rate_per_thousand'
       | 'break_even_warning_pct'
-      | 'break_even_optimal_pct',
+      | 'break_even_optimal_pct'
+      | 'operational_high_occupancy_threshold_pct'
+      | 'operational_revenue_drop_threshold_pct',
     value: number | null,
     label: string
   ): string | null {
@@ -1111,6 +1255,28 @@ export class ListFinancialControl implements OnInit {
     }
     if (parsed < 0) {
       return `${label} no puede ser negativo.`;
+    }
+    payload[key] = parsed;
+    return null;
+  }
+
+  private appendOptionalPositiveInteger(
+    payload: FinancialControlConfigPayload,
+    key:
+      | 'operational_low_availability_threshold_rooms'
+      | 'operational_high_refunds_threshold_count'
+      | 'operational_revenue_window_days'
+      | 'operational_refund_window_days',
+    value: number | null,
+    label: string
+  ): string | null {
+    if (value === null || value === undefined) return null;
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed)) {
+      return `${label} debe ser un numero entero.`;
+    }
+    if (parsed < 1) {
+      return `${label} debe ser mayor a 0.`;
     }
     payload[key] = parsed;
     return null;

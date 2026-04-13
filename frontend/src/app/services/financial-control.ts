@@ -35,6 +35,12 @@ export type FinancialControlConfigPayload = {
   fontur_rate_per_thousand?: number;
   break_even_warning_pct?: number;
   break_even_optimal_pct?: number;
+  operational_high_occupancy_threshold_pct?: number;
+  operational_low_availability_threshold_rooms?: number;
+  operational_revenue_drop_threshold_pct?: number;
+  operational_high_refunds_threshold_count?: number;
+  operational_revenue_window_days?: number;
+  operational_refund_window_days?: number;
 };
 
 @Injectable({
