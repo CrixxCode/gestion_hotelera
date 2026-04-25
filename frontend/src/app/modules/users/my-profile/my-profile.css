@@ -256,6 +256,37 @@
   cursor: not-allowed;
 }
 
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  width: 100%;
+  padding-right: 86px;
+}
+
+.btn-password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--gh-status-info-text);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.btn-password-toggle:hover {
+  background: var(--gh-surface);
+}
+
 .form-grid small {
   color: var(--gh-status-danger-text);
   font-size: 12px;
@@ -280,6 +311,11 @@
 
 .btn-gold:hover {
   background: var(--gh-status-warn-text);
+}
+
+.btn-gold:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .btn-gold i {

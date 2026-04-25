@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
+from accounts.tenancy import TenantScopeMixin
 from apps.master_data.models import MasterData
 from apps.rooms.models import Room
 
@@ -33,13 +34,100 @@ class HotelSettingsViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = getattr(self.request, "user", None)
+
+        if not user or not user.is_authenticated:
+            return queryset.none()
+
+        if user.is_superuser:
+            return queryset
+
+        if user.hotel_settings_id is None:
+            return queryset.none()
+
+        return queryset.filter(id=user.hotel_settings_id)
+
+    def perform_create(self, serializer):
+        settings_obj = serializer.save()
+        user = getattr(self.request, "user", None)
+
+        # Flujo bootstrap/recovery: en creacion siempre vinculamos al usuario
+        # no-superuser con el hotel recien creado.
+        if (
+            user
+            and user.is_authenticated
+            and not user.is_superuser
+        ):
+            user.hotel_settings = settings_obj
+            user.save(update_fields=["hotel_settings"])
+
+    def _resolve_current_settings(self):
+        requested_hotel_id = (
+            self.request.query_params.get("hotel_settings")
+            or self.request.data.get("hotel_settings")
+            or ""
+        )
+        requested_hotel_id = str(requested_hotel_id).strip()
+        queryset = self.get_queryset()
+
+        if requested_hotel_id.isdigit():
+            return queryset.filter(id=int(requested_hotel_id)).first()
+
+        return queryset.first()
+
+    def _clear_settings_payload(self, settings_obj: HotelSettings):
+        if settings_obj.logo:
+            settings_obj.logo.delete(save=False)
+
+        return {
+            "legal_name": None,
+            "slogan": None,
+            "description": None,
+            "logo": None,
+            "stars": 3,
+            "facebook": None,
+            "instagram": None,
+            "twitter_x": None,
+            "address": None,
+            "city": None,
+            "state": None,
+            "country": None,
+            "postal_code": None,
+            "primary_phone": None,
+            "secondary_phone": None,
+            "general_email": None,
+            "reservations_email": None,
+            "website": None,
+            "check_in_time": None,
+            "check_out_time": None,
+            "max_guests_per_room": 2,
+            "currency": "COP",
+            "tax_rate": 0,
+            "system_language": "es",
+            "timezone": "America/Bogota",
+        }
+
     def create(self, request, *args, **kwargs):
         """
-        Permite una sola configuracion principal del hotel.
+        Usuarios de hotel solo pueden administrar su hotel asignado.
+        Superusuarios pueden crear hoteles adicionales.
         """
-        if HotelSettings.objects.exists():
+        user = getattr(request, "user", None)
+        if (
+            user
+            and user.is_authenticated
+            and not user.is_superuser
+            and self.get_queryset().exists()
+        ):
             return Response(
-                {"detail": "Hotel settings already exists. Please update the existing record."},
+                {
+                    "detail": (
+                        "Este usuario ya tiene un hotel asignado. "
+                        "Debes actualizar esa configuracion en lugar de crear otra."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -50,7 +138,7 @@ class HotelSettingsViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         """
         Devuelve la configuracion actual del hotel.
         """
-        settings_obj = HotelSettings.objects.first()
+        settings_obj = self._resolve_current_settings()
 
         if not settings_obj:
             return Response(None, status=status.HTTP_200_OK)
@@ -61,10 +149,29 @@ class HotelSettingsViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], url_path="clear")
     def clear(self, request):
         """
-        Elimina toda la configuracion actual del hotel.
-        Tambien borra los pisos relacionados por cascada.
+        Limpia la configuracion del hotel.
+        Mantiene el hotel (HotelSettings) y elimina logicamente pisos/habitaciones.
         """
-        settings_obj = HotelSettings.objects.first()
+        user = getattr(request, "user", None)
+        requested_hotel_id = (
+            request.query_params.get("hotel_settings")
+            or request.data.get("hotel_settings")
+            or ""
+        )
+        requested_hotel_id = str(requested_hotel_id).strip()
+
+        if user and user.is_authenticated and user.is_superuser and not requested_hotel_id:
+            return Response(
+                {
+                    "detail": (
+                        "Como superadmin debes indicar el hotel a eliminar "
+                        "con 'hotel_settings' en query param o body."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        settings_obj = self._resolve_current_settings()
 
         if not settings_obj:
             return Response(
@@ -81,19 +188,24 @@ class HotelSettingsViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
                     self.perform_destroy(room)
                 for floor in floors:
                     self.perform_destroy(floor)
-            self.perform_destroy(settings_obj)
+
+            reset_payload = self._clear_settings_payload(settings_obj)
+            for field, value in reset_payload.items():
+                setattr(settings_obj, field, value)
+            settings_obj.save(update_fields=list(reset_payload.keys()))
 
         return Response(
-            {"detail": "Hotel settings deleted successfully."},
+            {"detail": "Hotel settings cleared successfully."},
             status=status.HTTP_200_OK,
         )
 
 
-class HotelFloorViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+class HotelFloorViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
     queryset = HotelFloor.objects.select_related("hotel_settings").all().order_by("floor_number")
     serializer_class = HotelFloorSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
+    tenant_filter = "hotel_settings"
 
     required_scopes = ["hotel_settings.read"]
 
@@ -130,7 +242,10 @@ class HotelFloorViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 
         existing_by_number = {
             number: floor_id
-            for number, floor_id in Room.objects.filter(number__in=target_numbers).values_list("number", "floor_id")
+            for number, floor_id in Room.objects.filter(
+                number__in=target_numbers,
+                floor__hotel_settings_id=floor.hotel_settings_id,
+            ).values_list("number", "floor_id")
         }
 
         conflicting_numbers = sorted(
@@ -199,7 +314,10 @@ class HotelFloorViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 
     @transaction.atomic
     def perform_create(self, serializer):
-        floor = serializer.save()
+        if self.is_global_admin():
+            floor = serializer.save()
+        else:
+            floor = serializer.save(hotel_settings=self.request.user.hotel_settings)
         self._create_missing_rooms(floor)
 
     @transaction.atomic
@@ -212,7 +330,10 @@ class HotelFloorViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
             self.request.query_params.get("delete_extra_rooms")
         )
 
-        floor = serializer.save()
+        if self.is_global_admin():
+            floor = serializer.save()
+        else:
+            floor = serializer.save(hotel_settings=self.request.user.hotel_settings)
         self._create_missing_rooms(floor)
 
         if delete_extra_rooms:
@@ -223,6 +344,8 @@ class HotelFloorViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         Valida que exista la configuracion del hotel antes de crear pisos.
         """
         hotel_settings_id = request.data.get("hotel_settings")
+        if not self.is_global_admin():
+            hotel_settings_id = self.get_tenant_id()
 
         if not hotel_settings_id:
             return Response(
@@ -243,11 +366,11 @@ class HotelFloorViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         """
         Devuelve los pisos de una configuracion especifica.
         """
-        floors = self.queryset.filter(hotel_settings_id=settings_id)
+        floors = self.get_queryset().filter(hotel_settings_id=settings_id)
         serializer = self.get_serializer(floors, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-class ReservationPolicyViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+class ReservationPolicyViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
     queryset = (
         ReservationPolicy.objects.select_related(
             "hotel_settings",
@@ -259,6 +382,7 @@ class ReservationPolicyViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet)
     pagination_class = None
     permission_classes = [HasResourcePermission]
     required_scopes = ["reservation-policies.read"]
+    tenant_filter = "hotel_settings"
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [

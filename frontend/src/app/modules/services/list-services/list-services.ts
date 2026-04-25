@@ -127,8 +127,10 @@ export class ListServices implements OnInit {
   loading = false;
   errorMessage = '';
   infoMessage = '';
+  showDeletedServices = false;
 
   services: ServiceI[] = [];
+  deletedServices: ServiceI[] = [];
   filteredServices: ServiceI[] = [];
   groupedServices: ServiceCatalogGroup[] = [];
   serviceTypes: MasterDataI[] = [];
@@ -170,6 +172,10 @@ export class ListServices implements OnInit {
     return this.services.length;
   }
 
+  get deletedServicesCount(): number {
+    return this.deletedServices.length;
+  }
+
   get activeServices(): number {
     return this.services.filter((service) => service.is_active).length;
   }
@@ -208,18 +214,36 @@ export class ListServices implements OnInit {
   loadCatalogData(): void {
     this.loading = true;
     this.errorMessage = '';
+    const selectedServiceId = this.selectedService?.id ?? null;
+    const serviceToEditId = this.serviceToEdit?.id ?? null;
 
     forkJoin({
-      services: this.servicesService.listServices().pipe(catchError(() => of([] as ServiceI[]))),
+      services: this.servicesService
+        .listServices({ include_inactive: true })
+        .pipe(catchError(() => of([] as ServiceI[]))),
+      allServices: this.servicesService
+        .listServices({ include_inactive: true, include_deleted: true })
+        .pipe(catchError(() => of([] as ServiceI[]))),
       serviceTypes: this.masterDataService
         .listMasterData({ group: 'SERVICE_TYPE', is_active: 'true', ordering: 'sort_order,name' })
         .pipe(catchError(() => of([] as MasterDataI[]))),
       settings: this.hotelSettingsService.getCurrentSettings().pipe(catchError(() => of(null)))
     }).subscribe({
-      next: ({ services, serviceTypes, settings }) => {
+      next: ({ services, allServices, serviceTypes, settings }) => {
         this.loading = false;
         this.services = services;
+        const visibleIds = new Set(services.map((service) => service.id));
+        this.deletedServices = allServices.filter((service) => !visibleIds.has(service.id));
         this.serviceTypes = serviceTypes;
+
+        if (selectedServiceId) {
+          this.selectedService = services.find((service) => service.id === selectedServiceId) || null;
+        }
+
+        if (serviceToEditId) {
+          this.serviceToEdit = services.find((service) => service.id === serviceToEditId) || null;
+          if (!this.serviceToEdit) this.showUpdateDrawer = false;
+        }
 
         this.buildTypeMaps();
         this.hotelSettingsId = this.resolveHotelSettingsId(settings, services, this.hotelSettingsId);
@@ -238,34 +262,7 @@ export class ListServices implements OnInit {
   }
 
   refreshServices(): void {
-    this.loading = true;
-    this.errorMessage = '';
-
-    this.servicesService.listServices().subscribe({
-      next: (services) => {
-        this.loading = false;
-        this.services = services;
-
-        if (this.selectedService) {
-          this.selectedService = services.find((service) => service.id === this.selectedService?.id) || null;
-        }
-
-        if (this.serviceToEdit) {
-          this.serviceToEdit = services.find((service) => service.id === this.serviceToEdit?.id) || null;
-          if (!this.serviceToEdit) {
-            this.showUpdateDrawer = false;
-          }
-        }
-
-        this.hotelSettingsId = this.resolveHotelSettingsId(null, services, this.hotelSettingsId);
-        this.typeTabs = this.buildTypeTabs(this.services);
-        this.applyFilters();
-      },
-      error: () => {
-        this.loading = false;
-        this.errorMessage = 'No fue posible actualizar el catalogo.';
-      }
-    });
+    this.loadCatalogData();
   }
 
   exportCsv(): void {
@@ -412,6 +409,24 @@ export class ListServices implements OnInit {
           },
           error: () => {
             this.errorMessage = 'No fue posible eliminar el servicio seleccionado.';
+          }
+        });
+      }
+    });
+  }
+
+  restoreService(service: ServiceI): void {
+    openActionConfirmation(this.confirmationService, {
+      action: 'restore',
+      target: service.name || 'servicio',
+      onAccept: () => {
+        this.errorMessage = '';
+        this.servicesService.restoreService(service.id).subscribe({
+          next: () => {
+            this.refreshServices();
+          },
+          error: () => {
+            this.errorMessage = 'No fue posible restaurar el servicio seleccionado.';
           }
         });
       }

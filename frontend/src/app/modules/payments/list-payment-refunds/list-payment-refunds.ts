@@ -90,7 +90,7 @@ export class ListPaymentRefunds implements OnInit {
     this.infoMessage = '';
 
     this.billingService
-      .listPaymentRefunds({ ordering: '-refund_date,-id' })
+      .listPaymentRefunds({ ordering: '-refund_date,-id', include_inactive: true })
       .pipe(catchError(() => of([] as PaymentRefundI[])))
       .subscribe({
         next: (refunds) => {

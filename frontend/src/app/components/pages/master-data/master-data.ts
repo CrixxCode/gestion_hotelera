@@ -96,7 +96,9 @@ export class MasterDataComponent implements OnInit {
 
   loadMasterData(): void {
     this.loading = true;
-    this.masterDataService.listMasterDataAll({ ordering: 'group,sort_order,name' }).subscribe({
+    this.masterDataService
+      .listMasterDataAll({ ordering: 'group,sort_order,name', include_inactive: true })
+      .subscribe({
       next: (items) => {
         this.allItems = Array.isArray(items) ? items : [];
         this.loading = false;
@@ -108,7 +110,7 @@ export class MasterDataComponent implements OnInit {
         this.filteredItems = [];
         this.toast('No se pudo cargar el catalogo maestro.', 'danger');
       }
-    });
+      });
   }
 
   applyFilters(): void {

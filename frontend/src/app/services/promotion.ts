@@ -24,6 +24,8 @@ export class PromotionsService {
   listPromotions(filters?: {
     search?: string;
     ordering?: string;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<PromotionI[]> {
     let params = new HttpParams();
 
@@ -33,6 +35,14 @@ export class PromotionsService {
 
     if (filters?.ordering?.trim()) {
       params = params.set('ordering', filters.ordering.trim());
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -65,6 +75,10 @@ export class PromotionsService {
 
   deletePromotion(id: number): Observable<void> {
     return this.http.delete<void>(`${this.promotionsUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
+  restorePromotion(id: number): Observable<PromotionI> {
+    return this.http.post<PromotionI>(`${this.promotionsUrl}${id}/restore/`, {}, this.auth.buildCsrfRequestOptions());
   }
 
   private unwrapArray<T>(res: unknown): T[] {

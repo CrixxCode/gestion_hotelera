@@ -24,8 +24,10 @@ export class ListRoomTypes implements OnInit {
   loading = false;
   errorMessage = '';
   infoMessage = '';
+  showDeletedRoomTypes = false;
 
   roomTypes: RoomTypeI[] = [];
+  deletedRoomTypes: RoomTypeI[] = [];
   filteredRoomTypes: RoomTypeI[] = [];
   rates: RateI[] = [];
 
@@ -57,6 +59,10 @@ export class ListRoomTypes implements OnInit {
 
   get totalTypes(): number {
     return this.roomTypes.length;
+  }
+
+  get deletedRoomTypesCount(): number {
+    return this.deletedRoomTypes.length;
   }
 
   get activeTypes(): number {
@@ -94,12 +100,21 @@ export class ListRoomTypes implements OnInit {
     const selectedRoomTypeId = this.selectedRoomType?.id ?? null;
 
     forkJoin({
-      roomTypes: this.roomService.listRoomTypes({ ordering: 'sort_order,name' }).pipe(catchError(() => of([] as RoomTypeI[]))),
-      rates: this.roomService.listRates({ ordering: '-created_at' }).pipe(catchError(() => of([] as RateI[])))
+      roomTypes: this.roomService
+        .listRoomTypes({ ordering: 'sort_order,name', include_inactive: true })
+        .pipe(catchError(() => of([] as RoomTypeI[]))),
+      allRoomTypes: this.roomService
+        .listRoomTypes({ ordering: 'sort_order,name', include_inactive: true, include_deleted: true })
+        .pipe(catchError(() => of([] as RoomTypeI[]))),
+      rates: this.roomService
+        .listRates({ ordering: '-created_at', include_inactive: true })
+        .pipe(catchError(() => of([] as RateI[])))
     }).subscribe({
-      next: ({ roomTypes, rates }) => {
+      next: ({ roomTypes, allRoomTypes, rates }) => {
         this.loading = false;
         this.roomTypes = roomTypes;
+        const visibleIds = new Set(roomTypes.map((roomType) => roomType.id));
+        this.deletedRoomTypes = allRoomTypes.filter((roomType) => !visibleIds.has(roomType.id));
         this.rates = rates;
         this.buildActiveRateMap();
 
@@ -282,6 +297,24 @@ export class ListRoomTypes implements OnInit {
               error,
               'No fue posible eliminar el tipo de habitacion. Verifica si tiene habitaciones o tarifas asociadas.'
             );
+          }
+        });
+      }
+    });
+  }
+
+  restoreRoomType(roomType: RoomTypeI): void {
+    openActionConfirmation(this.confirmationService, {
+      action: 'restore',
+      target: roomType.name || 'tipo de habitacion',
+      onAccept: () => {
+        this.errorMessage = '';
+        this.roomService.restoreRoomType(roomType.id).subscribe({
+          next: () => {
+            this.refreshRoomTypes();
+          },
+          error: () => {
+            this.errorMessage = 'No fue posible restaurar el tipo de habitacion seleccionado.';
           }
         });
       }

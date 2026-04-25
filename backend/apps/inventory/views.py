@@ -1,18 +1,36 @@
 from rest_framework import filters, viewsets
+from django.db.models import F
 
 from apps.inventory.models import Item, InventoryMovement, RoomInventory
 from apps.inventory.serializers import ItemSerializer, InventoryMovementSerializer, RoomInventorySerializer
 from accounts.permissions import HasResourcePermission
+from accounts.soft_delete import LogicalDeleteViewSetMixin
+from accounts.tenancy import TenantScopeMixin
 
 
-class ItemViewSet(viewsets.ModelViewSet):
+def _filter_queryset_by_user_tenant(queryset, user, *, tenant_filter: str):
+    if not user or not user.is_authenticated:
+        return queryset.none()
+
+    if user.is_superuser:
+        return queryset
+
+    tenant_id = getattr(user, "hotel_settings_id", None)
+    if tenant_id is None:
+        return queryset.none()
+
+    return queryset.filter(**{tenant_filter: tenant_id})
+
+
+class ItemViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
     queryset = (
         Item.objects.select_related(
             "hotel_settings",
             "item_type",
             "unit_measure",
-        ).order_by("-id")
+        )
     )
+    tenant_filter = "hotel_settings"
     serializer_class = ItemSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -42,22 +60,32 @@ class ItemViewSet(viewsets.ModelViewSet):
     ]
     ordering = ["-id"]
 
+    def get_base_queryset(self):
+        return self.queryset.order_by("-id")
+
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return ["items.write"]
-        return self.required_scopes
+
+        scopes = list(self.required_scopes)
+        if self._should_include_deleted():
+            scopes.append("items.read_deleted")
+        return scopes
 
     def get_permissions(self):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
     
-class InventoryMovementViewSet(viewsets.ModelViewSet):
+        
+class InventoryMovementViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
     queryset = (
         InventoryMovement.objects.select_related(
             "item",
+            "item__hotel_settings",
             "movement_type",
-        ).order_by("-id")
+        )
     )
+    tenant_filter = "item__hotel_settings"
     serializer_class = InventoryMovementSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -82,6 +110,9 @@ class InventoryMovementViewSet(viewsets.ModelViewSet):
     ]
     ordering = ["-id"]
 
+    def get_base_queryset(self):
+        return self.queryset.order_by("-id")
+
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return ["inventory-movements.write"]
@@ -91,13 +122,16 @@ class InventoryMovementViewSet(viewsets.ModelViewSet):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
     
-class RoomInventoryViewSet(viewsets.ModelViewSet):
+class RoomInventoryViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
     queryset = (
         RoomInventory.objects.select_related(
             "room",
+            "room__floor",
+            "room__floor__hotel_settings",
             "item",
-        ).order_by("-id")
+        )
     )
+    tenant_filter = "room__floor__hotel_settings"
     serializer_class = RoomInventorySerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -118,6 +152,11 @@ class RoomInventoryViewSet(viewsets.ModelViewSet):
         "updated_at",
     ]
     ordering = ["-id"]
+
+    def get_base_queryset(self):
+        return self.queryset.filter(
+            item__hotel_settings_id=F("room__floor__hotel_settings_id"),
+        ).order_by("-id")
 
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):

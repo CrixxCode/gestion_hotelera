@@ -1,15 +1,25 @@
 from rest_framework import serializers
 
+from accounts.tenancy import TenantSerializerMixin
 from apps.finance.models import (
     Expense,
     FinancialControlConfig,
     OperationalAlert,
     FinancialStatementSnapshot,
 )
+from apps.hotel_settings.models import HotelSettings
 from apps.master_data.models import MasterData
 
 
-class ExpenseSerializer(serializers.ModelSerializer):
+class ExpenseSerializer(TenantSerializerMixin, serializers.ModelSerializer):
+    tenant_field_name = "hotel_settings"
+
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
     hotel_name = serializers.CharField(source="hotel_settings.hotel_name", read_only=True)
 
     expense_category_name = serializers.CharField(source="expense_category.name", read_only=True)
@@ -60,8 +70,35 @@ class ExpenseSerializer(serializers.ModelSerializer):
             )
         return value
 
+    def validate_concept(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("El concepto es obligatorio.")
+        return value
 
-class FinancialControlConfigSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        self.require_target_tenant(attrs)
+        return attrs
+
+    def create(self, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().update(instance, validated_data)
+
+
+class FinancialControlConfigSerializer(TenantSerializerMixin, serializers.ModelSerializer):
+    tenant_field_name = "hotel_settings"
+
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
     hotel_name = serializers.CharField(source="hotel_settings.hotel_name", read_only=True)
 
     class Meta:
@@ -91,8 +128,39 @@ class FinancialControlConfigSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ("id", "created_at", "updated_at")
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        hotel = self.require_target_tenant(attrs)
 
-class OperationalAlertSerializer(serializers.ModelSerializer):
+        qs = FinancialControlConfig.objects.filter(hotel_settings=hotel)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if qs.exists():
+            raise serializers.ValidationError(
+                {"hotel_settings": "Ya existe una configuracion financiera para este hotel."}
+            )
+
+        return attrs
+
+    def create(self, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().update(instance, validated_data)
+
+
+class OperationalAlertSerializer(TenantSerializerMixin, serializers.ModelSerializer):
+    tenant_field_name = "hotel_settings"
+
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
     hotel_name = serializers.CharField(source="hotel_settings.hotel_name", read_only=True)
 
     class Meta:
@@ -123,8 +191,41 @@ class OperationalAlertSerializer(serializers.ModelSerializer):
             "updated_at",
         )
 
+    def validate_title(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("El titulo es obligatorio.")
+        return value
 
-class FinancialStatementSnapshotSerializer(serializers.ModelSerializer):
+    def validate_message(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("El mensaje es obligatorio.")
+        return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        self.require_target_tenant(attrs)
+        return attrs
+
+    def create(self, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().update(instance, validated_data)
+
+
+class FinancialStatementSnapshotSerializer(TenantSerializerMixin, serializers.ModelSerializer):
+    tenant_field_name = "hotel_settings"
+
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
     hotel_name = serializers.CharField(source="hotel_settings.hotel_name", read_only=True)
     total_assets = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
     total_liabilities = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
@@ -209,3 +310,34 @@ class FinancialStatementSnapshotSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+        validators = []
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        hotel = self.require_target_tenant(attrs)
+
+        year = attrs.get("period_year", getattr(self.instance, "period_year", None))
+        month = attrs.get("period_month", getattr(self.instance, "period_month", None))
+
+        qs = FinancialStatementSnapshot.objects.filter(
+            hotel_settings=hotel,
+            period_year=year,
+            period_month=month,
+        )
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if year is not None and month is not None and qs.exists():
+            raise serializers.ValidationError(
+                {"period_month": "Ya existe un snapshot financiero para este hotel y periodo."}
+            )
+
+        return attrs
+
+    def create(self, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().update(instance, validated_data)

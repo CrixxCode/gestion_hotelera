@@ -8,6 +8,7 @@ from rest_framework.response import Response
 
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
+from accounts.tenancy import TenantScopeMixin
 from apps.finance.models import (
     Expense,
     FinancialControlConfig,
@@ -33,14 +34,15 @@ from apps.finance.services import (
 )
 
 
-class ExpenseViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+class ExpenseViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         Expense.objects.select_related(
             "hotel_settings",
             "expense_category",
             "payment_method",
-        ).order_by("-id")
+        )
     )
+    tenant_filter = "hotel_settings"
     serializer_class = ExpenseSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -69,6 +71,9 @@ class ExpenseViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     ]
     ordering = ["-id"]
 
+    def get_base_queryset(self):
+        return self.queryset.order_by("-id")
+
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return ["expenses.write"]
@@ -79,8 +84,9 @@ class ExpenseViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         return super().get_permissions()
 
 
-class FinancialControlConfigViewSet(viewsets.ModelViewSet):
-    queryset = FinancialControlConfig.objects.select_related("hotel_settings").order_by("hotel_settings__hotel_name")
+class FinancialControlConfigViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
+    queryset = FinancialControlConfig.objects.select_related("hotel_settings")
+    tenant_filter = "hotel_settings"
     serializer_class = FinancialControlConfigSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -98,6 +104,9 @@ class FinancialControlConfigViewSet(viewsets.ModelViewSet):
     ]
     ordering = ["hotel_settings__hotel_name"]
 
+    def get_base_queryset(self):
+        return self.queryset.order_by("hotel_settings__hotel_name")
+
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return ["financial_control.write"]
@@ -108,8 +117,9 @@ class FinancialControlConfigViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
 
-class OperationalAlertViewSet(viewsets.ModelViewSet):
-    queryset = OperationalAlert.objects.select_related("hotel_settings").order_by("-triggered_at", "-id")
+class OperationalAlertViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
+    queryset = OperationalAlert.objects.select_related("hotel_settings")
+    tenant_filter = "hotel_settings"
     serializer_class = OperationalAlertSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -132,6 +142,9 @@ class OperationalAlertViewSet(viewsets.ModelViewSet):
     ]
     ordering = ["-triggered_at", "-id"]
 
+    def get_base_queryset(self):
+        return self.queryset.order_by("-triggered_at", "-id")
+
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return ["financial_control.write"]
@@ -144,6 +157,7 @@ class OperationalAlertViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], url_path="sync")
     def sync(self, request):
         try:
+            user = request.user
             raw_hotel_settings = (
                 request.data.get("hotel_settings")
                 if isinstance(request.data, dict)
@@ -152,13 +166,39 @@ class OperationalAlertViewSet(viewsets.ModelViewSet):
             if raw_hotel_settings is None:
                 raw_hotel_settings = request.query_params.get("hotel_settings")
 
-            if raw_hotel_settings in (None, ""):
-                payload = sync_operational_alerts_for_all_hotels()
+            if user.is_superuser:
+                if raw_hotel_settings in (None, ""):
+                    payload = sync_operational_alerts_for_all_hotels()
+                    return Response(payload, status=status.HTTP_200_OK)
+
+                hotel_settings_id = int(raw_hotel_settings)
+                payload = sync_operational_alerts_for_hotel(hotel_settings_id=hotel_settings_id)
                 return Response(payload, status=status.HTTP_200_OK)
 
-            hotel_settings_id = int(raw_hotel_settings)
-            payload = sync_operational_alerts_for_hotel(hotel_settings_id=hotel_settings_id)
+            if user.hotel_settings_id is None:
+                return Response(
+                    {"hotel_settings": "El usuario autenticado no tiene un hotel asignado."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if raw_hotel_settings not in (None, ""):
+                requested_hotel_settings_id = int(raw_hotel_settings)
+                if requested_hotel_settings_id != user.hotel_settings_id:
+                    return Response(
+                        {
+                            "hotel_settings": (
+                                "No puedes sincronizar alertas para un hotel diferente al "
+                                "hotel del usuario autenticado."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            payload = sync_operational_alerts_for_hotel(
+                hotel_settings_id=user.hotel_settings_id
+            )
             return Response(payload, status=status.HTTP_200_OK)
+
         except (TypeError, ValueError):
             return Response(
                 {"hotel_settings": "hotel_settings must be a valid integer."},
@@ -166,12 +206,9 @@ class OperationalAlertViewSet(viewsets.ModelViewSet):
             )
 
 
-class FinancialStatementSnapshotViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
-    queryset = FinancialStatementSnapshot.objects.select_related("hotel_settings").order_by(
-        "-period_year",
-        "-period_month",
-        "-id",
-    )
+class FinancialStatementSnapshotViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+    queryset = FinancialStatementSnapshot.objects.select_related("hotel_settings")
+    tenant_filter = "hotel_settings"
     serializer_class = FinancialStatementSnapshotSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -188,6 +225,9 @@ class FinancialStatementSnapshotViewSet(LogicalDeleteViewSetMixin, viewsets.Mode
         "updated_at",
     ]
     ordering = ["-period_year", "-period_month", "-id"]
+
+    def get_base_queryset(self):
+        return self.queryset.order_by("-period_year", "-period_month", "-id")
 
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
@@ -226,7 +266,7 @@ class FinancialControlViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="dashboard")
     def dashboard(self, request):
         try:
-            hotel_settings_id = self._parse_hotel_settings_id()
+            hotel_settings_id = self._resolve_hotel_settings_id()
             start_date, end_date = resolve_period(
                 start_date_raw=request.query_params.get("start_date"),
                 end_date_raw=request.query_params.get("end_date"),
@@ -243,7 +283,7 @@ class FinancialControlViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="what-if")
     def what_if(self, request):
         try:
-            hotel_settings_id = self._parse_hotel_settings_id()
+            hotel_settings_id = self._resolve_hotel_settings_id()
             start_date, end_date = resolve_period(
                 start_date_raw=request.query_params.get("start_date"),
                 end_date_raw=request.query_params.get("end_date"),
@@ -288,7 +328,7 @@ class FinancialControlViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="statements")
     def statements(self, request):
         try:
-            hotel_settings_id = self._parse_hotel_settings_id()
+            hotel_settings_id = self._resolve_hotel_settings_id()
             year, month = resolve_year_month(
                 year_raw=request.query_params.get("year"),
                 month_raw=request.query_params.get("month"),
@@ -302,17 +342,46 @@ class FinancialControlViewSet(viewsets.ViewSet):
         except DjangoValidationError as exc:
             return self._validation_error_response(exc)
 
-    def _parse_hotel_settings_id(self) -> int:
-        raw_value = (self.request.query_params.get("hotel_settings") or "").strip()
-        if not raw_value:
+    def _resolve_hotel_settings_id(self) -> int:
+        user = self.request.user
+
+        if not user or not user.is_authenticated:
+            raise DjangoValidationError({"detail": "Authentication required."})
+
+        if user.is_superuser:
+            raw_value = (self.request.query_params.get("hotel_settings") or "").strip()
+            if not raw_value:
+                raise DjangoValidationError(
+                    {"hotel_settings": "hotel_settings query parameter is required for superadmin."}
+                )
+            if not raw_value.isdigit():
+                raise DjangoValidationError({"hotel_settings": "hotel_settings must be a valid integer."})
+            hotel_settings_id = int(raw_value)
+            if not HotelSettings.objects.filter(id=hotel_settings_id).exists():
+                raise DjangoValidationError({"hotel_settings": "The selected hotel_settings does not exist."})
+            return hotel_settings_id
+
+        hotel_settings_id = getattr(user, "hotel_settings_id", None)
+        if hotel_settings_id is None:
             raise DjangoValidationError(
-                {"hotel_settings": "hotel_settings query parameter is required."}
+                {"hotel_settings": "El usuario autenticado no tiene un hotel asignado."}
             )
-        if not raw_value.isdigit():
-            raise DjangoValidationError({"hotel_settings": "hotel_settings must be a valid integer."})
-        hotel_settings_id = int(raw_value)
-        if not HotelSettings.objects.filter(id=hotel_settings_id).exists():
-            raise DjangoValidationError({"hotel_settings": "The selected hotel_settings does not exist."})
+
+        raw_value = (self.request.query_params.get("hotel_settings") or "").strip()
+        if raw_value:
+            if not raw_value.isdigit():
+                raise DjangoValidationError({"hotel_settings": "hotel_settings must be a valid integer."})
+
+            requested_hotel_settings_id = int(raw_value)
+            if requested_hotel_settings_id != hotel_settings_id:
+                raise DjangoValidationError(
+                    {
+                        "hotel_settings": (
+                            "No puedes consultar dashboards financieros para un hotel "
+                            "diferente al hotel del usuario autenticado."
+                        )
+                    }
+                )
         return hotel_settings_id
 
     def _validation_error_response(self, exc: DjangoValidationError):

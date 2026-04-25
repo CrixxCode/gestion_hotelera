@@ -146,7 +146,17 @@
         <form [formGroup]="passwordForm" class="form-grid one-col">
           <label>
             <span>Contrasena Actual</span>
-            <input type="password" formControlName="current_password" placeholder="Ingresa tu contrasena actual" />
+            <div class="password-field">
+              <input [type]="passwordInputType('current')" formControlName="current_password" placeholder="Ingresa tu contrasena actual" />
+              <button
+                type="button"
+                class="btn-password-toggle"
+                (click)="togglePasswordVisibility('current')"
+                [attr.aria-label]="showCurrentPassword ? 'Ocultar contrasena actual' : 'Mostrar contrasena actual'"
+              >
+                <i class="fa-solid" [ngClass]="showCurrentPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
+              </button>
+            </div>
             <small *ngIf="passwordForm.controls.current_password.touched && passwordForm.controls.current_password.invalid">
               La contrasena actual es obligatoria.
             </small>
@@ -154,7 +164,17 @@
 
           <label>
             <span>Nueva Contrasena</span>
-            <input type="password" formControlName="new_password" placeholder="Minimo 8 caracteres" />
+            <div class="password-field">
+              <input [type]="passwordInputType('new')" formControlName="new_password" placeholder="Minimo 8 caracteres" />
+              <button
+                type="button"
+                class="btn-password-toggle"
+                (click)="togglePasswordVisibility('new')"
+                [attr.aria-label]="showNewPassword ? 'Ocultar nueva contrasena' : 'Mostrar nueva contrasena'"
+              >
+                <i class="fa-solid" [ngClass]="showNewPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
+              </button>
+            </div>
             <small *ngIf="passwordForm.controls.new_password.touched && passwordForm.controls.new_password.invalid">
               Debe tener minimo 8 caracteres.
             </small>
@@ -162,7 +182,17 @@
 
           <label>
             <span>Confirmar Nueva Contrasena</span>
-            <input type="password" formControlName="confirm_password" placeholder="Repite la nueva contrasena" />
+            <div class="password-field">
+              <input [type]="passwordInputType('confirm')" formControlName="confirm_password" placeholder="Repite la nueva contrasena" />
+              <button
+                type="button"
+                class="btn-password-toggle"
+                (click)="togglePasswordVisibility('confirm')"
+                [attr.aria-label]="showConfirmPassword ? 'Ocultar confirmacion de contrasena' : 'Mostrar confirmacion de contrasena'"
+              >
+                <i class="fa-solid" [ngClass]="showConfirmPassword ? 'fa-eye-slash' : 'fa-eye'"></i>
+              </button>
+            </div>
             <small *ngIf="passwordForm.controls.confirm_password.touched && passwordForm.controls.confirm_password.invalid">
               La confirmacion es obligatoria.
             </small>
@@ -170,7 +200,9 @@
         </form>
 
         <div class="actions-row">
-          <button type="button" class="btn-gold" (click)="savePassword()">Cambiar Contrasena</button>
+          <button type="button" class="btn-gold" [disabled]="passwordLoading" (click)="savePassword()">
+            {{ passwordLoading ? 'Guardando...' : 'Cambiar Contrasena' }}
+          </button>
         </div>
 
         <p class="feedback error" *ngIf="passwordErrorMessage">

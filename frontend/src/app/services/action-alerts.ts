@@ -2,6 +2,7 @@ export type ActionAlertType =
   | 'create'
   | 'update'
   | 'delete'
+  | 'restore'
   | 'assign'
   | 'remove'
   | 'register'
@@ -12,6 +13,7 @@ const ACTION_LABELS: Record<ActionAlertType, string> = {
   create: 'creacion',
   update: 'actualizacion',
   delete: 'eliminacion',
+  restore: 'restauracion',
   assign: 'asignacion',
   remove: 'remocion',
   register: 'registro',

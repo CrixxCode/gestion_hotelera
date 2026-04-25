@@ -120,8 +120,10 @@ export class ListItems implements OnInit {
   errorMessage = '';
   infoMessage = '';
   viewMode: ItemViewMode = 'cards';
+  showDeletedItems = false;
 
   items: ItemI[] = [];
+  deletedItems: ItemI[] = [];
   filteredItems: ItemI[] = [];
   groupedItems: ItemCatalogGroup[] = [];
 
@@ -170,6 +172,10 @@ export class ListItems implements OnInit {
     return this.items.length;
   }
 
+  get deletedItemsCount(): number {
+    return this.deletedItems.length;
+  }
+
   get activeItems(): number {
     return this.items.filter((item) => item.is_active).length;
   }
@@ -200,7 +206,10 @@ export class ListItems implements OnInit {
     const selectedItemId = this.selectedItem?.id ?? null;
 
     forkJoin({
-      items: this.itemsService.listItems().pipe(catchError(() => of([] as ItemI[]))),
+      items: this.itemsService.listItems({ include_inactive: true }).pipe(catchError(() => of([] as ItemI[]))),
+      allItems: this.itemsService
+        .listItems({ include_inactive: true, include_deleted: true })
+        .pipe(catchError(() => of([] as ItemI[]))),
       itemTypes: this.masterDataService
         .listMasterData({ group: 'ITEM_TYPE', is_active: 'true', ordering: 'sort_order,name' })
         .pipe(catchError(() => of([] as MasterDataI[]))),
@@ -209,9 +218,11 @@ export class ListItems implements OnInit {
         .pipe(catchError(() => of([] as MasterDataI[]))),
       settings: this.hotelSettingsService.getCurrentSettings().pipe(catchError(() => of(null)))
     }).subscribe({
-      next: ({ items, itemTypes, unitMeasures, settings }) => {
+      next: ({ items, allItems, itemTypes, unitMeasures, settings }) => {
         this.loading = false;
         this.items = items;
+        const visibleIds = new Set(items.map((item) => item.id));
+        this.deletedItems = allItems.filter((item) => !visibleIds.has(item.id));
         this.itemTypes = itemTypes;
         this.unitMeasures = unitMeasures;
 
@@ -382,6 +393,24 @@ export class ListItems implements OnInit {
           },
           error: () => {
             this.errorMessage = 'No fue posible eliminar el item seleccionado.';
+          }
+        });
+      }
+    });
+  }
+
+  restoreItem(item: ItemI): void {
+    openActionConfirmation(this.confirmationService, {
+      action: 'restore',
+      target: item.name || 'item',
+      onAccept: () => {
+        this.errorMessage = '';
+        this.itemsService.restoreItem(item.id).subscribe({
+          next: () => {
+            this.refreshItems();
+          },
+          error: () => {
+            this.errorMessage = 'No fue posible restaurar el item seleccionado.';
           }
         });
       }

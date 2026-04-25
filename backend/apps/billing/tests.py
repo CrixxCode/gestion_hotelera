@@ -2,6 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -10,8 +11,10 @@ from accounts.models import Resource, Role
 from apps.billing.models import Charge, CreditNote, Invoice, Payment, PaymentRefund
 from apps.billing.serializers import ChargeSerializer
 from apps.billing.services import get_or_create_default_charge_type
+from apps.billing.views import ChargeViewSet
 from apps.clients.models import Client
 from apps.hotel_settings.models import HotelFloor, HotelSettings
+from apps.inventory.models import InventoryMovement, Item
 from apps.master_data.models import MasterData
 from apps.packages.models import Package
 from apps.reservations.models import Reservation, ReservationRoom
@@ -430,6 +433,369 @@ class BillingAutomationTestCase(TestCase):
         self.assertEqual(charge.description, "Servicio: Minibar")
         self.assertEqual(charge.unit_price, Decimal("15000.00"))
         self.assertEqual(charge.total_amount, Decimal("30000.00"))
+
+
+class BillingTenantIsolationTests(TestCase):
+    def _md(self, group, code, name=None, sort_order=1):
+        return MasterData.objects.update_or_create(
+            group=group,
+            code=code,
+            defaults={
+                "name": name or code.title(),
+                "sort_order": sort_order,
+                "is_active": True,
+            },
+        )[0]
+
+    def setUp(self):
+        self.document_type = self._md(MasterData.Group.DOCUMENT_TYPE, "CC", "Cedula", 1)
+        self.client_type = self._md(MasterData.Group.CLIENT_TYPE, "REGULAR", "Regular", 1)
+        self.client_status = self._md(MasterData.Group.CLIENT_STATUS, "ACTIVO", "Activo", 1)
+        self.reservation_status = self._md(
+            MasterData.Group.RESERVATION_STATUS,
+            "CONFIRMADA",
+            "Confirmada",
+            1,
+        )
+        self.reservation_origin = self._md(
+            MasterData.Group.RESERVATION_ORIGIN,
+            "WEB",
+            "Web",
+            1,
+        )
+        self.service_type = self._md(MasterData.Group.SERVICE_TYPE, "SPA", "Spa", 1)
+        self.charge_type = self._md(MasterData.Group.CHARGE_TYPE, "SERVICIO", "Servicio", 1)
+
+        self.hotel_a = HotelSettings.objects.create(hotel_name="Hotel A")
+        self.hotel_b = HotelSettings.objects.create(hotel_name="Hotel B")
+
+        self.room_type_a = RoomType.objects.create(
+            hotel_settings=self.hotel_a,
+            code="STD-A",
+            name="Standard A",
+            capacity=2,
+            bed_count=1,
+            is_active=True,
+            sort_order=1,
+        )
+        self.room_type_b = RoomType.objects.create(
+            hotel_settings=self.hotel_b,
+            code="STD-B",
+            name="Standard B",
+            capacity=2,
+            bed_count=1,
+            is_active=True,
+            sort_order=1,
+        )
+
+        self.client_a = Client.objects.create(
+            hotel_settings=self.hotel_a,
+            document_type=self.document_type,
+            document_number="BILL-A-001",
+            first_name="Ana",
+            last_name="A",
+            email="ana-a@example.com",
+            phone="3001111111",
+            country="CO",
+            client_type=self.client_type,
+            status=self.client_status,
+        )
+        today = timezone.now().date()
+        self.reservation_a = Reservation.objects.create(
+            hotel_settings=self.hotel_a,
+            client=self.client_a,
+            status=self.reservation_status,
+            origin=self.reservation_origin,
+            expected_check_in=today + timedelta(days=1),
+            expected_check_out=today + timedelta(days=2),
+        )
+
+        self.service_a = Service.objects.create(
+            hotel_settings=self.hotel_a,
+            service_type=self.service_type,
+            name="Servicio A",
+            base_price=Decimal("10000.00"),
+            is_active=True,
+        )
+        self.service_b = Service.objects.create(
+            hotel_settings=self.hotel_b,
+            service_type=self.service_type,
+            name="Servicio B",
+            base_price=Decimal("12000.00"),
+            is_active=True,
+        )
+        self.package_a = Package.objects.create(
+            hotel_settings=self.hotel_a,
+            room_type=self.room_type_a,
+            name="Paquete A",
+            base_price=Decimal("50000.00"),
+            is_active=True,
+        )
+        self.package_b = Package.objects.create(
+            hotel_settings=self.hotel_b,
+            room_type=self.room_type_b,
+            name="Paquete B",
+            base_price=Decimal("55000.00"),
+            is_active=True,
+        )
+
+    def test_charge_model_clean_rejects_cross_hotel_service_and_package(self):
+        invalid_service_charge = Charge(
+            reservation=self.reservation_a,
+            charge_type=self.charge_type,
+            service=self.service_b,
+            description="Servicio cruzado",
+            quantity=1,
+            unit_price=Decimal("1000.00"),
+            total_amount=Decimal("1000.00"),
+            is_active=True,
+        )
+        with self.assertRaises(DjangoValidationError) as service_ctx:
+            invalid_service_charge.clean()
+        self.assertIn("service", service_ctx.exception.message_dict)
+
+        invalid_package_charge = Charge(
+            reservation=self.reservation_a,
+            charge_type=self.charge_type,
+            package=self.package_b,
+            description="Paquete cruzado",
+            quantity=1,
+            unit_price=Decimal("2000.00"),
+            total_amount=Decimal("2000.00"),
+            is_active=True,
+        )
+        with self.assertRaises(DjangoValidationError) as package_ctx:
+            invalid_package_charge.clean()
+        self.assertIn("package", package_ctx.exception.message_dict)
+
+    def test_charge_viewset_excludes_cross_hotel_related_rows(self):
+        valid_charge = Charge.objects.create(
+            reservation=self.reservation_a,
+            charge_type=self.charge_type,
+            service=self.service_a,
+            description="Servicio valido",
+            quantity=1,
+            unit_price=Decimal("10000.00"),
+            is_active=True,
+        )
+        invalid_service_charge = Charge.objects.create(
+            reservation=self.reservation_a,
+            charge_type=self.charge_type,
+            service=self.service_b,
+            description="Servicio inconsistente",
+            quantity=1,
+            unit_price=Decimal("12000.00"),
+            is_active=True,
+        )
+        invalid_package_charge = Charge.objects.create(
+            reservation=self.reservation_a,
+            charge_type=self.charge_type,
+            package=self.package_b,
+            description="Paquete inconsistente",
+            quantity=1,
+            unit_price=Decimal("55000.00"),
+            is_active=True,
+        )
+
+        ids = set(ChargeViewSet().get_base_queryset().values_list("id", flat=True))
+        self.assertIn(valid_charge.id, ids)
+        self.assertNotIn(invalid_service_charge.id, ids)
+        self.assertNotIn(invalid_package_charge.id, ids)
+
+
+class BillingPosBatchApiTestCase(TestCase):
+    def _md(self, group, code, name=None, sort_order=1):
+        return MasterData.objects.update_or_create(
+            group=group,
+            code=code,
+            defaults={
+                "name": name or code.title(),
+                "sort_order": sort_order,
+                "is_active": True,
+            },
+        )[0]
+
+    def setUp(self):
+        self.document_type = self._md(MasterData.Group.DOCUMENT_TYPE, "CC", "Cedula", 1)
+        self.client_type = self._md(MasterData.Group.CLIENT_TYPE, "REGULAR", "Regular", 1)
+        self.client_status = self._md(MasterData.Group.CLIENT_STATUS, "ACTIVO", "Activo", 1)
+        self.reservation_status = self._md(
+            MasterData.Group.RESERVATION_STATUS,
+            "CONFIRMADA",
+            "Confirmada",
+            1,
+        )
+        self.reservation_origin = self._md(
+            MasterData.Group.RESERVATION_ORIGIN,
+            "WEB",
+            "Web",
+            1,
+        )
+        self.item_type = self._md(MasterData.Group.ITEM_TYPE, "MINIBAR", "Minibar", 1)
+        self.unit_measure = self._md(MasterData.Group.UNIT_MEASURE, "UND", "Unidad", 1)
+        self._md(
+            MasterData.Group.INVENTORY_MOVEMENT_TYPE,
+            "OUT",
+            "Salida de inventario",
+            1,
+        )
+
+        role = Role.objects.create(name="Charges Writer", slug="charges-writer")
+        write_resource = Resource.objects.create(
+            key="charges.write",
+            name="Write charges",
+            link_backend="/api/charges/",
+        )
+        role.resources.add(write_resource)
+
+        self.user = User.objects.create_user(
+            username="charges_writer",
+            email="charges_writer@example.com",
+            password="pass12345",
+        )
+        self.user.roles.add(role)
+
+        self.client_api = APIClient()
+        self.client_api.force_login(self.user)
+
+        self.hotel_settings = HotelSettings.objects.create(hotel_name="Hotel POS")
+        self.client = Client.objects.create(
+            document_type=self.document_type,
+            document_number="POS-001",
+            first_name="Sara",
+            last_name="Pos",
+            email="sara.pos@example.com",
+            phone="3001112233",
+            country="CO",
+            client_type=self.client_type,
+            status=self.client_status,
+        )
+        today = timezone.now().date()
+        self.reservation = Reservation.objects.create(
+            client=self.client,
+            status=self.reservation_status,
+            origin=self.reservation_origin,
+            expected_check_in=today + timedelta(days=1),
+            expected_check_out=today + timedelta(days=2),
+        )
+
+        self.item_one = Item.objects.create(
+            hotel_settings=self.hotel_settings,
+            item_type=self.item_type,
+            unit_measure=self.unit_measure,
+            name="Agua mineral",
+            sku="POS-AGUA",
+            stock=10,
+            minimum_stock=2,
+            maximum_stock=40,
+            cost_price=Decimal("1200.00"),
+            sale_price=Decimal("5000.00"),
+            is_active=True,
+        )
+        self.item_two = Item.objects.create(
+            hotel_settings=self.hotel_settings,
+            item_type=self.item_type,
+            unit_measure=self.unit_measure,
+            name="Cerveza artesanal",
+            sku="POS-CERV",
+            stock=2,
+            minimum_stock=1,
+            maximum_stock=20,
+            cost_price=Decimal("2000.00"),
+            sale_price=Decimal("8000.00"),
+            is_active=True,
+        )
+
+    def _reservation_invoice(self):
+        return (
+            Invoice.objects.filter(reservation=self.reservation, is_active=True)
+            .order_by("id")
+            .first()
+        )
+
+    def test_pos_batch_registers_charges_and_inventory_movements(self):
+        response = self.client_api.post(
+            "/api/charges/pos-batch/",
+            {
+                "reservation": self.reservation.id,
+                "reference": "POS-TEST-001",
+                "lines": [
+                    {"item": self.item_one.id, "quantity": 2},
+                    {
+                        "item": self.item_two.id,
+                        "quantity": 1,
+                        "description": "Consumo especial bar",
+                    },
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data.get("charges_created"), 2)
+        self.assertEqual(len(response.data.get("charges", [])), 2)
+        self.assertEqual(response.data.get("charge_type_code"), "BAR")
+
+        charges = Charge.objects.filter(
+            reservation=self.reservation,
+            is_automatic=False,
+            is_active=True,
+        ).order_by("id")
+        self.assertEqual(charges.count(), 2)
+        self.assertTrue(all(charge.charge_type.code == "BAR" for charge in charges))
+
+        self.item_one.refresh_from_db()
+        self.item_two.refresh_from_db()
+        self.assertEqual(self.item_one.stock, 8)
+        self.assertEqual(self.item_two.stock, 1)
+
+        movements = InventoryMovement.objects.filter(
+            movement_type__code="OUT",
+            reference__startswith="POS-TEST-001:",
+        )
+        self.assertEqual(movements.count(), 2)
+
+        invoice = self._reservation_invoice()
+        self.assertIsNotNone(invoice)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.subtotal, Decimal("18000.00"))
+        self.assertEqual(invoice.total_amount, Decimal("18000.00"))
+
+    def test_pos_batch_rejects_when_stock_is_insufficient_and_rolls_back(self):
+        response = self.client_api.post(
+            "/api/charges/pos-batch/",
+            {
+                "reservation": self.reservation.id,
+                "reference": "POS-TEST-ERR",
+                "lines": [
+                    {"item": self.item_one.id, "quantity": 1},
+                    {"item": self.item_two.id, "quantity": 10},
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+        charges_count = Charge.objects.filter(
+            reservation=self.reservation,
+            is_automatic=False,
+        ).count()
+        self.assertEqual(charges_count, 0)
+
+        movements_count = InventoryMovement.objects.filter(
+            reference__startswith="POS-TEST-ERR:",
+        ).count()
+        self.assertEqual(movements_count, 0)
+
+        self.item_one.refresh_from_db()
+        self.item_two.refresh_from_db()
+        self.assertEqual(self.item_one.stock, 10)
+        self.assertEqual(self.item_two.stock, 2)
+
+        invoice = self._reservation_invoice()
+        self.assertIsNotNone(invoice)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.subtotal, Decimal("0.00"))
+        self.assertEqual(invoice.total_amount, Decimal("0.00"))
 
 
 class BillingApiFilterAndPaginationTestCase(TestCase):

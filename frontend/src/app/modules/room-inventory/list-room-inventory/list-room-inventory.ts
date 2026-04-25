@@ -91,8 +91,10 @@ export class ListRoomInventory implements OnInit {
   errorMessage = '';
   infoMessage = '';
   viewMode: RoomInventoryViewMode = 'cards';
+  showDeletedRoomInventory = false;
 
   roomInventory: RoomInventoryI[] = [];
+  deletedRoomInventory: RoomInventoryI[] = [];
   filteredRoomInventory: RoomInventoryI[] = [];
   groupedRoomInventory: RoomInventoryGroup[] = [];
   rooms: RoomI[] = [];
@@ -137,6 +139,10 @@ export class ListRoomInventory implements OnInit {
     return this.roomInventory.length;
   }
 
+  get deletedRoomInventoryCount(): number {
+    return this.deletedRoomInventory.length;
+  }
+
   get activeAssignments(): number {
     return this.roomInventory.filter((record) => record.is_active).length;
   }
@@ -160,13 +166,20 @@ export class ListRoomInventory implements OnInit {
     const selectedRoomKey = this.selectedRoomGroup?.key ?? null;
 
     forkJoin({
-      roomInventory: this.roomInventoryService.listRoomInventory().pipe(catchError(() => of([] as RoomInventoryI[]))),
+      roomInventory: this.roomInventoryService
+        .listRoomInventory({ include_inactive: true })
+        .pipe(catchError(() => of([] as RoomInventoryI[]))),
+      allRoomInventory: this.roomInventoryService
+        .listRoomInventory({ include_inactive: true, include_deleted: true })
+        .pipe(catchError(() => of([] as RoomInventoryI[]))),
       rooms: this.roomService.listRooms().pipe(catchError(() => of([] as RoomI[]))),
       items: this.itemsService.listItems().pipe(catchError(() => of([] as ItemI[])))
     }).subscribe({
-      next: ({ roomInventory, rooms, items }) => {
+      next: ({ roomInventory, allRoomInventory, rooms, items }) => {
         this.loading = false;
         this.roomInventory = roomInventory;
+        const visibleIds = new Set(roomInventory.map((record) => record.id));
+        this.deletedRoomInventory = allRoomInventory.filter((record) => !visibleIds.has(record.id));
         this.rooms = rooms;
         this.items = items;
 
@@ -323,6 +336,24 @@ export class ListRoomInventory implements OnInit {
           },
           error: () => {
             this.errorMessage = 'No fue posible eliminar el registro seleccionado.';
+          }
+        });
+      }
+    });
+  }
+
+  restoreRoomInventoryRecord(record: RoomInventoryI): void {
+    openActionConfirmation(this.confirmationService, {
+      action: 'restore',
+      target: this.getItemLabel(record),
+      onAccept: () => {
+        this.errorMessage = '';
+        this.roomInventoryService.restoreRoomInventory(record.id).subscribe({
+          next: () => {
+            this.refreshRoomInventory();
+          },
+          error: () => {
+            this.errorMessage = 'No fue posible restaurar el registro seleccionado.';
           }
         });
       }

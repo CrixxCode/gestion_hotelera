@@ -406,6 +406,17 @@ td small {
   background: var(--gh-surface-soft);
 }
 
+.row-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.row-btn.checkin {
+  border-color: var(--gh-status-info-border);
+  background: var(--gh-status-info-bg);
+  color: var(--gh-status-info-text);
+}
+
 .row-btn.danger {
   border-color: var(--gh-status-danger-border);
   background: var(--gh-surface)5f5;
@@ -629,6 +640,11 @@ td small {
   color: var(--gh-text-strong);
   font-size: 14px;
   font-weight: 600;
+}
+
+.card-action-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
 }
 
 .card-action-btn.action-checkin {

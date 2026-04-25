@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../enviorements/environment';
 import { AuthService } from './auth/auth';
@@ -41,16 +41,32 @@ export class ResourcesService {
   }
 
   // -------- Roles (para selección) --------
-  listRoles(): Observable<RoleLite[]> {
-    return this.http.get<any>(this.rolesUrl, { withCredentials: true }).pipe(
+  listRoles(filters?: { include_inactive?: boolean; include_deleted?: boolean }): Observable<RoleLite[]> {
+    let params = new HttpParams();
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
+    }
+
+    return this.http.get<any>(this.rolesUrl, { withCredentials: true, params }).pipe(
       map(res => this.unwrapArray<RoleLite>(res))
     );
   }
 
   // -------- Recursos CRUD --------
-  listResources(q: string = ''): Observable<Resource[]> {
-    const qs = q ? `?q=${encodeURIComponent(q)}` : '';
-    return this.http.get<any>(`${this.resourcesUrl}${qs}`, { withCredentials: true }).pipe(
+  listResources(q: string = '', filters?: { include_inactive?: boolean; include_deleted?: boolean }): Observable<Resource[]> {
+    let params = new HttpParams();
+    if (q) params = params.set('q', q);
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
+    }
+
+    return this.http.get<any>(this.resourcesUrl, { withCredentials: true, params }).pipe(
       map(res => this.unwrapArray<Resource>(res))
     );
   }
@@ -65,6 +81,10 @@ export class ResourcesService {
 
   deleteResource(id: string): Observable<any> {
     return this.http.delete(`${this.resourcesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
+  restoreResource(id: string): Observable<Resource> {
+    return this.http.post<Resource>(`${this.resourcesUrl}${id}/restore/`, {}, this.auth.buildCsrfRequestOptions());
   }
 
   // -------- Rol ↔ Recursos --------

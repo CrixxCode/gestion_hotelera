@@ -72,7 +72,12 @@
 
       <label class="gh-filter-field">
         <span>Uso</span>
-        <select class="gh-filter-select" [(ngModel)]="usageFilter" (change)="applyFilters()">
+        <select
+          class="gh-filter-select"
+          [(ngModel)]="usageFilter"
+          (change)="applyFilters()"
+          [disabled]="!usageMetricsAvailable"
+        >
           <option value="ALL">Todos</option>
           <option value="IN_USE">En uso</option>
           <option value="NO_USE">Sin uso</option>
@@ -92,6 +97,51 @@
         </button>
       </div>
     </div>
+  </section>
+
+  <section class="gh-filters-card" *ngIf="!loading && deletedAmenitiesCount > 0">
+    <div class="gh-filters-actions">
+      <p class="state-note">
+        Hay {{ deletedAmenitiesCount }} amenidad(es) eliminadas logicamente.
+      </p>
+      <div class="gh-action-group">
+        <button type="button" class="gh-btn gh-btn-light" (click)="showDeletedAmenities = !showDeletedAmenities">
+          <i class="fa-solid" [class.fa-eye]="!showDeletedAmenities" [class.fa-eye-slash]="showDeletedAmenities"></i>
+          {{ showDeletedAmenities ? 'Ocultar eliminadas' : 'Ver eliminadas' }}
+        </button>
+      </div>
+    </div>
+
+    <article class="table-card" *ngIf="showDeletedAmenities">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Amenidad</th>
+              <th>Icono</th>
+              <th>Uso</th>
+              <th>Estado operativo</th>
+              <th>Accion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let amenity of deletedAmenities; trackBy: trackByAmenity">
+              <td>{{ amenity.name }}</td>
+              <td>{{ amenity.icon || '-' }}</td>
+              <td>{{ getUsageCount(amenity.id) }}</td>
+              <td>{{ amenity.is_active ? 'Activa' : 'Inactiva' }}</td>
+              <td>
+                <div class="row-actions">
+                  <button class="row-btn" title="Restaurar" (click)="restoreAmenity(amenity)">
+                    <i class="fa-solid fa-rotate-left"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
   </section>
 
   <section class="table-card">

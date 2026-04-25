@@ -42,8 +42,11 @@ export class AmenitiesPage implements OnInit {
   loading = false;
   saving = false;
   loadWarning = '';
+  showDeletedAmenities = false;
+  usageMetricsAvailable = true;
 
   allAmenities: AmenityI[] = [];
+  deletedAmenities: AmenityI[] = [];
   filteredAmenities: AmenityI[] = [];
   usageByAmenity = new Map<number, number>();
 
@@ -91,6 +94,10 @@ export class AmenitiesPage implements OnInit {
     return this.allAmenities.length;
   }
 
+  get deletedAmenitiesCount(): number {
+    return this.deletedAmenities.length;
+  }
+
   get activeAmenities(): number {
     return this.allAmenities.filter((item) => !!item.is_active).length;
   }
@@ -110,26 +117,42 @@ export class AmenitiesPage implements OnInit {
   loadData(): void {
     this.loading = true;
     this.loadWarning = '';
+    this.usageMetricsAvailable = true;
     forkJoin({
-      amenitiesResult: this.roomService.listAmenities().pipe(
+      amenitiesResult: this.roomService.listAmenities({ include_inactive: true }).pipe(
+        map((data) => ({ data, failed: false })),
+        catchError(() => of({ data: [] as AmenityI[], failed: true }))
+      ),
+      allAmenitiesResult: this.roomService.listAmenities({ include_inactive: true, include_deleted: true }).pipe(
         map((data) => ({ data, failed: false })),
         catchError(() => of({ data: [] as AmenityI[], failed: true }))
       ),
       roomsResult: this.roomService.listRooms().pipe(
-        map((data) => ({ data, failed: false })),
-        catchError(() => of({ data: [] as RoomI[], failed: true }))
+        map((data) => ({ data, failed: false, status: 200 })),
+        catchError((error: { status?: number }) =>
+          of({ data: [] as RoomI[], failed: true, status: error?.status ?? 0 })
+        )
       )
     }).subscribe({
-      next: ({ amenitiesResult, roomsResult }) => {
+      next: ({ amenitiesResult, allAmenitiesResult, roomsResult }) => {
         this.loading = false;
         this.allAmenities = this.sortAmenities(amenitiesResult.data);
-        this.usageByAmenity = this.buildUsageMap(roomsResult.data);
+        const visibleIds = new Set(this.allAmenities.map((amenity) => amenity.id));
+        this.deletedAmenities = this.sortAmenities(
+          allAmenitiesResult.data.filter((amenity) => !visibleIds.has(amenity.id))
+        );
+        const usagePermissionDenied = roomsResult.failed && (roomsResult.status === 401 || roomsResult.status === 403);
+        this.usageMetricsAvailable = !roomsResult.failed;
+        this.usageByAmenity = this.usageMetricsAvailable ? this.buildUsageMap(roomsResult.data) : new Map<number, number>();
+        if (!this.usageMetricsAvailable) {
+          this.usageFilter = 'ALL';
+        }
         this.applyFilters();
 
         if (amenitiesResult.failed) {
           this.loadWarning = 'No se pudieron cargar amenidades. Revisa permisos de acceso.';
           this.toast(this.loadWarning, 'danger');
-        } else if (roomsResult.failed) {
+        } else if (roomsResult.failed && !usagePermissionDenied) {
           this.loadWarning = 'No se pudo calcular el uso de amenidades por habitacion.';
           this.toast(this.loadWarning, 'info');
         }
@@ -298,6 +321,24 @@ export class AmenitiesPage implements OnInit {
       error: (error) => {
         this.deleteTarget = null;
         this.toast(this.extractErrorMessage(error, errorActionAlert('delete', 'amenidad')), 'danger');
+      }
+    });
+  }
+
+  restoreAmenity(item: AmenityI): void {
+    openActionConfirmation(this.confirmationService, {
+      action: 'restore',
+      target: item.name || 'amenidad',
+      onAccept: () => {
+        this.roomService.restoreAmenity(item.id).subscribe({
+          next: () => {
+            this.toast(successActionAlert('restore', 'amenidad'), 'success');
+            this.loadData();
+          },
+          error: (error) => {
+            this.toast(this.extractErrorMessage(error, errorActionAlert('restore', 'amenidad')), 'danger');
+          }
+        });
       }
     });
   }

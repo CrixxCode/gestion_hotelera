@@ -10,6 +10,8 @@ from apps.master_data.models import MasterData
 from apps.packages.models import Package
 from apps.reservations.models import (
     Reservation,
+    ReservationInventoryCheck,
+    ReservationInventoryCheckLine,
     ReservationRoom,
     ReservationGuest,
 )
@@ -27,7 +29,11 @@ from apps.reservations.services import (
     sync_reservation_room_pricing_and_occupancy,
     validate_reservation_deposit_rules,
 )
-from apps.hotel_settings.models import ReservationPolicy
+from apps.hotel_settings.models import ReservationPolicy, HotelSettings
+from accounts.tenancy import TenantSerializerMixin
+from apps.clients.models import Client
+from apps.inventory.models import Item
+from apps.rooms.models import Room
 
 
 class ReservationPolicySummarySerializer(serializers.ModelSerializer):
@@ -103,6 +109,21 @@ class ReservationRoomSerializer(serializers.ModelSerializer):
             "children": {"required": False},
         }
 
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+            fields["reservation"].queryset = Reservation.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+            fields["room"].queryset = Room.objects.filter(
+                floor__hotel_settings_id=user.hotel_settings_id
+            )
+
+        return fields
+
     def validate_night_rate(self, value):
         if value < 0:
             raise serializers.ValidationError("Night rate cannot be negative.")
@@ -121,9 +142,46 @@ class ReservationRoomSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
 
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
         reservation = attrs.get("reservation", getattr(self.instance, "reservation", None))
         room = attrs.get("room", getattr(self.instance, "room", None))
         provided_night_rate = attrs.get("night_rate", None)
+
+        if reservation is None:
+            raise serializers.ValidationError({
+                "reservation": "La reserva es obligatoria."
+            })
+
+        if room is None:
+            raise serializers.ValidationError({
+                "room": "La habitacion es obligatoria."
+            })
+
+        reservation_hotel_id = reservation.hotel_settings_id
+        room_hotel_id = getattr(getattr(room, "floor", None), "hotel_settings_id", None)
+
+        if reservation_hotel_id and room_hotel_id and reservation_hotel_id != room_hotel_id:
+            raise serializers.ValidationError({
+                "room": "La habitacion no pertenece al mismo hotel de la reserva."
+            })
+
+        if user and user.is_authenticated and not user.is_superuser:
+            if user.hotel_settings_id is None:
+                raise serializers.ValidationError({
+                    "reservation": "El usuario autenticado no tiene un hotel asignado."
+                })
+
+            if reservation_hotel_id != user.hotel_settings_id:
+                raise serializers.ValidationError({
+                    "reservation": "La reserva no pertenece al hotel del usuario autenticado."
+                })
+
+            if room_hotel_id != user.hotel_settings_id:
+                raise serializers.ValidationError({
+                    "room": "La habitacion no pertenece al hotel del usuario autenticado."
+                })
 
         should_validate_room_status = self.instance is None
         if self.instance is not None:
@@ -172,7 +230,6 @@ class ReservationRoomSerializer(serializers.ModelSerializer):
 
         if reservation and room and reservation.package_id:
             package = reservation.package
-            room_hotel_id = getattr(getattr(room, "floor", None), "hotel_settings_id", None)
             check_in = reservation.expected_check_in
             check_out = reservation.expected_check_out
 
@@ -239,7 +296,6 @@ class ReservationRoomSerializer(serializers.ModelSerializer):
                     }
                 )
 
-            # Siempre normalizamos la tarifa segun la configuracion activa del tipo de habitacion.
             attrs["night_rate"] = expected_rate.price
 
         return attrs
@@ -290,6 +346,76 @@ class ReservationGuestSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ("id", "created_at", "full_name")
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+            fields["reservation"].queryset = Reservation.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+
+        return fields
+
+    def validate_document_number(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("El numero de documento es obligatorio.")
+        return value
+
+    def validate_first_name(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("El nombre es obligatorio.")
+        return value
+
+    def validate_last_name(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("El apellido es obligatorio.")
+        return value
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        reservation = attrs.get("reservation", getattr(self.instance, "reservation", None))
+        document_type = attrs.get("document_type", getattr(self.instance, "document_type", None))
+        document_number = attrs.get("document_number", getattr(self.instance, "document_number", None))
+
+        if reservation is None:
+            raise serializers.ValidationError({
+                "reservation": "La reserva es obligatoria."
+            })
+
+        if user and user.is_authenticated and not user.is_superuser:
+            if user.hotel_settings_id is None:
+                raise serializers.ValidationError({
+                    "reservation": "El usuario autenticado no tiene un hotel asignado."
+                })
+
+            if reservation.hotel_settings_id != user.hotel_settings_id:
+                raise serializers.ValidationError({
+                    "reservation": "La reserva no pertenece al hotel del usuario autenticado."
+                })
+
+        qs = ReservationGuest.objects.filter(
+            reservation=reservation,
+            document_type=document_type,
+            document_number=document_number,
+        )
+
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if document_type and document_number and qs.exists():
+            raise serializers.ValidationError({
+                "document_number": "Ya existe un huesped con ese documento en esta reserva."
+            })
+
+        return attrs
 
     def create(self, validated_data):
         with transaction.atomic():
@@ -345,6 +471,18 @@ class ReservationDepositSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     created_at = serializers.DateTimeField(read_only=True)
 
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+            fields["reservation"].queryset = Reservation.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+
+        return fields
+
     def validate_amount(self, value):
         if value <= 0:
             raise serializers.ValidationError("Deposit amount must be greater than zero.")
@@ -353,9 +491,28 @@ class ReservationDepositSerializer(serializers.Serializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
 
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
         reservation = attrs.get("reservation")
         if reservation is None:
             reservation = getattr(getattr(self.instance, "invoice", None), "reservation", None)
+
+        if reservation is None:
+            raise serializers.ValidationError({
+                "reservation": "Reservation is required."
+            })
+
+        if user and user.is_authenticated and not user.is_superuser:
+            if user.hotel_settings_id is None:
+                raise serializers.ValidationError({
+                    "reservation": "El usuario autenticado no tiene un hotel asignado."
+                })
+
+            if reservation.hotel_settings_id != user.hotel_settings_id:
+                raise serializers.ValidationError({
+                    "reservation": "La reserva no pertenece al hotel del usuario autenticado."
+                })
 
         amount = attrs.get("amount", getattr(self.instance, "amount", None))
         exclude_payment_id = getattr(self.instance, "id", None)
@@ -448,17 +605,30 @@ class ReservationDepositSerializer(serializers.Serializer):
 
         return representation
 
-    def _lock_reservation(self, reservation_id: int):
-        return (
-            Reservation.objects.select_related("status")
+    def _lock_reservation(
+        self,
+        reservation_id: int,
+        *,
+        expected_hotel_settings_id: int | None = None,
+    ):
+        queryset = (
+            Reservation.objects.select_related("status", "hotel_settings")
             .prefetch_related(
                 "rooms_detail",
                 "charges",
                 "invoices__payments__refunds__status",
             )
             .select_for_update()
-            .get(pk=reservation_id)
         )
+        if expected_hotel_settings_id is not None:
+            queryset = queryset.filter(hotel_settings_id=expected_hotel_settings_id)
+
+        reservation = queryset.filter(pk=reservation_id).first()
+        if reservation is None:
+            raise serializers.ValidationError(
+                {"reservation": "La reserva no existe o no pertenece al hotel esperado."}
+            )
+        return reservation
 
     @staticmethod
     def _apply_payment_date(payment, deposit_date):
@@ -482,7 +652,10 @@ class ReservationDepositSerializer(serializers.Serializer):
         validated_data.pop("status", None)
 
         with transaction.atomic():
-            locked_reservation = self._lock_reservation(reservation.pk)
+            locked_reservation = self._lock_reservation(
+                reservation.pk,
+                expected_hotel_settings_id=reservation.hotel_settings_id,
+            )
 
             errors = validate_reservation_deposit_rules(
                 locked_reservation,
@@ -491,7 +664,10 @@ class ReservationDepositSerializer(serializers.Serializer):
             if errors:
                 raise serializers.ValidationError(errors)
 
-            invoice = ensure_default_invoice_for_reservation(locked_reservation.id)
+            invoice = ensure_default_invoice_for_reservation(
+                locked_reservation.id,
+                expected_hotel_settings_id=locked_reservation.hotel_settings_id,
+            )
             if invoice is None:
                 raise serializers.ValidationError(
                     {"reservation": "No fue posible obtener la factura activa de la reserva."}
@@ -521,7 +697,10 @@ class ReservationDepositSerializer(serializers.Serializer):
             raise serializers.ValidationError({"reservation": "Reservation is required."})
 
         with transaction.atomic():
-            locked_reservation = self._lock_reservation(reservation.pk)
+            locked_reservation = self._lock_reservation(
+                reservation.pk,
+                expected_hotel_settings_id=reservation.hotel_settings_id,
+            )
 
             errors = validate_reservation_deposit_rules(
                 locked_reservation,
@@ -533,7 +712,10 @@ class ReservationDepositSerializer(serializers.Serializer):
 
             target_invoice = instance.invoice
             if getattr(target_invoice, "reservation_id", None) != locked_reservation.id:
-                target_invoice = ensure_default_invoice_for_reservation(locked_reservation.id)
+                target_invoice = ensure_default_invoice_for_reservation(
+                    locked_reservation.id,
+                    expected_hotel_settings_id=locked_reservation.hotel_settings_id,
+                )
                 if target_invoice is None:
                     raise serializers.ValidationError(
                         {"reservation": "No fue posible obtener la factura activa de la reserva."}
@@ -672,6 +854,7 @@ class ReservationListSerializer(ReservationBusinessRulesMixin, serializers.Model
             "real_check_out",
             "promo_code",
             "total_discount",
+            "notes",
             "policies",
             "total_rooms",
             "total_guests",
@@ -864,8 +1047,19 @@ class ReservationDetailSerializer(ReservationBusinessRulesMixin, serializers.Mod
             context=self.context,
         ).data
 
+class ReservationWriteSerializer(TenantSerializerMixin, serializers.ModelSerializer):
+    tenant_field_name = "hotel_settings"
 
-class ReservationWriteSerializer(serializers.ModelSerializer):
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    client = serializers.PrimaryKeyRelatedField(
+        queryset=Client.objects.all(),
+        required=True,
+    )
     package = serializers.PrimaryKeyRelatedField(
         queryset=Package.objects.all(),
         required=False,
@@ -881,6 +1075,7 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
         model = Reservation
         fields = [
             "id",
+            "hotel_settings",
             "client",
             "status",
             "origin",
@@ -907,6 +1102,25 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
             "package_name",
             "package_price",
         )
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+            fields["client"].queryset = Client.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+            fields["package"].queryset = Package.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+            fields["policies"].child_relation.queryset = ReservationPolicy.objects.filter(
+                hotel_settings_id=user.hotel_settings_id,
+                is_active=True,
+            )
+
+        return fields
 
     def validate_package(self, value):
         if value and not value.is_active:
@@ -949,6 +1163,14 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
                 {"reservation": "No puedes editar una reserva que ya tiene check-in registrado."}
             )
 
+        client = attrs.get("client", getattr(self.instance, "client", None))
+
+        # Permite inferir hotel desde el cliente cuando superadmin no lo manda explícito.
+        if attrs.get("hotel_settings") is None and client is not None:
+            attrs["hotel_settings"] = getattr(client, "hotel_settings", None)
+
+        hotel = self.require_target_tenant(attrs)
+
         expected_check_in = attrs.get(
             "expected_check_in",
             getattr(self.instance, "expected_check_in", None),
@@ -970,8 +1192,20 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
             getattr(self.instance, "total_discount", 0),
         )
         package = attrs.get("package", getattr(self.instance, "package", None))
+        policies = attrs.get("policies", None)
 
         errors = {}
+
+        if client and client.hotel_settings_id != hotel.id:
+            errors["client"] = "El cliente no pertenece al mismo hotel de la reserva."
+
+        if package and package.hotel_settings_id != hotel.id:
+            errors["package"] = "El paquete no pertenece al mismo hotel de la reserva."
+
+        if policies is not None:
+            invalid_policies = [policy.id for policy in policies if policy.hotel_settings_id != hotel.id]
+            if invalid_policies:
+                errors["policies"] = "Una o mas politicas no pertenecen al mismo hotel de la reserva."
 
         if expected_check_in and expected_check_out:
             if expected_check_out <= expected_check_in:
@@ -996,7 +1230,11 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
 
         if self.instance and expected_check_in and expected_check_out:
             room_conflicts = []
-            reservation_rooms = self.instance.rooms_detail.select_related("room", "room__floor").all()
+            reservation_rooms = self.instance.rooms_detail.select_related(
+                "room",
+                "room__floor",
+            ).all()
+
             for reservation_room in reservation_rooms:
                 conflict = find_overlapping_reservation_room(
                     room_id=reservation_room.room_id,
@@ -1024,6 +1262,12 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
                     room = reservation_room.room
                     room_hotel_id = getattr(getattr(room, "floor", None), "hotel_settings_id", None)
 
+                    if room_hotel_id and room_hotel_id != hotel.id:
+                        package_conflicts.append(
+                            f"Room {room.number} belongs to a different hotel than the reservation."
+                        )
+                        continue
+
                     if room_hotel_id and package.hotel_settings_id != room_hotel_id:
                         package_conflicts.append(
                             f"Room {room.number} belongs to a different hotel than the selected package."
@@ -1046,9 +1290,12 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         policies = validated_data.pop("policies", None)
         package = validated_data.get("package")
+
         validated_data.pop("status", None)
         validated_data["real_check_in"] = None
         validated_data["real_check_out"] = None
+
+        self.assign_target_tenant(validated_data)
         validated_data.update(self._build_package_snapshot(package))
 
         pending_status = get_pending_reservation_status()
@@ -1077,6 +1324,8 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
         validated_data.pop("real_check_in", None)
         validated_data.pop("real_check_out", None)
 
+        self.assign_target_tenant(validated_data)
+
         if "package" in validated_data:
             package = validated_data.get("package")
             validated_data.update(self._build_package_snapshot(package))
@@ -1087,3 +1336,166 @@ class ReservationWriteSerializer(serializers.ModelSerializer):
             reservation.policies.set(policies)
 
         return reservation
+
+class ReservationInventoryCheckSerializer(serializers.ModelSerializer):
+    reservation_id = serializers.IntegerField(source="reservation.id", read_only=True)
+    reservation_status = serializers.CharField(source="reservation.status.code", read_only=True)
+    created_by_username = serializers.CharField(source="created_by.username", read_only=True)
+
+    class Meta:
+        model = ReservationInventoryCheck
+        fields = [
+            "id",
+            "reservation",
+            "reservation_id",
+            "check_type",
+            "created_by",
+            "created_by_username",
+            "notes",
+            "created_at",
+            "reservation_status",
+        ]
+        read_only_fields = ("id", "created_at", "created_by")
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+            fields["reservation"].queryset = Reservation.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+
+        return fields
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        reservation = attrs.get("reservation", getattr(self.instance, "reservation", None))
+        if reservation is None:
+            raise serializers.ValidationError({
+                "reservation": "La reserva es obligatoria."
+            })
+
+        if user and user.is_authenticated and not user.is_superuser:
+            if user.hotel_settings_id is None:
+                raise serializers.ValidationError({
+                    "reservation": "El usuario autenticado no tiene un hotel asignado."
+                })
+
+            if reservation.hotel_settings_id != user.hotel_settings_id:
+                raise serializers.ValidationError({
+                    "reservation": "La reserva no pertenece al hotel del usuario autenticado."
+                })
+
+        return attrs
+
+class ReservationInventoryCheckLineSerializer(serializers.ModelSerializer):
+    room_number = serializers.CharField(source="room.number", read_only=True)
+    item_name = serializers.CharField(source="item.name", read_only=True)
+    check_type = serializers.CharField(source="inventory_check.check_type", read_only=True)
+
+    class Meta:
+        model = ReservationInventoryCheckLine
+        fields = [
+            "id",
+            "inventory_check",
+            "reservation_room",
+            "room",
+            "room_number",
+            "item",
+            "item_name",
+            "expected_quantity",
+            "reviewed_quantity",
+            "difference_quantity",
+            "notes",
+            "created_at",
+            "check_type",
+        ]
+        read_only_fields = ("id", "created_at", "difference_quantity", "check_type")
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+            fields["inventory_check"].queryset = ReservationInventoryCheck.objects.filter(
+                reservation__hotel_settings_id=user.hotel_settings_id
+            )
+            fields["reservation_room"].queryset = ReservationRoom.objects.filter(
+                reservation__hotel_settings_id=user.hotel_settings_id
+            )
+            fields["room"].queryset = Room.objects.filter(
+                floor__hotel_settings_id=user.hotel_settings_id
+            )
+
+            # Si Item ya es tenantizado, restringe también aquí.
+            if "item" in fields and hasattr(fields["item"].queryset.model, "hotel_settings_id"):
+                fields["item"].queryset = Item.objects.filter(
+                    hotel_settings_id=user.hotel_settings_id
+                )
+
+        return fields
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        inventory_check = attrs.get("inventory_check", getattr(self.instance, "inventory_check", None))
+        reservation_room = attrs.get("reservation_room", getattr(self.instance, "reservation_room", None))
+        room = attrs.get("room", getattr(self.instance, "room", None))
+        item = attrs.get("item", getattr(self.instance, "item", None))
+
+        if inventory_check is None:
+            raise serializers.ValidationError({
+                "inventory_check": "El inventario de reserva es obligatorio."
+            })
+
+        if room is None:
+            raise serializers.ValidationError({
+                "room": "La habitacion es obligatoria."
+            })
+
+        reservation = inventory_check.reservation
+        reservation_hotel_id = reservation.hotel_settings_id
+        room_hotel_id = getattr(getattr(room, "floor", None), "hotel_settings_id", None)
+
+        if room_hotel_id and reservation_hotel_id and room_hotel_id != reservation_hotel_id:
+            raise serializers.ValidationError({
+                "room": "La habitacion no pertenece al mismo hotel del control de inventario."
+            })
+
+        if reservation_room is not None:
+            if reservation_room.reservation_id != reservation.id:
+                raise serializers.ValidationError({
+                    "reservation_room": "La habitacion de reserva no pertenece a la misma reserva del control."
+                })
+
+            if reservation_room.room_id != room.id:
+                raise serializers.ValidationError({
+                    "reservation_room": "La habitacion de reserva no coincide con la habitacion seleccionada."
+                })
+
+        if user and user.is_authenticated and not user.is_superuser:
+            if user.hotel_settings_id is None:
+                raise serializers.ValidationError({
+                    "inventory_check": "El usuario autenticado no tiene un hotel asignado."
+                })
+
+            if reservation_hotel_id != user.hotel_settings_id:
+                raise serializers.ValidationError({
+                    "inventory_check": "El control de inventario no pertenece al hotel del usuario autenticado."
+                })
+
+        # Si Item tiene hotel_settings, validarlo también.
+        if item is not None and hasattr(item, "hotel_settings_id"):
+            item_hotel_id = getattr(item, "hotel_settings_id", None)
+            if item_hotel_id and reservation_hotel_id and item_hotel_id != reservation_hotel_id:
+                raise serializers.ValidationError({
+                    "item": "El item no pertenece al mismo hotel del control de inventario."
+                })
+
+        return attrs

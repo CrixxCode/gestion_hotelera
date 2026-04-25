@@ -114,6 +114,59 @@
     </div>
   </section>
 
+  <section class="gh-filters-card" *ngIf="!loading && deletedMaintenanceOrdersCount > 0">
+    <div class="gh-filters-actions">
+      <p class="state-note">
+        Hay {{ deletedMaintenanceOrdersCount }} orden(es) eliminadas logicamente.
+      </p>
+      <div class="gh-action-group">
+        <button
+          type="button"
+          class="gh-btn gh-btn-light"
+          (click)="showDeletedMaintenanceOrders = !showDeletedMaintenanceOrders">
+          <i
+            class="fa-solid"
+            [class.fa-eye]="!showDeletedMaintenanceOrders"
+            [class.fa-eye-slash]="showDeletedMaintenanceOrders"></i>
+          {{ showDeletedMaintenanceOrders ? 'Ocultar eliminadas' : 'Ver eliminadas' }}
+        </button>
+      </div>
+    </div>
+
+    <article class="table-card" *ngIf="showDeletedMaintenanceOrders">
+      <div class="table-scroll">
+        <table class="maintenance-order-table">
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Habitacion</th>
+              <th>Titulo</th>
+              <th>Prioridad</th>
+              <th>Estado</th>
+              <th>Accion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let order of deletedMaintenanceOrders; trackBy: trackByOrder">
+              <td class="code-cell">{{ getOrderCode(order) }}</td>
+              <td>{{ getRoomLabel(order) }}</td>
+              <td>{{ getTitleLabel(order) }}</td>
+              <td>{{ getPriorityLabel(order) }}</td>
+              <td>{{ getStatusLabel(order) }}</td>
+              <td>
+                <div class="table-actions">
+                  <button type="button" class="row-btn" title="Restaurar" (click)="restoreMaintenanceOrder(order)">
+                    <i class="fa-solid fa-rotate-left"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
   <section class="state-message" *ngIf="loading || errorMessage || infoMessage || filteredMaintenanceOrders.length === 0">
     <p *ngIf="loading">Cargando ordenes de mantenimiento...</p>
     <p class="error" *ngIf="!loading && errorMessage">{{ errorMessage }}</p>

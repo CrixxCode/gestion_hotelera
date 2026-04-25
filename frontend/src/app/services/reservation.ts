@@ -53,6 +53,8 @@ export class ReservationService {
     search?: string;
     ordering?: string;
     include_finished?: boolean;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
     page?: number;
     page_size?: number;
   }): Observable<ReservationI[]> {
@@ -63,6 +65,8 @@ export class ReservationService {
     search?: string;
     ordering?: string;
     include_finished?: boolean;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
     page?: number;
     page_size?: number;
   }): Observable<PaginatedResponseI<ReservationI>> {
@@ -78,6 +82,14 @@ export class ReservationService {
 
     if (typeof filters?.include_finished === 'boolean') {
       params = params.set('include_finished', String(filters.include_finished));
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     if (filters?.page && Number.isFinite(filters.page) && filters.page > 0) {
@@ -107,6 +119,8 @@ export class ReservationService {
     ordering?: string;
     hotel_settings?: number;
     is_active?: boolean;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<ReservationPolicyI[]> {
     let params = new HttpParams();
 
@@ -124,6 +138,14 @@ export class ReservationService {
 
     if (typeof filters?.is_active === 'boolean') {
       params = params.set('is_active', String(filters.is_active));
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -152,6 +174,14 @@ export class ReservationService {
 
   deleteReservationPolicy(id: number): Observable<void> {
     return this.http.delete<void>(`${this.reservationPoliciesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
+  restoreReservationPolicy(id: number): Observable<ReservationPolicyI> {
+    return this.http.post<ReservationPolicyI>(
+      `${this.reservationPoliciesUrl}${id}/restore/`,
+      {},
+      this.auth.buildCsrfRequestOptions()
+    );
   }
 
   createReservation(payload: ReservationWritePayloadI): Observable<ReservationI> {
@@ -206,6 +236,14 @@ export class ReservationService {
     return this.http.delete<void>(`${this.reservationsUrl}${id}/`, this.auth.buildCsrfRequestOptions());
   }
 
+  restoreReservation(id: number): Observable<ReservationI> {
+    return this.http.post<ReservationI>(
+      `${this.reservationsUrl}${id}/restore/`,
+      {},
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
   listReservationRooms(filters?: { reservation?: number }): Observable<ReservationRoomI[]> {
     let params = new HttpParams();
 
@@ -239,6 +277,14 @@ export class ReservationService {
 
   deleteReservationRoom(id: number): Observable<void> {
     return this.http.delete<void>(`${this.reservationRoomsUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
+  restoreReservationRoom(id: number): Observable<ReservationRoomI> {
+    return this.http.post<ReservationRoomI>(
+      `${this.reservationRoomsUrl}${id}/restore/`,
+      {},
+      this.auth.buildCsrfRequestOptions()
+    );
   }
 
   listReservationGuests(filters?: { reservation?: number }): Observable<ReservationGuestI[]> {

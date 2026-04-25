@@ -4,15 +4,17 @@ from apps.services.models import Service
 from apps.services.serializers import ServiceSerializer
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
+from accounts.tenancy import TenantScopeMixin
 
 
-class ServiceViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+class ServiceViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         Service.objects.select_related(
             "hotel_settings",
             "service_type",
-        ).order_by("-id")
+        )
     )
+    tenant_filter = "hotel_settings"
     serializer_class = ServiceSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -34,6 +36,9 @@ class ServiceViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         "updated_at",
     ]
     ordering = ["-id"]
+
+    def get_base_queryset(self):
+        return self.queryset.order_by("-id")
 
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):

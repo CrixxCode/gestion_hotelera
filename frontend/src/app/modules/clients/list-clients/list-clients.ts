@@ -8,6 +8,7 @@ import { UpdateClient } from '../update-client/update-client';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ConfirmationService } from 'primeng/api';
 import { openActionConfirmation } from '../../../services/action-confirmations';
+import { catchError, forkJoin, of } from 'rxjs';
 
 @Component({
   selector: 'app-show-client',
@@ -19,8 +20,10 @@ import { openActionConfirmation } from '../../../services/action-confirmations';
 })
 export class ListClients implements OnInit {
   clients: ClientI[] = [];
+  deletedClients: ClientI[] = [];
   filteredClients: ClientI[] = [];
   paginatedClients: ClientI[] = [];
+  showDeletedClients = false;
 
   search = '';
   statusFilter = 'ALL';
@@ -81,12 +84,25 @@ export class ListClients implements OnInit {
     this.loadClients();
   }
 
+  get deletedClientsCount(): number {
+    return this.deletedClients.length;
+  }
+
   loadClients(): void {
     this.loading = true;
 
-    this.clientsService.listClients().subscribe({
-      next: (data) => {
-        this.clients = data;
+    forkJoin({
+      clients: this.clientsService
+        .listClients({ include_inactive: true })
+        .pipe(catchError(() => of([] as ClientI[]))),
+      allClients: this.clientsService
+        .listClients({ include_inactive: true, include_deleted: true })
+        .pipe(catchError(() => of([] as ClientI[])))
+    }).subscribe({
+      next: ({ clients, allClients }) => {
+        this.clients = clients;
+        const visibleIds = new Set(clients.map((client) => client.id));
+        this.deletedClients = allClients.filter((client) => !visibleIds.has(client.id));
         this.updateStats();
         this.applyFilters();
         this.loading = false;
@@ -253,6 +269,29 @@ export class ListClients implements OnInit {
           },
           error: (error) => {
             console.error('No se pudo eliminar el cliente:', error);
+          }
+        });
+      }
+    });
+  }
+
+  restoreClient(client: ClientI | null | undefined): void {
+    if (!client?.id) return;
+
+    const fullName = client.full_name || `${client.first_name} ${client.last_name}`;
+
+    openActionConfirmation(this.confirmationService, {
+      action: 'restore',
+      target: fullName,
+      key: 'clientDelete',
+      onAccept: () => {
+        this.clientsService.restoreClient(client.id!).subscribe({
+          next: () => {
+            this.selectedClient = null;
+            this.loadClients();
+          },
+          error: (error) => {
+            console.error('No se pudo restaurar el cliente:', error);
           }
         });
       }

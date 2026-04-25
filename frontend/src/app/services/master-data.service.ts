@@ -40,12 +40,20 @@ export class MasterDataService {
     is_active?: 'true' | 'false';
     search?: string;
     ordering?: string;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): HttpParams {
     let params = new HttpParams();
     if (filters?.group) params = params.set('group', filters.group);
     if (filters?.is_active) params = params.set('is_active', filters.is_active);
     if (filters?.search?.trim()) params = params.set('search', filters.search.trim());
     if (filters?.ordering?.trim()) params = params.set('ordering', filters.ordering.trim());
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
+    }
     return params;
   }
 
@@ -68,6 +76,8 @@ export class MasterDataService {
     is_active?: 'true' | 'false';
     search?: string;
     ordering?: string;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<MasterDataI[]> {
     const params = this.buildListParams(filters);
 
@@ -81,6 +91,8 @@ export class MasterDataService {
     is_active?: 'true' | 'false';
     search?: string;
     ordering?: string;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<MasterDataI[]> {
     const params = this.buildListParams(filters);
 
@@ -109,5 +121,13 @@ export class MasterDataService {
 
   deleteMasterData(id: number): Observable<unknown> {
     return this.http.delete(`${this.masterDataUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
+  restoreMasterData(id: number): Observable<MasterDataI> {
+    return this.http.post<MasterDataI>(
+      `${this.masterDataUrl}${id}/restore/`,
+      {},
+      this.auth.buildCsrfRequestOptions()
+    );
   }
 }

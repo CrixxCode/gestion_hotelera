@@ -110,10 +110,10 @@ export class ListPayments implements OnInit {
 
     forkJoin({
       payments: this.billingService
-        .listPayments({ ordering: '-payment_date,-id' })
+        .listPayments({ ordering: '-payment_date,-id', include_inactive: true })
         .pipe(catchError(() => of([] as PaymentI[]))),
       invoices: this.billingService
-        .listInvoices({ ordering: '-id' })
+        .listInvoices({ ordering: '-id', include_inactive: true })
         .pipe(catchError(() => of([] as InvoiceI[]))),
       reservationsPage: this.reservationService
         .listReservationsPage({ include_finished: true, ordering: '-id', page: 1, page_size: 200 })

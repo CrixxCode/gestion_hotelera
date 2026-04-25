@@ -1,11 +1,13 @@
 import unicodedata
 
+from django.conf import settings
 from rest_framework import serializers
 
+from accounts.tenancy import TenantSerializerMixin
 from apps.master_data.models import MasterData
 from apps.master_data.serializers import MasterDataCodeField
 from .models import Client
-
+from apps.hotel_settings.models import HotelSettings
 
 def _normalize_token(value):
     if value is None:
@@ -152,7 +154,16 @@ class ClientSerializer(serializers.ModelSerializer):
         return obj.status_code
 
 
-class ClientCreateUpdateSerializer(serializers.ModelSerializer):
+class ClientCreateUpdateSerializer(TenantSerializerMixin, serializers.ModelSerializer):
+    tenant_field_name = "hotel_settings"
+
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+
     document_type = MasterDataCodeField(group=MasterData.Group.DOCUMENT_TYPE)
     client_type = MasterDataCodeField(
         group=MasterData.Group.CLIENT_TYPE,
@@ -168,6 +179,7 @@ class ClientCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Client
         fields = (
+            "hotel_settings",
             "document_type",
             "document_number",
             "first_name",
@@ -178,16 +190,23 @@ class ClientCreateUpdateSerializer(serializers.ModelSerializer):
             "client_type",
             "status",
         )
+        validators = []
 
     def to_internal_value(self, data):
         mutable_data = data.copy() if hasattr(data, "copy") else dict(data)
 
         if "document_type" in mutable_data:
-            mutable_data["document_type"] = normalize_document_type(mutable_data.get("document_type"))
+            mutable_data["document_type"] = normalize_document_type(
+                mutable_data.get("document_type")
+            )
         if "client_type" in mutable_data:
-            mutable_data["client_type"] = normalize_client_type(mutable_data.get("client_type"))
+            mutable_data["client_type"] = normalize_client_type(
+                mutable_data.get("client_type")
+            )
         if "status" in mutable_data:
-            mutable_data["status"] = normalize_status(mutable_data.get("status"))
+            mutable_data["status"] = normalize_status(
+                mutable_data.get("status")
+            )
 
         return super().to_internal_value(mutable_data)
 
@@ -200,12 +219,95 @@ class ClientCreateUpdateSerializer(serializers.ModelSerializer):
     def validate_email(self, value):
         return value.lower().strip()
 
+    def resolve_target_tenant(self, attrs):
+        tenant = super().resolve_target_tenant(attrs)
+        actor = self.get_actor()
+        if actor and actor.is_authenticated:
+            return tenant
+
+        raw_public_hotel_id = getattr(settings, "PUBLIC_CLIENT_REGISTRATION_HOTEL_ID", None)
+        if raw_public_hotel_id in (None, ""):
+            raise serializers.ValidationError(
+                {
+                    "hotel_settings": (
+                        "Registro publico de clientes no configurado de forma segura. "
+                        "Define PUBLIC_CLIENT_REGISTRATION_HOTEL_ID."
+                    )
+                }
+            )
+        try:
+            public_hotel_id = int(raw_public_hotel_id)
+        except (TypeError, ValueError):
+            raise serializers.ValidationError(
+                {
+                    "hotel_settings": (
+                        "PUBLIC_CLIENT_REGISTRATION_HOTEL_ID debe ser un entero valido."
+                    )
+                }
+            )
+
+        public_hotel = HotelSettings.objects.filter(id=public_hotel_id).first()
+        if public_hotel is None:
+            raise serializers.ValidationError(
+                {"hotel_settings": "El hotel configurado para registro publico no existe."}
+            )
+        return public_hotel
+
+    def validate(self, attrs):
+        hotel = self.require_target_tenant(attrs)
+
+        actor = self.get_actor()
+        if (
+            self.instance
+            and actor
+            and actor.is_authenticated
+            and not self.is_global_admin()
+            and self.instance.hotel_settings_id != hotel.id
+        ):
+            raise serializers.ValidationError(
+                "No puedes modificar clientes de otro hotel."
+            )
+
+        document_number = attrs.get(
+            "document_number",
+            getattr(self.instance, "document_number", None),
+        )
+        email = attrs.get(
+            "email",
+            getattr(self.instance, "email", None),
+        )
+
+        qs = Client.objects.filter(hotel_settings=hotel)
+
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if document_number and qs.filter(document_number=document_number.strip()).exists():
+            raise serializers.ValidationError({
+                "document_number": "Ya existe un cliente con este documento en este hotel."
+            })
+
+        if email and qs.filter(email=email.strip().lower()).exists():
+            raise serializers.ValidationError({
+                "email": "Ya existe un cliente con este correo en este hotel."
+            })
+
+        return attrs
+
     def create(self, validated_data):
+        self.assign_target_tenant(validated_data)
+
         if not validated_data.get("client_type"):
-            validated_data["client_type"] = get_master_data(MasterData.Group.CLIENT_TYPE, "REGULAR")
+            validated_data["client_type"] = get_master_data(
+                MasterData.Group.CLIENT_TYPE,
+                "REGULAR",
+            )
 
         if not validated_data.get("status"):
-            validated_data["status"] = get_master_data(MasterData.Group.CLIENT_STATUS, "ACTIVO")
+            validated_data["status"] = get_master_data(
+                MasterData.Group.CLIENT_STATUS,
+                "ACTIVO",
+            )
 
         if not validated_data.get("client_type") or not validated_data.get("status"):
             raise serializers.ValidationError(
@@ -213,3 +315,22 @@ class ClientCreateUpdateSerializer(serializers.ModelSerializer):
             )
 
         return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self.assign_target_tenant(validated_data)
+
+        if "client_type" not in validated_data or validated_data.get("client_type") is None:
+            auto_client_type = get_master_data(
+                MasterData.Group.CLIENT_TYPE,
+                instance.resolve_client_type_code_by_stay_nights(),
+            )
+            if auto_client_type:
+                validated_data["client_type"] = auto_client_type
+
+        if "status" not in validated_data or validated_data.get("status") is None:
+            validated_data["status"] = instance.status or get_master_data(
+                MasterData.Group.CLIENT_STATUS,
+                "ACTIVO",
+            )
+
+        return super().update(instance, validated_data)

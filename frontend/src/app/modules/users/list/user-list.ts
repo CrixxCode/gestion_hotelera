@@ -10,6 +10,7 @@ import {
   successActionAlert
 } from '../../../services/action-alerts';
 import { openActionConfirmation } from '../../../services/action-confirmations';
+import { catchError, forkJoin, of } from 'rxjs';
 
 // PrimeNG
 import { ToastModule } from 'primeng/toast';
@@ -43,7 +44,9 @@ import { UserUpdate } from '../update/update';
 })
 export class UserList implements OnInit {
   users: UserI[] = [];
+  deletedUsers: UserI[] = [];
   filteredUsers: UserI[] = [];
+  showDeletedUsers = false;
 
   loading = true;
   globalFilter = '';
@@ -104,11 +107,24 @@ export class UserList implements OnInit {
     this.loadUsers();
   }
 
+  get deletedUsersCount(): number {
+    return this.deletedUsers.length;
+  }
+
   loadUsers(): void {
     this.loading = true;
-    this.userService.getUsers().subscribe({
-      next: (data) => {
-        this.users = data;
+    forkJoin({
+      users: this.userService
+        .getUsers({ include_inactive: true })
+        .pipe(catchError(() => of([] as UserI[]))),
+      allUsers: this.userService
+        .getUsers({ include_inactive: true, include_deleted: true })
+        .pipe(catchError(() => of([] as UserI[])))
+    }).subscribe({
+      next: ({ users, allUsers }) => {
+        this.users = users;
+        const visibleIds = new Set(users.map((user) => user.id));
+        this.deletedUsers = allUsers.filter((user) => !visibleIds.has(user.id));
         this.updateStats();
         this.applyFilters();
         this.loading = false;
@@ -121,6 +137,37 @@ export class UserList implements OnInit {
           life: 3000
         });
         this.loading = false;
+      }
+    });
+  }
+
+  restoreUser(user: UserI): void {
+    openActionConfirmation(this.confirmationService, {
+      action: 'restore',
+      target: `${user.first_name} ${user.last_name}`.trim() || 'usuario',
+      key: 'userDelete',
+      onAccept: () => {
+        if (!user.id) return;
+
+        this.userService.restoreUser(user.id).subscribe({
+          next: () => {
+            this.messageService.add({
+              severity: 'success',
+              summary: ACTION_ALERT_SUCCESS_SUMMARY,
+              detail: successActionAlert('restore', 'usuario'),
+              life: 3000
+            });
+            this.loadUsers();
+          },
+          error: () => {
+            this.messageService.add({
+              severity: 'error',
+              summary: ACTION_ALERT_ERROR_SUMMARY,
+              detail: errorActionAlert('restore', 'usuario'),
+              life: 3000
+            });
+          }
+        });
       }
     });
   }

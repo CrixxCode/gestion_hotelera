@@ -44,6 +44,10 @@ export class MyProfilePage implements OnInit {
   passwordSavedMessage = '';
   workSavedMessage = '';
   passwordErrorMessage = '';
+  passwordLoading = false;
+  showCurrentPassword = false;
+  showNewPassword = false;
+  showConfirmPassword = false;
   isEditingProfile = false;
   isEditingWork = false;
   private personalSnapshot: PersonalFormValue | null = null;
@@ -124,12 +128,52 @@ export class MyProfilePage implements OnInit {
       return;
     }
 
-    this.passwordSavedMessage = 'Interfaz lista. Pendiente conectar endpoint para cambio de contrasena.';
-    this.passwordForm.reset({
-      current_password: '',
-      new_password: '',
-      confirm_password: '',
+    const { current_password } = this.passwordForm.getRawValue();
+    this.passwordLoading = true;
+
+    this.authService.getCsrfToken().subscribe({
+      next: () => {
+        this.authService.changePassword(current_password, new_password).subscribe({
+          next: () => {
+            this.passwordLoading = false;
+            this.passwordSavedMessage = 'Contrasena actualizada correctamente.';
+            this.showCurrentPassword = false;
+            this.showNewPassword = false;
+            this.showConfirmPassword = false;
+            this.passwordForm.reset({
+              current_password: '',
+              new_password: '',
+              confirm_password: '',
+            });
+          },
+          error: (err) => {
+            this.passwordLoading = false;
+            const details = err?.error;
+            this.passwordErrorMessage =
+              details?.old_password?.[0] ||
+              details?.new_password?.[0] ||
+              details?.detail ||
+              'No fue posible cambiar la contrasena. Intenta nuevamente.';
+          },
+        });
+      },
+      error: () => {
+        this.passwordLoading = false;
+        this.passwordErrorMessage = 'No fue posible conectar con el servidor.';
+      },
     });
+  }
+
+  togglePasswordVisibility(field: 'current' | 'new' | 'confirm'): void {
+    if (field === 'current') this.showCurrentPassword = !this.showCurrentPassword;
+    if (field === 'new') this.showNewPassword = !this.showNewPassword;
+    if (field === 'confirm') this.showConfirmPassword = !this.showConfirmPassword;
+  }
+
+  passwordInputType(field: 'current' | 'new' | 'confirm'): 'text' | 'password' {
+    if (field === 'current') return this.showCurrentPassword ? 'text' : 'password';
+    if (field === 'new') return this.showNewPassword ? 'text' : 'password';
+    return this.showConfirmPassword ? 'text' : 'password';
   }
 
   saveWorkInfo(): void {

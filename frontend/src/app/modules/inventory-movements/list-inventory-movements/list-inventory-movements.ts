@@ -112,8 +112,10 @@ export class ListInventoryMovements implements OnInit {
   errorMessage = '';
   infoMessage = '';
   viewMode: MovementViewMode = 'cards';
+  showDeletedMovements = false;
 
   movements: InventoryMovementI[] = [];
+  deletedMovements: InventoryMovementI[] = [];
   filteredMovements: InventoryMovementI[] = [];
   groupedMovements: MovementGroup[] = [];
   movementTypes: MasterDataI[] = [];
@@ -162,6 +164,10 @@ export class ListInventoryMovements implements OnInit {
     return this.movements.length;
   }
 
+  get deletedMovementsCount(): number {
+    return this.deletedMovements.length;
+  }
+
   get incomingMovements(): number {
     return this.movements.filter((movement) => this.resolveDirection(movement) === 'IN').length;
   }
@@ -194,15 +200,22 @@ export class ListInventoryMovements implements OnInit {
     const selectedMovementId = this.selectedMovement?.id ?? null;
 
     forkJoin({
-      movements: this.inventoryMovementsService.listInventoryMovements().pipe(catchError(() => of([] as InventoryMovementI[]))),
+      movements: this.inventoryMovementsService
+        .listInventoryMovements({ include_inactive: true })
+        .pipe(catchError(() => of([] as InventoryMovementI[]))),
+      allMovements: this.inventoryMovementsService
+        .listInventoryMovements({ include_inactive: true, include_deleted: true })
+        .pipe(catchError(() => of([] as InventoryMovementI[]))),
       movementTypes: this.masterDataService
         .listMasterData({ group: 'INVENTORY_MOVEMENT_TYPE', is_active: 'true', ordering: 'sort_order,name' })
         .pipe(catchError(() => of([] as MasterDataI[]))),
       items: this.itemsService.listItems().pipe(catchError(() => of([] as ItemI[])))
     }).subscribe({
-      next: ({ movements, movementTypes, items }) => {
+      next: ({ movements, allMovements, movementTypes, items }) => {
         this.loading = false;
         this.movements = movements;
+        const visibleIds = new Set(movements.map((movement) => movement.id));
+        this.deletedMovements = allMovements.filter((movement) => !visibleIds.has(movement.id));
         this.movementTypes = movementTypes;
         this.items = items;
 
@@ -373,6 +386,24 @@ export class ListInventoryMovements implements OnInit {
           },
           error: () => {
             this.errorMessage = 'No fue posible eliminar el movimiento seleccionado.';
+          }
+        });
+      }
+    });
+  }
+
+  restoreMovement(movement: InventoryMovementI): void {
+    openActionConfirmation(this.confirmationService, {
+      action: 'restore',
+      target: this.getMovementCode(movement),
+      onAccept: () => {
+        this.errorMessage = '';
+        this.inventoryMovementsService.restoreInventoryMovement(movement.id).subscribe({
+          next: () => {
+            this.refreshMovements();
+          },
+          error: () => {
+            this.errorMessage = 'No fue posible restaurar el movimiento seleccionado.';
           }
         });
       }

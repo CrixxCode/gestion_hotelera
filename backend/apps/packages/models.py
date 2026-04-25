@@ -50,6 +50,9 @@ class Package(models.Model):
         if self.start_date and self.end_date and self.end_date < self.start_date:
             errors["end_date"] = "End date cannot be earlier than start date."
 
+        if self.room_type and self.room_type.hotel_settings_id != self.hotel_settings_id:
+            errors["room_type"] = "The room type must belong to the same hotel as the package."
+
         if errors:
             raise ValidationError(errors)
 

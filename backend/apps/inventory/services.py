@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from apps.inventory.models import InventoryMovement, InventoryRestockAlert, Item, RoomInventory
@@ -79,7 +80,14 @@ def apply_checkout_consumption_inventory(
     }
 
     reservation_id = getattr(reservation, "id", None)
+    reservation_hotel_settings_id = getattr(reservation, "hotel_settings_id", None)
     if not reservation_id or not isinstance(inventory_comparison, dict):
+        return result
+    if reservation_hotel_settings_id is None:
+        result["warnings"].append(
+            "No se pudo resolver el hotel de la reserva para aplicar consumo de inventario."
+        )
+        result["skipped_lines"] = len(inventory_comparison.get("lines") or [])
         return result
 
     lines = inventory_comparison.get("lines")
@@ -125,12 +133,17 @@ def apply_checkout_consumption_inventory(
                 movement_type_id=movement_type.id,
                 reference=reference,
                 is_active=True,
+                item__hotel_settings_id=reservation_hotel_settings_id,
             ).exists()
             if movement_exists:
                 result["skipped_lines"] += 1
                 continue
 
-            item = Item.objects.select_for_update().filter(id=item_id, is_active=True).first()
+            item = Item.objects.select_for_update().filter(
+                id=item_id,
+                is_active=True,
+                hotel_settings_id=reservation_hotel_settings_id,
+            ).first()
             if not item:
                 result["warnings"].append(
                     f"No se encontro item activo {item_id} para consumo de reserva #{reservation_id}."
@@ -206,7 +219,11 @@ def replenish_room_inventory_on_operation_close(
         return result
 
     room_inventory_ids = list(
-        RoomInventory.objects.filter(room_id=room_id, is_active=True).values_list("id", flat=True)
+        RoomInventory.objects.filter(
+            room_id=room_id,
+            is_active=True,
+            item__hotel_settings_id=F("room__floor__hotel_settings_id"),
+        ).values_list("id", flat=True)
     )
     if not room_inventory_ids:
         return result
@@ -227,7 +244,11 @@ def replenish_room_inventory_on_operation_close(
             room_inventory = (
                 RoomInventory.objects.select_for_update()
                 .select_related("room", "item")
-                .filter(id=room_inventory_id, is_active=True)
+                .filter(
+                    id=room_inventory_id,
+                    is_active=True,
+                    item__hotel_settings_id=F("room__floor__hotel_settings_id"),
+                )
                 .first()
             )
             if not room_inventory:
@@ -240,7 +261,16 @@ def replenish_room_inventory_on_operation_close(
                 result["skipped_lines"] += 1
                 continue
 
-            item = Item.objects.select_for_update().filter(id=room_inventory.item_id, is_active=True).first()
+            room_hotel_settings_id = getattr(
+                getattr(getattr(room_inventory, "room", None), "floor", None),
+                "hotel_settings_id",
+                None,
+            )
+            item = Item.objects.select_for_update().filter(
+                id=room_inventory.item_id,
+                is_active=True,
+                hotel_settings_id=room_hotel_settings_id,
+            ).first()
             if not item:
                 result["warnings"].append(
                     f"No se encontro item activo para room_inventory {room_inventory_id}."

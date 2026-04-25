@@ -2,7 +2,13 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from accounts.views import (PasswordResetRequestView, PasswordResetConfirmView, HealthCheckView, ProfileUpdateView)
+from accounts.views import (
+    PasswordResetRequestView,
+    PasswordResetConfirmView,
+    PasswordChangeView,
+    HealthCheckView,
+    ProfileUpdateView,
+)
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
@@ -22,6 +28,7 @@ urlpatterns = [
     path("api/auth/me/", MeSessionView.as_view(), name="session_me"),
     path("api/auth/login/", SessionLoginView.as_view(), name="session_login"),
     path("api/auth/logout/", SessionLogoutView.as_view(), name="session_logout"),
+    path("api/auth/password/change/", PasswordChangeView.as_view(), name="password_change"),
     path("api/auth/password/reset/", PasswordResetRequestView.as_view(), name="password_reset"),
     path("api/auth/password/reset/confirm/", PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
     path("api/auth/me/update/", ProfileUpdateView.as_view(), name="profile_update"),

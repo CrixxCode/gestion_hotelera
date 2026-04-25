@@ -129,8 +129,10 @@ export class ListPackages implements OnInit {
   loading = false;
   errorMessage = '';
   infoMessage = '';
+  showDeletedPackages = false;
 
   packages: PackageI[] = [];
+  deletedPackages: PackageI[] = [];
   filteredPackages: PackageI[] = [];
   groupedPackages: PackageGroup[] = [];
 
@@ -175,6 +177,10 @@ export class ListPackages implements OnInit {
     return this.packages.length;
   }
 
+  get deletedPackagesCount(): number {
+    return this.deletedPackages.length;
+  }
+
   get activePackages(): number {
     return this.packages.filter((pkg) => pkg.is_active).length;
   }
@@ -200,24 +206,44 @@ export class ListPackages implements OnInit {
   loadCatalogData(): void {
     this.loading = true;
     this.errorMessage = '';
+    const selectedPackageId = this.selectedPackage?.id ?? null;
+    const packageToEditId = this.packageToEdit?.id ?? null;
 
     forkJoin({
-      packages: this.packagesService.listPackages().pipe(catchError(() => of([] as PackageI[]))),
+      packages: this.packagesService
+        .listPackages({ include_inactive: true })
+        .pipe(catchError(() => of([] as PackageI[]))),
+      allPackages: this.packagesService
+        .listPackages({ include_inactive: true, include_deleted: true })
+        .pipe(catchError(() => of([] as PackageI[]))),
       roomTypes: this.masterDataService
         .listMasterData({ group: 'ROOM_TYPE', is_active: 'true', ordering: 'sort_order,name' })
         .pipe(catchError(() => of([] as MasterDataI[]))),
-      servicesCatalog: this.servicesService.listServices().pipe(catchError(() => of([] as ServiceI[]))),
+      servicesCatalog: this.servicesService
+        .listServices({ include_inactive: true })
+        .pipe(catchError(() => of([] as ServiceI[]))),
       packageServices: this.packagesService
         .listPackageServices({ ordering: 'id' })
         .pipe(catchError(() => of([] as PackageServiceI[]))),
       settings: this.hotelSettingsService.getCurrentSettings().pipe(catchError(() => of(null)))
     }).subscribe({
-      next: ({ packages, roomTypes, servicesCatalog, packageServices, settings }) => {
+      next: ({ packages, allPackages, roomTypes, servicesCatalog, packageServices, settings }) => {
         this.loading = false;
         this.packages = packages;
+        const visibleIds = new Set(packages.map((pkg) => pkg.id));
+        this.deletedPackages = allPackages.filter((pkg) => !visibleIds.has(pkg.id));
         this.roomTypes = roomTypes;
         const effectivePackageServices = this.getEffectivePackageServices(packages, packageServices);
         this.services = this.mergeServicesCatalog(servicesCatalog, packages, effectivePackageServices);
+
+        if (selectedPackageId) {
+          this.selectedPackage = packages.find((pkg) => pkg.id === selectedPackageId) || null;
+        }
+
+        if (packageToEditId) {
+          this.packageToEdit = packages.find((pkg) => pkg.id === packageToEditId) || null;
+          if (!this.packageToEdit) this.showUpdateDrawer = false;
+        }
 
         this.buildRoomTypeMaps();
         this.hotelSettingsId = this.resolveHotelSettingsId(
@@ -242,33 +268,7 @@ export class ListPackages implements OnInit {
   }
 
   refreshPackages(): void {
-    this.loading = true;
-    this.errorMessage = '';
-
-    this.packagesService.listPackages().subscribe({
-      next: (packages) => {
-        this.loading = false;
-        this.packages = packages;
-
-        if (this.selectedPackage) {
-          this.selectedPackage = packages.find((pkg) => pkg.id === this.selectedPackage?.id) || null;
-        }
-
-        if (this.packageToEdit) {
-          this.packageToEdit = packages.find((pkg) => pkg.id === this.packageToEdit?.id) || null;
-          if (!this.packageToEdit) {
-            this.showUpdateDrawer = false;
-          }
-        }
-
-        this.categoryTabs = this.buildCategoryTabs(this.packages);
-        this.applyFilters();
-      },
-      error: () => {
-        this.loading = false;
-        this.errorMessage = 'No fue posible actualizar el catalogo de paquetes.';
-      }
-    });
+    this.loadCatalogData();
   }
 
   exportCsv(): void {
@@ -429,6 +429,24 @@ export class ListPackages implements OnInit {
           },
           error: () => {
             this.errorMessage = 'No fue posible eliminar el paquete seleccionado.';
+          }
+        });
+      }
+    });
+  }
+
+  restorePackage(pkg: PackageI): void {
+    openActionConfirmation(this.confirmationService, {
+      action: 'restore',
+      target: pkg.name || 'paquete',
+      onAccept: () => {
+        this.errorMessage = '';
+        this.packagesService.restorePackage(pkg.id).subscribe({
+          next: () => {
+            this.refreshPackages();
+          },
+          error: () => {
+            this.errorMessage = 'No fue posible restaurar el paquete seleccionado.';
           }
         });
       }

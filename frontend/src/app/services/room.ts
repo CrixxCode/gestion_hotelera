@@ -37,6 +37,8 @@ export class RoomService {
     status?: RoomVisualStatus | 'ALL';
     floor?: number | 'ALL';
     ordering?: string;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<RoomI[]> {
     let params = new HttpParams();
 
@@ -54,6 +56,14 @@ export class RoomService {
 
     if (filters?.ordering) {
       params = params.set('ordering', filters.ordering);
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -89,9 +99,15 @@ export class RoomService {
     return this.http.delete<void>(`${this.roomsUrl}${id}/`, this.auth.buildCsrfRequestOptions());
   }
 
+  restoreRoom(id: number): Observable<RoomI> {
+    return this.http.post<RoomI>(`${this.roomsUrl}${id}/restore/`, {}, this.auth.buildCsrfRequestOptions());
+  }
+
   listRoomTypes(filters?: {
     search?: string;
     ordering?: string;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<RoomTypeI[]> {
     let params = new HttpParams();
 
@@ -101,6 +117,14 @@ export class RoomService {
 
     if (filters?.ordering?.trim()) {
       params = params.set('ordering', filters.ordering.trim());
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -132,9 +156,26 @@ export class RoomService {
     return this.http.delete<void>(`${this.roomTypesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
   }
 
-  listAmenities(): Observable<AmenityI[]> {
+  restoreRoomType(id: number): Observable<RoomTypeI> {
+    return this.http.post<RoomTypeI>(`${this.roomTypesUrl}${id}/restore/`, {}, this.auth.buildCsrfRequestOptions());
+  }
+
+  listAmenities(filters?: {
+    include_inactive?: boolean;
+    include_deleted?: boolean;
+  }): Observable<AmenityI[]> {
+    let params = new HttpParams();
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
+    }
+
     return this.http
-      .get<AmenityI[] | { results?: AmenityI[] }>(this.amenitiesUrl, { withCredentials: true })
+      .get<AmenityI[] | { results?: AmenityI[] }>(this.amenitiesUrl, { withCredentials: true, params })
       .pipe(map((res) => this.unwrapArray<AmenityI>(res)));
   }
 
@@ -158,11 +199,17 @@ export class RoomService {
     return this.http.delete<void>(`${this.amenitiesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
   }
 
+  restoreAmenity(id: number): Observable<AmenityI> {
+    return this.http.post<AmenityI>(`${this.amenitiesUrl}${id}/restore/`, {}, this.auth.buildCsrfRequestOptions());
+  }
+
   listRates(filters?: {
     search?: string;
     ordering?: string;
     room_type?: number;
     is_active?: boolean;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<RateI[]> {
     let params = new HttpParams();
 
@@ -180,6 +227,14 @@ export class RoomService {
 
     if (typeof filters?.is_active === 'boolean') {
       params = params.set('is_active', String(filters.is_active));
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -209,6 +264,10 @@ export class RoomService {
 
   deleteRate(id: number): Observable<void> {
     return this.http.delete<void>(`${this.ratesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
+  restoreRate(id: number): Observable<RateI> {
+    return this.http.post<RateI>(`${this.ratesUrl}${id}/restore/`, {}, this.auth.buildCsrfRequestOptions());
   }
 
   listFloors(): Observable<HotelFloorI[]> {

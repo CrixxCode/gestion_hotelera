@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
+from apps.hotel_settings.models import HotelSettings
 
 from rest_framework import serializers
 
@@ -58,11 +59,27 @@ class RoleSerializer(serializers.ModelSerializer):
         )
         return ResourceSerializer(qs, many=True).data
 
+class UserHotelSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HotelSettings
+        fields = ["id", "hotel_name", "city", "country", "timezone", "currency"]
+
 
 class UserMiniSerializer(serializers.ModelSerializer):
+    hotel_settings = UserHotelSettingsSerializer(read_only=True)
+
     class Meta:
         model = User
-        fields = ["id", "username", "first_name", "last_name", "email", "is_active", "avatar"]
+        fields = [
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "email",
+            "is_active",
+            "avatar",
+            "hotel_settings",
+        ]
 
 # -----------------------------
 # Usuarios
@@ -72,6 +89,7 @@ class UserSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
     resource_keys = serializers.SerializerMethodField()
     menu = serializers.SerializerMethodField()
+    hotel_settings = UserHotelSettingsSerializer(read_only=True)
 
     class Meta:
         model = User
@@ -84,6 +102,7 @@ class UserSerializer(serializers.ModelSerializer):
             "email",
             "is_active",
             "is_staff",
+            "hotel_settings",
             "roles",
             "resource_keys",
             "menu",
@@ -184,7 +203,6 @@ class UserSerializer(serializers.ModelSerializer):
 
         return [node(r) for r in top]
 
-
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     first_name = serializers.CharField(required=True, max_length=50)
@@ -192,6 +210,13 @@ class RegisterSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)
     is_active = serializers.BooleanField(default=True, required=False)
     status = serializers.CharField(required=False, write_only=True)
+
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
 
     class Meta:
         model = User
@@ -205,6 +230,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             "password",
             "is_active",
             "status",
+            "hotel_settings",
         ]
 
     def validate_username(self, value):
@@ -226,8 +252,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
+        request = self.context.get("request")
+        actor = getattr(request, "user", None)
+
         password = validated_data.pop("password")
         status = validated_data.pop("status", "ACTIVE")
+        incoming_hotel = validated_data.pop("hotel_settings", None)
 
         is_active = validated_data.pop("is_active", True)
         if isinstance(status, str):
@@ -239,8 +269,51 @@ class RegisterSerializer(serializers.ModelSerializer):
         validated_data["last_name"] = validated_data.get("last_name", "").strip()
         validated_data["is_active"] = is_active
 
+        assigned_hotel = None
+
+        if actor and actor.is_authenticated:
+            if actor.is_superuser:
+                assigned_hotel = incoming_hotel
+            else:
+                if actor.hotel_settings is None:
+                    raise serializers.ValidationError({
+                        "hotel_settings": "El usuario autenticado no tiene un hotel asignado."
+                    })
+                assigned_hotel = actor.hotel_settings
+        else:
+            # Registro público no encaja bien con este flujo multitenant
+            # salvo que definas una estrategia explícita.
+            raw_public_hotel_id = getattr(settings, "PUBLIC_USER_REGISTRATION_HOTEL_ID", None)
+            if raw_public_hotel_id in (None, ""):
+                raise serializers.ValidationError({
+                    "hotel_settings": (
+                        "Registro publico no configurado de forma segura. "
+                        "Define PUBLIC_USER_REGISTRATION_HOTEL_ID."
+                    )
+                })
+            try:
+                public_hotel_id = int(raw_public_hotel_id)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError({
+                    "hotel_settings": "PUBLIC_USER_REGISTRATION_HOTEL_ID debe ser un entero valido."
+                })
+
+            assigned_hotel = HotelSettings.objects.filter(id=public_hotel_id).first()
+            if assigned_hotel is None:
+                raise serializers.ValidationError({
+                    "hotel_settings": "El hotel configurado para registro publico no existe."
+                })
+
         user = User(**validated_data)
+        user.hotel_settings = assigned_hotel
         user.set_password(password)
+
+        if not user.is_superuser and user.hotel_settings is None:
+            raise serializers.ValidationError({
+                "hotel_settings": "Este usuario debe pertenecer a un hotel."
+            })
+
+        user.full_clean()
         user.save()
         return user
 

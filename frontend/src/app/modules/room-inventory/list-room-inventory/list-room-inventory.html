@@ -114,6 +114,55 @@
     </div>
   </section>
 
+  <section class="gh-filters-card" *ngIf="!loading && deletedRoomInventoryCount > 0">
+    <div class="gh-filters-actions">
+      <p class="state-note">
+        Hay {{ deletedRoomInventoryCount }} asignacion(es) eliminadas logicamente.
+      </p>
+      <div class="gh-action-group">
+        <button type="button" class="gh-btn gh-btn-light" (click)="showDeletedRoomInventory = !showDeletedRoomInventory">
+          <i class="fa-solid" [class.fa-eye]="!showDeletedRoomInventory" [class.fa-eye-slash]="showDeletedRoomInventory"></i>
+          {{ showDeletedRoomInventory ? 'Ocultar eliminadas' : 'Ver eliminadas' }}
+        </button>
+      </div>
+    </div>
+
+    <article class="table-card" *ngIf="showDeletedRoomInventory">
+      <div class="table-scroll">
+        <table class="room-inventory-table">
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Habitacion</th>
+              <th>Item</th>
+              <th>Cantidad</th>
+              <th>Minimo</th>
+              <th>Estado operativo</th>
+              <th>Accion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let record of deletedRoomInventory; trackBy: trackByRecord">
+              <td class="code-cell">{{ getRecordCode(record) }}</td>
+              <td>{{ getRoomLabel(record) }}</td>
+              <td>{{ getItemLabel(record) }}</td>
+              <td>{{ getStockLabel(record) }}</td>
+              <td>{{ getMinimumLabel(record) }}</td>
+              <td>{{ record.is_active ? 'Activo' : 'Inactivo' }}</td>
+              <td>
+                <div class="table-actions">
+                  <button type="button" class="row-btn" title="Restaurar" (click)="restoreRoomInventoryRecord(record)">
+                    <i class="fa-solid fa-rotate-left"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
   <section class="state-message" *ngIf="loading || errorMessage || infoMessage || filteredRoomInventory.length === 0">
     <p *ngIf="loading">Cargando inventario por habitacion...</p>
     <p class="error" *ngIf="!loading && errorMessage">{{ errorMessage }}</p>

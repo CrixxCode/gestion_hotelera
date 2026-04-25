@@ -94,8 +94,10 @@ export class ListCleaningTasks implements OnInit {
   errorMessage = '';
   infoMessage = '';
   viewMode: CleaningTaskViewMode = 'cards';
+  showDeletedCleaningTasks = false;
 
   cleaningTasks: CleaningTaskI[] = [];
+  deletedCleaningTasks: CleaningTaskI[] = [];
   filteredCleaningTasks: CleaningTaskI[] = [];
   groupedCleaningTasks: CleaningTaskGroup[] = [];
   rooms: RoomI[] = [];
@@ -142,6 +144,10 @@ export class ListCleaningTasks implements OnInit {
     return this.cleaningTasks.length;
   }
 
+  get deletedCleaningTasksCount(): number {
+    return this.deletedCleaningTasks.length;
+  }
+
   get pendingTasks(): number {
     return this.cleaningTasks.filter((task) => this.normalizeCode(task.status) === 'PENDIENTE').length;
   }
@@ -164,7 +170,12 @@ export class ListCleaningTasks implements OnInit {
     const selectedId = this.selectedCleaningTask?.id ?? null;
 
     forkJoin({
-      cleaningTasks: this.cleaningTasksService.listCleaningTasks().pipe(catchError(() => of([] as CleaningTaskI[]))),
+      cleaningTasks: this.cleaningTasksService
+        .listCleaningTasks({ include_inactive: true })
+        .pipe(catchError(() => of([] as CleaningTaskI[]))),
+      allCleaningTasks: this.cleaningTasksService
+        .listCleaningTasks({ include_inactive: true, include_deleted: true })
+        .pipe(catchError(() => of([] as CleaningTaskI[]))),
       rooms: this.roomService.listRooms().pipe(catchError(() => of([] as RoomI[]))),
       taskTypes: this.masterDataService
         .listMasterData({ group: 'CLEANING_TASK_TYPE', is_active: 'true', ordering: 'sort_order,name' })
@@ -173,9 +184,11 @@ export class ListCleaningTasks implements OnInit {
         .listMasterData({ group: 'CLEANING_STATUS', is_active: 'true', ordering: 'sort_order,name' })
         .pipe(catchError(() => of([] as MasterDataI[])))
     }).subscribe({
-      next: ({ cleaningTasks, rooms, taskTypes, statuses }) => {
+      next: ({ cleaningTasks, allCleaningTasks, rooms, taskTypes, statuses }) => {
         this.loading = false;
         this.cleaningTasks = cleaningTasks;
+        const visibleIds = new Set(cleaningTasks.map((task) => task.id));
+        this.deletedCleaningTasks = allCleaningTasks.filter((task) => !visibleIds.has(task.id));
         this.rooms = rooms;
         this.taskTypes = taskTypes;
         this.statuses = statuses;
@@ -358,6 +371,24 @@ export class ListCleaningTasks implements OnInit {
           },
           error: () => {
             this.errorMessage = 'No fue posible eliminar la tarea seleccionada.';
+          }
+        });
+      }
+    });
+  }
+
+  restoreCleaningTask(task: CleaningTaskI): void {
+    openActionConfirmation(this.confirmationService, {
+      action: 'restore',
+      target: this.getTaskCode(task),
+      onAccept: () => {
+        this.errorMessage = '';
+        this.cleaningTasksService.restoreCleaningTask(task.id).subscribe({
+          next: () => {
+            this.refreshCleaningTasks();
+          },
+          error: () => {
+            this.errorMessage = 'No fue posible restaurar la tarea seleccionada.';
           }
         });
       }

@@ -1,8 +1,18 @@
 <div class="financial-control-page">
   <header class="page-header">
-    <div>
+    <div class="header-copy">
       <h1>Control Financiero</h1>
       <p>Tablero financiero, simulador de escenarios y estados financieros del hotel.</p>
+      <div class="header-meta">
+        <span class="meta-chip">
+          <i class="fa-solid fa-hotel"></i>
+          {{ selectedConfigRecord?.hotelName || (selectedHotelSettingsId ? ('Hotel #' + selectedHotelSettingsId) : 'Sin hotel seleccionado') }}
+        </span>
+        <span class="meta-chip">
+          <i class="fa-solid fa-calendar-days"></i>
+          {{ startDate }} a {{ endDate }}
+        </span>
+      </div>
     </div>
 
     <div class="header-actions">

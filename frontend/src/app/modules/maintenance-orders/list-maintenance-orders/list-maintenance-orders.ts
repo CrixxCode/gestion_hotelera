@@ -94,8 +94,10 @@ export class ListMaintenanceOrders implements OnInit {
   errorMessage = '';
   infoMessage = '';
   viewMode: MaintenanceOrderViewMode = 'cards';
+  showDeletedMaintenanceOrders = false;
 
   maintenanceOrders: MaintenanceOrderI[] = [];
+  deletedMaintenanceOrders: MaintenanceOrderI[] = [];
   filteredMaintenanceOrders: MaintenanceOrderI[] = [];
   groupedMaintenanceOrders: MaintenanceOrderGroup[] = [];
   rooms: RoomI[] = [];
@@ -142,6 +144,10 @@ export class ListMaintenanceOrders implements OnInit {
     return this.maintenanceOrders.length;
   }
 
+  get deletedMaintenanceOrdersCount(): number {
+    return this.deletedMaintenanceOrders.length;
+  }
+
   get pendingOrders(): number {
     return this.maintenanceOrders.filter((order) => this.normalizeCode(order.status) === 'PENDIENTE').length;
   }
@@ -165,7 +171,10 @@ export class ListMaintenanceOrders implements OnInit {
 
     forkJoin({
       maintenanceOrders: this.maintenanceOrdersService
-        .listMaintenanceOrders()
+        .listMaintenanceOrders({ include_inactive: true })
+        .pipe(catchError(() => of([] as MaintenanceOrderI[]))),
+      allMaintenanceOrders: this.maintenanceOrdersService
+        .listMaintenanceOrders({ include_inactive: true, include_deleted: true })
         .pipe(catchError(() => of([] as MaintenanceOrderI[]))),
       rooms: this.roomService.listRooms().pipe(catchError(() => of([] as RoomI[]))),
       priorities: this.masterDataService
@@ -175,9 +184,11 @@ export class ListMaintenanceOrders implements OnInit {
         .listMasterData({ group: 'MAINTENANCE_STATUS', is_active: 'true', ordering: 'sort_order,name' })
         .pipe(catchError(() => of([] as MasterDataI[])))
     }).subscribe({
-      next: ({ maintenanceOrders, rooms, priorities, statuses }) => {
+      next: ({ maintenanceOrders, allMaintenanceOrders, rooms, priorities, statuses }) => {
         this.loading = false;
         this.maintenanceOrders = maintenanceOrders;
+        const visibleIds = new Set(maintenanceOrders.map((order) => order.id));
+        this.deletedMaintenanceOrders = allMaintenanceOrders.filter((order) => !visibleIds.has(order.id));
         this.rooms = rooms;
         this.priorities = priorities;
         this.statuses = statuses;
@@ -374,6 +385,24 @@ export class ListMaintenanceOrders implements OnInit {
           },
           error: () => {
             this.errorMessage = 'No fue posible eliminar la orden seleccionada.';
+          }
+        });
+      }
+    });
+  }
+
+  restoreMaintenanceOrder(order: MaintenanceOrderI): void {
+    openActionConfirmation(this.confirmationService, {
+      action: 'restore',
+      target: this.getOrderCode(order),
+      onAccept: () => {
+        this.errorMessage = '';
+        this.maintenanceOrdersService.restoreMaintenanceOrder(order.id).subscribe({
+          next: () => {
+            this.refreshMaintenanceOrders();
+          },
+          error: () => {
+            this.errorMessage = 'No fue posible restaurar la orden seleccionada.';
           }
         });
       }

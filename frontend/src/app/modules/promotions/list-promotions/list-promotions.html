@@ -104,6 +104,47 @@
     </div>
   </section>
 
+  <section class="gh-filters-card" *ngIf="!loading && deletedPromotionsCount > 0">
+    <div class="gh-filters-actions">
+      <p class="state-note">Hay {{ deletedPromotionsCount }} promocion(es) eliminadas logicamente.</p>
+      <div class="gh-action-group">
+        <button type="button" class="gh-btn gh-btn-light" (click)="showDeletedPromotions = !showDeletedPromotions">
+          <i class="fa-solid" [class.fa-eye]="!showDeletedPromotions" [class.fa-eye-slash]="showDeletedPromotions"></i>
+          {{ showDeletedPromotions ? 'Ocultar eliminadas' : 'Ver eliminadas' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="table-scroll" *ngIf="showDeletedPromotions">
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Tipo descuento</th>
+            <th>Valor</th>
+            <th>Estado operativo</th>
+            <th>Accion</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let promotion of deletedPromotions; trackBy: trackByPromotion">
+            <td>{{ promotion.name }}</td>
+            <td>{{ getDiscountTypeLabel(promotion) }}</td>
+            <td>{{ getDiscountValueLabel(promotion) }}</td>
+            <td>{{ promotion.is_active ? 'Activa' : 'Inactiva' }}</td>
+            <td>
+              <div class="table-actions">
+                <button type="button" class="row-btn" title="Restaurar" (click)="restorePromotion(promotion)">
+                  <i class="fa-solid fa-rotate-left"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
   <section class="state-message" *ngIf="loading || errorMessage || infoMessage || groupedPromotions.length === 0">
     <p *ngIf="loading">Cargando catalogo de promociones...</p>
     <p class="error" *ngIf="!loading && errorMessage">{{ errorMessage }}</p>

@@ -3,6 +3,7 @@ import { Dashboard } from './components/pages/dashboard/dashboard';
 import { LoginComponent } from './components/auth/login/login';
 import { ForgotPasswordComponent } from './components/auth/forgot-password/forgot-password';
 import { ResetPasswordComponent } from './components/auth/reset-password/reset-password';
+import { LandingPage } from './components/pages/landing/landing';
 import { LayoutMain } from './components/layout/layout-main/layout-main';
 import { UserList } from './modules/users/list/user-list';
 import { UserRegister } from './modules/users/register/register';
@@ -67,7 +68,7 @@ const loadMyProfileComponent = () =>
 export const routes: Routes = [
     {
         path: '',
-        component: LoginComponent,
+        component: LandingPage,
 
     },
     {
@@ -149,4 +150,3 @@ export const routes: Routes = [
         ]
     },
 ];
-

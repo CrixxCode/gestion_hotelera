@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { catchError, forkJoin, of } from 'rxjs';
 import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
@@ -61,7 +61,8 @@ type MethodAccumulator = {
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './list-income-consolidated.html',
-  styleUrls: ['./list-income-consolidated.css']
+  styleUrls: ['./list-income-consolidated.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class ListIncomeConsolidated implements OnInit {
   loading = false;
@@ -76,12 +77,21 @@ export class ListIncomeConsolidated implements OnInit {
   invoicesMap = new Map<number, InvoiceI>();
   reservationsMap = new Map<number, ReservationI>();
   paymentMethods: MasterDataI[] = [];
+  paymentMethodLabelByCode = new Map<string, string>();
 
   search = '';
   periodFilter: IncomePeriodFilter = 'THIS_MONTH';
   activityFilter: IncomeActivityFilter = 'ACTIVE';
   methodFilter = 'ALL';
   viewMode: IncomeViewMode = 'daily';
+  renderReady = false;
+
+  totalTransactions = 0;
+  activeTransactionsCount = 0;
+  totalCollectedLabel = this.formatCurrency(0);
+  todayCollectedLabel = this.formatCurrency(0);
+  monthCollectedLabel = this.formatCurrency(0);
+  averageTicketLabel = this.formatCurrency(0);
 
   readonly activityOptions: Array<{ value: IncomeActivityFilter; label: string }> = [
     { value: 'ACTIVE', label: 'Activos' },
@@ -100,66 +110,12 @@ export class ListIncomeConsolidated implements OnInit {
   constructor(
     private billingService: BillingService,
     private reservationService: ReservationService,
-    private masterDataService: MasterDataService
+    private masterDataService: MasterDataService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
     this.loadIncomeData();
-  }
-
-  get totalTransactions(): number {
-    return this.payments.length;
-  }
-
-  get activeTransactionsCount(): number {
-    return this.payments.filter((payment) => !!payment.is_active).length;
-  }
-
-  get totalCollectedLabel(): string {
-    const total = this.payments
-      .filter((payment) => !!payment.is_active)
-      .reduce((sum, payment) => sum + this.toNumber(payment.amount), 0);
-    return this.formatCurrency(total);
-  }
-
-  get todayCollectedLabel(): string {
-    const todayKey = this.formatDateKey(new Date());
-    const total = this.payments
-      .filter((payment) => !!payment.is_active)
-      .filter((payment) => {
-        const paymentDate = this.getPaymentDate(payment);
-        if (!paymentDate) return false;
-        return this.formatDateKey(paymentDate) === todayKey;
-      })
-      .reduce((sum, payment) => sum + this.toNumber(payment.amount), 0);
-    return this.formatCurrency(total);
-  }
-
-  get monthCollectedLabel(): string {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-
-    const total = this.payments
-      .filter((payment) => !!payment.is_active)
-      .filter((payment) => {
-        const paymentDate = this.getPaymentDate(payment);
-        if (!paymentDate) return false;
-        return paymentDate.getFullYear() === year && paymentDate.getMonth() === month;
-      })
-      .reduce((sum, payment) => sum + this.toNumber(payment.amount), 0);
-
-    return this.formatCurrency(total);
-  }
-
-  get averageTicketLabel(): string {
-    if (!this.activeTransactionsCount) return this.formatCurrency(0);
-
-    const total = this.payments
-      .filter((payment) => !!payment.is_active)
-      .reduce((sum, payment) => sum + this.toNumber(payment.amount), 0);
-
-    return this.formatCurrency(total / this.activeTransactionsCount);
   }
 
   get methodOptions(): Array<{ value: string; label: string }> {
@@ -189,15 +145,16 @@ export class ListIncomeConsolidated implements OnInit {
 
   loadIncomeData(): void {
     this.loading = true;
+    this.renderReady = false;
     this.errorMessage = '';
     this.infoMessage = '';
 
     forkJoin({
       payments: this.billingService
-        .listPayments({ ordering: '-payment_date,-id' })
+        .listPayments({ ordering: '-payment_date,-id', include_inactive: true })
         .pipe(catchError(() => of([] as PaymentI[]))),
       invoices: this.billingService
-        .listInvoices({ ordering: '-id' })
+        .listInvoices({ ordering: '-id', include_inactive: true })
         .pipe(catchError(() => of([] as InvoiceI[]))),
       reservationsPage: this.reservationService
         .listReservationsPage({ include_finished: true, ordering: '-id', page: 1, page_size: 300 })
@@ -216,13 +173,15 @@ export class ListIncomeConsolidated implements OnInit {
         .pipe(catchError(() => of([] as MasterDataI[])))
     }).subscribe({
       next: ({ payments, invoices, reservationsPage, paymentMethods }) => {
-        this.loading = false;
         this.payments = [...payments].sort((a, b) => b.id - a.id);
         this.invoicesMap = new Map(invoices.map((invoice) => [invoice.id, invoice]));
         this.reservationsMap = new Map((reservationsPage.results || []).map((reservation) => [reservation.id, reservation]));
         this.paymentMethods = paymentMethods;
+        this.buildPaymentMethodLabelMap();
+        this.recomputeSummaryCards();
 
         this.applyFilters();
+        this.revealContentReady();
 
         if (!this.payments.length) {
           this.infoMessage = 'No hay ingresos registrados todavia.';
@@ -230,6 +189,7 @@ export class ListIncomeConsolidated implements OnInit {
       },
       error: () => {
         this.loading = false;
+        this.renderReady = false;
         this.errorMessage = 'No fue posible cargar el consolidado de ingresos.';
       }
     });
@@ -486,8 +446,8 @@ export class ListIncomeConsolidated implements OnInit {
 
     const methodCode = this.resolvePaymentMethodCode(payment);
     if (methodCode && methodCode !== 'SINMETODO') {
-      const method = this.paymentMethods.find((item) => this.normalizeCode(item.code) === methodCode);
-      if (method?.name?.trim()) return method.name.trim();
+      const methodLabel = this.paymentMethodLabelByCode.get(methodCode);
+      if (methodLabel?.trim()) return methodLabel.trim();
     }
 
     if (payment.payment_method_code?.trim()) return payment.payment_method_code.trim();
@@ -618,6 +578,71 @@ export class ListIncomeConsolidated implements OnInit {
   private toNumber(value: unknown): number {
     const parsed = Number(value || 0);
     return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  private recomputeSummaryCards(): void {
+    this.totalTransactions = this.payments.length;
+    const now = new Date();
+    const todayKey = this.formatDateKey(now);
+    const nowYear = now.getFullYear();
+    const nowMonth = now.getMonth();
+
+    let activeCount = 0;
+    let activeTotal = 0;
+    let todayTotal = 0;
+    let monthTotal = 0;
+
+    for (const payment of this.payments) {
+      if (!payment.is_active) continue;
+      const amount = this.toNumber(payment.amount);
+      activeCount += 1;
+      activeTotal += amount;
+
+      const paymentDate = this.getPaymentDate(payment);
+      if (!paymentDate) continue;
+
+      if (this.formatDateKey(paymentDate) === todayKey) {
+        todayTotal += amount;
+      }
+
+      if (paymentDate.getFullYear() === nowYear && paymentDate.getMonth() === nowMonth) {
+        monthTotal += amount;
+      }
+    }
+
+    this.activeTransactionsCount = activeCount;
+    this.totalCollectedLabel = this.formatCurrency(activeTotal);
+    this.todayCollectedLabel = this.formatCurrency(todayTotal);
+    this.monthCollectedLabel = this.formatCurrency(monthTotal);
+    this.averageTicketLabel = this.formatCurrency(activeCount ? activeTotal / activeCount : 0);
+  }
+
+  private buildPaymentMethodLabelMap(): void {
+    const map = new Map<string, string>();
+    for (const method of this.paymentMethods) {
+      const code = this.normalizeCode(method.code || method.name || String(method.id));
+      if (!code || map.has(code)) continue;
+      map.set(code, method.name || method.code || `Metodo #${method.id}`);
+    }
+    this.paymentMethodLabelByCode = map;
+  }
+
+  private revealContentReady(): void {
+    const schedule = (cb: () => void): void => {
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => cb());
+        return;
+      }
+      setTimeout(cb, 0);
+    };
+
+    schedule(() => {
+      schedule(() => {
+        this.loading = false;
+        this.renderReady = true;
+        this.cdr.markForCheck();
+      });
+    });
   }
 
   private formatCurrency(value: number): string {

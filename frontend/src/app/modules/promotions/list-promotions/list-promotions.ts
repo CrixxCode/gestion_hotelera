@@ -97,8 +97,10 @@ export class ListPromotions implements OnInit {
   infoMessage = '';
   discountTypesLoadFailed = false;
   hotelSettingsLoadFailed = false;
+  showDeletedPromotions = false;
 
   promotions: PromotionI[] = [];
+  deletedPromotions: PromotionI[] = [];
   filteredPromotions: PromotionI[] = [];
   groupedPromotions: PromotionGroup[] = [];
 
@@ -148,6 +150,10 @@ export class ListPromotions implements OnInit {
 
   get totalPromotions(): number {
     return this.promotions.length;
+  }
+
+  get deletedPromotionsCount(): number {
+    return this.deletedPromotions.length;
   }
 
   get activePromotions(): number {
@@ -208,7 +214,12 @@ export class ListPromotions implements OnInit {
     const selectedPromotionId = this.selectedPromotion?.id ?? null;
 
     forkJoin({
-      promotions: this.promotionsService.listPromotions().pipe(catchError(() => of([] as PromotionI[]))),
+      promotions: this.promotionsService
+        .listPromotions({ include_inactive: true })
+        .pipe(catchError(() => of([] as PromotionI[]))),
+      allPromotions: this.promotionsService
+        .listPromotions({ include_inactive: true, include_deleted: true })
+        .pipe(catchError(() => of([] as PromotionI[]))),
       discountTypes: this.masterDataService
         .listMasterData({ group: 'PROMOTION_DISCOUNT_TYPE', is_active: 'true', ordering: 'sort_order,name' })
         .pipe(
@@ -217,8 +228,12 @@ export class ListPromotions implements OnInit {
             return of([] as MasterDataI[]);
           })
         ),
-      services: this.servicesService.listServices().pipe(catchError(() => of([] as ServiceI[]))),
-      packages: this.packagesService.listPackages().pipe(catchError(() => of([] as PackageI[]))),
+      services: this.servicesService
+        .listServices({ include_inactive: true })
+        .pipe(catchError(() => of([] as ServiceI[]))),
+      packages: this.packagesService
+        .listPackages({ include_inactive: true })
+        .pipe(catchError(() => of([] as PackageI[]))),
       settings: this.hotelSettingsService.getCurrentSettings().pipe(
         catchError(() => {
           this.hotelSettingsLoadFailed = true;
@@ -226,9 +241,11 @@ export class ListPromotions implements OnInit {
         })
       )
     }).subscribe({
-      next: ({ promotions, discountTypes, services, packages, settings }) => {
+      next: ({ promotions, allPromotions, discountTypes, services, packages, settings }) => {
         this.loading = false;
         this.promotions = promotions;
+        const visibleIds = new Set(promotions.map((promotion) => promotion.id));
+        this.deletedPromotions = allPromotions.filter((promotion) => !visibleIds.has(promotion.id));
         this.discountTypes = discountTypes;
         this.services = services;
         this.packages = packages;
@@ -419,6 +436,24 @@ export class ListPromotions implements OnInit {
           },
           error: () => {
             this.errorMessage = 'No fue posible eliminar la promocion seleccionada.';
+          }
+        });
+      }
+    });
+  }
+
+  restorePromotion(promotion: PromotionI): void {
+    openActionConfirmation(this.confirmationService, {
+      action: 'restore',
+      target: promotion.name || 'promocion',
+      onAccept: () => {
+        this.errorMessage = '';
+        this.promotionsService.restorePromotion(promotion.id).subscribe({
+          next: () => {
+            this.refreshPromotions();
+          },
+          error: () => {
+            this.errorMessage = 'No fue posible restaurar la promocion seleccionada.';
           }
         });
       }

@@ -749,6 +749,120 @@ class ReservationFlowTestCase(TestCase):
         self.assertIn("reservation", serializer.errors)
 
 
+class ReservationAutoCancelCommandTestCase(TestCase):
+    def _md(self, group, code, name=None, sort_order=1):
+        return MasterData.objects.update_or_create(
+            group=group,
+            code=code,
+            defaults={
+                "name": name or code.title(),
+                "sort_order": sort_order,
+                "is_active": True,
+            },
+        )[0]
+
+    def setUp(self):
+        self.hotel_settings = HotelSettings.objects.create(
+            hotel_name="Hotel Auto Cancel Test",
+        )
+
+        self.document_type = self._md(MasterData.Group.DOCUMENT_TYPE, "CC", "Cedula", 1)
+        self.client_type = self._md(MasterData.Group.CLIENT_TYPE, "REGULAR", "Regular", 1)
+        self.client_status = self._md(MasterData.Group.CLIENT_STATUS, "ACTIVO", "Activo", 1)
+        self.reservation_origin = self._md(MasterData.Group.RESERVATION_ORIGIN, "WEB", "Web", 1)
+        self.reservation_status_pending = self._md(
+            MasterData.Group.RESERVATION_STATUS, "PENDIENTE", "Pendiente", 0
+        )
+        self.reservation_status_confirmed = self._md(
+            MasterData.Group.RESERVATION_STATUS, "CONFIRMADA", "Confirmada", 1
+        )
+        self.reservation_status_in_progress = self._md(
+            MasterData.Group.RESERVATION_STATUS, "EN_CURSO", "En curso", 2
+        )
+        self._md(MasterData.Group.RESERVATION_STATUS, "CANCELADA", "Cancelada", 3)
+
+        self.client_model = Client.objects.create(
+            hotel_settings=self.hotel_settings,
+            document_type=self.document_type,
+            document_number="555001",
+            first_name="Auto",
+            last_name="Cancel",
+            email="autocancel@example.com",
+            phone="3000000000",
+            country="CO",
+            client_type=self.client_type,
+            status=self.client_status,
+        )
+
+    def _create_reservation(self, *, expected_check_in, expected_check_out, status):
+        return Reservation.objects.create(
+            client=self.client_model,
+            hotel_settings=self.hotel_settings,
+            status=status,
+            origin=self.reservation_origin,
+            expected_check_in=expected_check_in,
+            expected_check_out=expected_check_out,
+        )
+
+    def test_command_auto_cancels_overdue_pending_without_check_in(self):
+        today = timezone.localdate()
+        reservation = self._create_reservation(
+            expected_check_in=today - timedelta(days=3),
+            expected_check_out=today - timedelta(days=1),
+            status=self.reservation_status_pending,
+        )
+
+        call_command("sync_reservation_room_statuses")
+        reservation.refresh_from_db()
+
+        self.assertEqual(reservation.status.code, "CANCELADA")
+        self.assertIn("AUTOCANCEL_OVERDUE:", reservation.notes or "")
+
+    def test_command_auto_cancels_overdue_confirmed_without_check_in(self):
+        today = timezone.localdate()
+        reservation = self._create_reservation(
+            expected_check_in=today - timedelta(days=2),
+            expected_check_out=today - timedelta(days=1),
+            status=self.reservation_status_confirmed,
+        )
+
+        call_command("sync_reservation_room_statuses")
+        reservation.refresh_from_db()
+
+        self.assertEqual(reservation.status.code, "CANCELADA")
+        self.assertIn("AUTOCANCEL_OVERDUE:", reservation.notes or "")
+
+    def test_command_does_not_cancel_when_real_check_in_exists(self):
+        today = timezone.localdate()
+        reservation = self._create_reservation(
+            expected_check_in=today - timedelta(days=3),
+            expected_check_out=today - timedelta(days=1),
+            status=self.reservation_status_in_progress,
+        )
+        reservation.real_check_in = timezone.now() - timedelta(days=2)
+        reservation.save(update_fields=["real_check_in"])
+
+        call_command("sync_reservation_room_statuses")
+        reservation.refresh_from_db()
+
+        self.assertEqual(reservation.status.code, "EN_CURSO")
+        self.assertNotIn("AUTOCANCEL_OVERDUE:", reservation.notes or "")
+
+    def test_list_serializer_includes_notes_for_auto_cancelled_reservation(self):
+        today = timezone.localdate()
+        reservation = self._create_reservation(
+            expected_check_in=today - timedelta(days=3),
+            expected_check_out=today - timedelta(days=1),
+            status=self.reservation_status_pending,
+        )
+        call_command("sync_reservation_room_statuses")
+        reservation.refresh_from_db()
+
+        data = ReservationListSerializer(instance=reservation).data
+        self.assertIn("notes", data)
+        self.assertIn("AUTOCANCEL_OVERDUE:", data["notes"] or "")
+
+
 class ReservationApiFlowTestCase(APITestCase):
     def _md(self, group, code, name=None, sort_order=1):
         return MasterData.objects.update_or_create(
@@ -1322,6 +1436,48 @@ class ReservationApiFlowTestCase(APITestCase):
             1,
         )
         self.assertFalse(shortage_charge.is_automatic)
+
+    def test_check_out_inventory_review_rejects_items_from_other_hotel(self):
+        other_hotel = HotelSettings.objects.create(hotel_name="Hotel Other")
+        other_item = Item.objects.create(
+            hotel_settings=other_hotel,
+            item_type=self.item_type_amenity,
+            unit_measure=self.unit_measure_unit,
+            name="Sabana Other",
+            sku="SABANA-OTHER-001",
+            stock=50,
+            minimum_stock=5,
+            cost_price=8000,
+            sale_price=10000,
+            is_active=True,
+        )
+
+        reservation = self._create_reservation(status=self.reservation_status_pending)
+        self._create_room_line(reservation=reservation, night_rate=100000)
+
+        confirm = self.client.post(f"/api/reservations/{reservation.id}/confirm/", data={}, format="json")
+        self.assertEqual(confirm.status_code, 200)
+        self._mark_reservation_as_checked_in(reservation)
+
+        response = self.client.post(
+            f"/api/reservations/{reservation.id}/check-out/",
+            data={
+                "inventory_review": [
+                    {
+                        "room": self.room.id,
+                        "item": other_item.id,
+                        "quantity": 1,
+                    }
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("mismo hotel", str(response.data.get("detail", "")).lower())
+
+        reservation.refresh_from_db()
+        self.assertEqual(reservation.status.code, "EN_CURSO")
+        self.assertIsNone(reservation.real_check_out)
 
     def test_cancel_endpoint_blocks_confirm_after_cancellation(self):
         reservation = self._create_reservation(status=self.reservation_status_confirmed)

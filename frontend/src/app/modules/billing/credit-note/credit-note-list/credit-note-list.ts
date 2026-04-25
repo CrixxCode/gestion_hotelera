@@ -251,7 +251,7 @@ export class CreditNoteList implements OnChanges {
     this.refreshing = forceRefresh;
 
     this.billingService
-      .listCreditNotes({ invoice: this.invoice.id, ordering: '-issue_date,-id' })
+      .listCreditNotes({ invoice: this.invoice.id, ordering: '-issue_date,-id', include_inactive: true })
       .subscribe({
         next: (rows) => {
           this.loading = false;

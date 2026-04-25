@@ -1,9 +1,12 @@
 from django.test import TestCase
+from django.contrib.auth import get_user_model
+from rest_framework.test import APIRequestFactory
 
 from apps.hotel_settings.models import HotelFloor, HotelSettings
 from apps.inventory.models import InventoryMovement, Item, RoomInventory
 from apps.master_data.models import MasterData
 from apps.rooms.models import CleaningTask, MaintenanceOrder, Room, RoomType
+from apps.rooms.serializers import AmenitySerializer
 
 
 class RoomOperationInventoryAutomationTestCase(TestCase):
@@ -165,3 +168,36 @@ class RoomOperationInventoryAutomationTestCase(TestCase):
         ).first()
         self.assertIsNotNone(movement)
         self.assertEqual(movement.quantity, 1)
+
+
+class AmenitySerializerTenantAutofillTests(TestCase):
+    def test_create_without_hotel_settings_uses_user_hotel(self):
+        user_model = get_user_model()
+        hotel = HotelSettings.objects.create(hotel_name="Hotel Amenidades")
+        user = user_model.objects.create_user(
+            username="amenity_user",
+            password="secret123",
+            hotel_settings=hotel,
+        )
+
+        request = APIRequestFactory().post(
+            "/api/amenities/",
+            {
+                "name": "WiFi Premium",
+                "icon": "fa-solid fa-wifi",
+                "is_active": True,
+            },
+            format="json",
+        )
+        request.user = user
+
+        serializer = AmenitySerializer(
+            data={
+                "name": "WiFi Premium",
+                "icon": "fa-solid fa-wifi",
+                "is_active": True,
+            },
+            context={"request": request},
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)

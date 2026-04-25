@@ -24,6 +24,8 @@ export class MaintenanceOrdersService {
   listMaintenanceOrders(filters?: {
     search?: string;
     ordering?: string;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<MaintenanceOrderI[]> {
     let params = new HttpParams();
 
@@ -33,6 +35,14 @@ export class MaintenanceOrdersService {
 
     if (filters?.ordering?.trim()) {
       params = params.set('ordering', filters.ordering.trim());
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -65,6 +75,14 @@ export class MaintenanceOrdersService {
 
   deleteMaintenanceOrder(id: number): Observable<void> {
     return this.http.delete<void>(`${this.maintenanceOrdersUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
+  restoreMaintenanceOrder(id: number): Observable<MaintenanceOrderI> {
+    return this.http.post<MaintenanceOrderI>(
+      `${this.maintenanceOrdersUrl}${id}/restore/`,
+      {},
+      this.auth.buildCsrfRequestOptions()
+    );
   }
 
   private unwrapArray<T>(res: unknown): T[] {

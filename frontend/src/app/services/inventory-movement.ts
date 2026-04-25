@@ -27,6 +27,8 @@ export class InventoryMovementsService {
   listInventoryMovements(filters?: {
     search?: string;
     ordering?: string;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<InventoryMovementI[]> {
     let params = new HttpParams();
 
@@ -36,6 +38,14 @@ export class InventoryMovementsService {
 
     if (filters?.ordering?.trim()) {
       params = params.set('ordering', filters.ordering.trim());
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -71,6 +81,14 @@ export class InventoryMovementsService {
 
   deleteInventoryMovement(id: number): Observable<void> {
     return this.http.delete<void>(`${this.movementsUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
+  restoreInventoryMovement(id: number): Observable<InventoryMovementI> {
+    return this.http.post<InventoryMovementI>(
+      `${this.movementsUrl}${id}/restore/`,
+      {},
+      this.auth.buildCsrfRequestOptions()
+    );
   }
 
   private unwrapArray<T>(res: unknown): T[] {

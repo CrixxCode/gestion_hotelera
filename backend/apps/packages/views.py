@@ -1,12 +1,14 @@
 from rest_framework import filters, viewsets
+from django.db.models import F, Q
 
 from apps.packages.models import Package, PackageService
 from apps.packages.serializers import PackageSerializer, PackageServiceSerializer
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
+from accounts.tenancy import TenantScopeMixin
 
 
-class PackageViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+class PackageViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         Package.objects.select_related(
             "hotel_settings",
@@ -16,8 +18,8 @@ class PackageViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
             "package_services__service",
             "package_services__service__service_type",
         )
-        .order_by("-id")
     )
+    tenant_filter = "hotel_settings"
     serializer_class = PackageSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -42,6 +44,11 @@ class PackageViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     ]
     ordering = ["-id"]
 
+    def get_base_queryset(self):
+        return self.queryset.filter(
+            Q(room_type__isnull=True) | Q(room_type__hotel_settings_id=F("hotel_settings_id"))
+        ).order_by("-id")
+
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return ["packages.write"]
@@ -51,15 +58,16 @@ class PackageViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
-
-class PackageServiceViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+class PackageServiceViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         PackageService.objects.select_related(
             "package",
+            "package__hotel_settings",
             "service",
             "service__service_type",
-        ).order_by("id")
+        )
     )
+    tenant_filter = "package__hotel_settings"
     serializer_class = PackageServiceSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -77,6 +85,11 @@ class PackageServiceViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         "created_at",
     ]
     ordering = ["id"]
+
+    def get_base_queryset(self):
+        return self.queryset.filter(
+            package__hotel_settings_id=F("service__hotel_settings_id"),
+        ).order_by("id")
 
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):

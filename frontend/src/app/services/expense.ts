@@ -30,6 +30,8 @@ export class ExpenseService {
     search?: string;
     ordering?: string;
     is_active?: boolean;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<ExpenseI[]> {
     let params = new HttpParams();
 
@@ -43,6 +45,14 @@ export class ExpenseService {
 
     if (typeof filters?.is_active === 'boolean') {
       params = params.set('is_active', String(filters.is_active));
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -75,6 +85,10 @@ export class ExpenseService {
 
   deleteExpense(id: number): Observable<void> {
     return this.http.delete<void>(`${this.expensesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
+  restoreExpense(id: number): Observable<ExpenseI> {
+    return this.http.post<ExpenseI>(`${this.expensesUrl}${id}/restore/`, {}, this.auth.buildCsrfRequestOptions());
   }
 
   private unwrapArray<T>(res: unknown): T[] {

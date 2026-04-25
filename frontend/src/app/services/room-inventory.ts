@@ -24,6 +24,8 @@ export class RoomInventoryService {
   listRoomInventory(filters?: {
     search?: string;
     ordering?: string;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<RoomInventoryI[]> {
     let params = new HttpParams();
 
@@ -33,6 +35,14 @@ export class RoomInventoryService {
 
     if (filters?.ordering?.trim()) {
       params = params.set('ordering', filters.ordering.trim());
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -65,6 +75,14 @@ export class RoomInventoryService {
 
   deleteRoomInventory(id: number): Observable<void> {
     return this.http.delete<void>(`${this.roomInventoryUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
+  restoreRoomInventory(id: number): Observable<RoomInventoryI> {
+    return this.http.post<RoomInventoryI>(
+      `${this.roomInventoryUrl}${id}/restore/`,
+      {},
+      this.auth.buildCsrfRequestOptions()
+    );
   }
 
   private unwrapArray<T>(res: unknown): T[] {

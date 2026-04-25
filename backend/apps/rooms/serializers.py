@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from accounts.tenancy import TenantSerializerMixin
+from apps.hotel_settings.models import HotelFloor, HotelSettings
 from apps.master_data.models import MasterData
 from apps.master_data.serializers import MasterDataCodeField
 from apps.reservations.services import (
@@ -21,11 +23,29 @@ AMENITY_ICON_CATALOG = {
     "fa-solid fa-dumbbell",
 }
 
-class AmenitySerializer(serializers.ModelSerializer):
+class AmenitySerializer(TenantSerializerMixin, serializers.ModelSerializer):
+    tenant_field_name = "hotel_settings"
+
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+
     class Meta:
         model = Amenity
-        fields = "__all__"
+        fields = (
+            "id",
+            "hotel_settings",
+            "name",
+            "description",
+            "icon",
+            "is_active",
+            "created_at",
+        )
         read_only_fields = ("id", "created_at")
+        validators = []
         extra_kwargs = {
             "icon": {"required": True, "allow_blank": False, "allow_null": False},
         }
@@ -42,12 +62,57 @@ class AmenitySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Icono no valido para amenidades.")
         return normalized
 
+    def validate(self, attrs):
+        hotel = self.require_target_tenant(attrs)
 
-class RoomTypeSerializer(serializers.ModelSerializer):
+        actor = self.get_actor()
+        if (
+            self.instance
+            and actor
+            and actor.is_authenticated
+            and not self.is_global_admin()
+            and self.instance.hotel_settings_id != hotel.id
+        ):
+            raise serializers.ValidationError(
+                "No puedes modificar amenidades de otro hotel."
+            )
+
+        name = attrs.get("name", getattr(self.instance, "name", None))
+        qs = Amenity.objects.filter(hotel_settings=hotel)
+
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if name and qs.filter(name=name.strip()).exists():
+            raise serializers.ValidationError({
+                "name": "Ya existe una amenidad con este nombre en este hotel."
+            })
+
+        return attrs
+
+    def create(self, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().update(instance, validated_data)
+
+class RoomTypeSerializer(TenantSerializerMixin, serializers.ModelSerializer):
+    tenant_field_name = "hotel_settings"
+
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+
     class Meta:
         model = RoomType
         fields = (
             "id",
+            "hotel_settings",
             "code",
             "name",
             "description",
@@ -60,6 +125,7 @@ class RoomTypeSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("id", "created_at", "updated_at")
+        validators = []
 
     def validate_code(self, value):
         return str(value).strip().upper()
@@ -70,18 +136,131 @@ class RoomTypeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("El nombre del tipo de habitacion es obligatorio.")
         return normalized
 
+    def validate(self, attrs):
+        hotel = self.require_target_tenant(attrs)
 
-class RateSerializer(serializers.ModelSerializer):
+        actor = self.get_actor()
+        if (
+            self.instance
+            and actor
+            and actor.is_authenticated
+            and not self.is_global_admin()
+            and self.instance.hotel_settings_id != hotel.id
+        ):
+            raise serializers.ValidationError(
+                "No puedes modificar tipos de habitacion de otro hotel."
+            )
+
+        code = attrs.get("code", getattr(self.instance, "code", None))
+        qs = RoomType.objects.filter(hotel_settings=hotel)
+
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if code and qs.filter(code=str(code).strip().upper()).exists():
+            raise serializers.ValidationError({
+                "code": "Ya existe un tipo de habitacion con este codigo en este hotel."
+            })
+
+        return attrs
+
+    def create(self, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().update(instance, validated_data)
+
+class RateSerializer(TenantSerializerMixin, serializers.ModelSerializer):
+    tenant_field_name = "hotel_settings"
+
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
     room_type = serializers.PrimaryKeyRelatedField(queryset=RoomType.objects.all())
     room_type_name = serializers.CharField(source="room_type.name", read_only=True)
 
     class Meta:
         model = Rate
-        fields = "__all__"
+        fields = (
+            "id",
+            "hotel_settings",
+            "room_type",
+            "room_type_name",
+            "name",
+            "price",
+            "start_date",
+            "end_date",
+            "is_active",
+            "created_at",
+        )
         read_only_fields = ("id", "created_at")
 
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
 
-class RoomSerializer(serializers.ModelSerializer):
+        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+            fields["room_type"].queryset = RoomType.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+        return fields
+
+    def validate(self, attrs):
+        hotel = self.require_target_tenant(attrs)
+        room_type = attrs.get("room_type", getattr(self.instance, "room_type", None))
+
+        actor = self.get_actor()
+        if (
+            self.instance
+            and actor
+            and actor.is_authenticated
+            and not self.is_global_admin()
+            and self.instance.hotel_settings_id != hotel.id
+        ):
+            raise serializers.ValidationError(
+                "No puedes modificar tarifas de otro hotel."
+            )
+
+        if room_type is None:
+            raise serializers.ValidationError({
+                "room_type": "El tipo de habitacion es obligatorio."
+            })
+
+        self.validate_same_tenant(room_type, "hotel_settings", "room_type", attrs)
+
+        start_date = attrs.get("start_date", getattr(self.instance, "start_date", None))
+        end_date = attrs.get("end_date", getattr(self.instance, "end_date", None))
+
+        if start_date and end_date and start_date > end_date:
+            raise serializers.ValidationError({
+                "end_date": "La fecha final no puede ser menor que la fecha inicial."
+            })
+
+        return attrs
+
+    def create(self, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().update(instance, validated_data)
+
+class RoomSerializer(TenantSerializerMixin, serializers.ModelSerializer):
+    tenant_field_name = "hotel_settings"
+
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
     room_type = serializers.PrimaryKeyRelatedField(
         queryset=RoomType.objects.all(),
         allow_null=True,
@@ -110,6 +289,7 @@ class RoomSerializer(serializers.ModelSerializer):
         model = Room
         fields = (
             "id",
+            "hotel_settings",
             "number",
             "room_type",
             "room_type_name",
@@ -127,6 +307,83 @@ class RoomSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = ("id", "created_at")
+
+    def resolve_target_tenant(self, attrs):
+        tenant = super().resolve_target_tenant(attrs)
+        if tenant is not None:
+            return tenant
+
+        floor = attrs.get("floor", getattr(self.instance, "floor", None))
+        return getattr(floor, "hotel_settings", None)
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+            fields["floor"].queryset = HotelFloor.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+            fields["room_type"].queryset = RoomType.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+            fields["amenity_ids"].queryset = Amenity.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+
+        return fields
+
+    def validate(self, attrs):
+        floor = attrs.get("floor", getattr(self.instance, "floor", None))
+        room_type = attrs.get("room_type", getattr(self.instance, "room_type", None))
+
+        if floor is None:
+            raise serializers.ValidationError({
+                "floor": "El piso de la habitacion es obligatorio."
+            })
+
+        hotel = self.require_target_tenant(attrs)
+
+        actor = self.get_actor()
+        if (
+            self.instance
+            and actor
+            and actor.is_authenticated
+            and not self.is_global_admin()
+            and self.instance.floor.hotel_settings_id != hotel.id
+        ):
+            raise serializers.ValidationError(
+                "No puedes modificar habitaciones de otro hotel."
+            )
+
+        if floor.hotel_settings_id != hotel.id:
+            raise serializers.ValidationError({
+                "floor": "El piso no pertenece al hotel seleccionado."
+            })
+
+        if room_type and room_type.hotel_settings_id != hotel.id:
+            raise serializers.ValidationError({
+                "room_type": "El tipo de habitacion no pertenece al mismo hotel de la habitacion."
+            })
+
+        amenities = attrs.get("amenities", None)
+        if amenities is not None and any(amenity.hotel_settings_id != hotel.id for amenity in amenities):
+            raise serializers.ValidationError({
+                "amenity_ids": "Todas las amenidades deben pertenecer al mismo hotel de la habitacion."
+            })
+
+        return attrs
+
+    def create(self, validated_data):
+        self.assign_target_tenant(validated_data)
+        validated_data.pop("hotel_settings", None)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self.assign_target_tenant(validated_data)
+        validated_data.pop("hotel_settings", None)
+        return super().update(instance, validated_data)
 
     def get_active_reservation(self, obj):
         reservation_details = list(
@@ -161,8 +418,15 @@ class RoomSerializer(serializers.ModelSerializer):
             "client_name": reservation.client.full_name if reservation.client_id else None,
         }
 
+class MaintenanceOrderSerializer(TenantSerializerMixin, serializers.ModelSerializer):
+    tenant_field_name = "hotel_settings"
 
-class MaintenanceOrderSerializer(serializers.ModelSerializer):
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
     room_number = serializers.CharField(source="room.number", read_only=True)
     priority = MasterDataCodeField(group=MasterData.Group.MAINTENANCE_PRIORITY)
     status = MasterDataCodeField(group=MasterData.Group.MAINTENANCE_STATUS)
@@ -173,6 +437,7 @@ class MaintenanceOrderSerializer(serializers.ModelSerializer):
         model = MaintenanceOrder
         fields = (
             "id",
+            "hotel_settings",
             "room",
             "room_number",
             "title",
@@ -187,8 +452,88 @@ class MaintenanceOrderSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id", "reported_at")
 
+    def resolve_target_tenant(self, attrs):
+        tenant = super().resolve_target_tenant(attrs)
+        if tenant is not None:
+            return tenant
 
-class CleaningTaskSerializer(serializers.ModelSerializer):
+        room = attrs.get("room", getattr(self.instance, "room", None))
+        floor = getattr(room, "floor", None)
+        return getattr(floor, "hotel_settings", None)
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+            fields["room"].queryset = Room.objects.filter(
+                floor__hotel_settings_id=user.hotel_settings_id
+            )
+        return fields
+
+    def validate(self, attrs):
+        room = attrs.get("room", getattr(self.instance, "room", None))
+
+        if room is None:
+            raise serializers.ValidationError({
+                "room": "La habitacion es obligatoria."
+            })
+
+        hotel = self.require_target_tenant(attrs)
+
+        actor = self.get_actor()
+        if (
+            self.instance
+            and actor
+            and actor.is_authenticated
+            and not self.is_global_admin()
+            and self.instance.room.floor.hotel_settings_id != hotel.id
+        ):
+            raise serializers.ValidationError(
+                "No puedes modificar ordenes de mantenimiento de otro hotel."
+            )
+
+        if room.floor.hotel_settings_id != hotel.id:
+            raise serializers.ValidationError({
+                "room": "La habitacion no pertenece al hotel seleccionado."
+            })
+
+        estimated_completed_at = attrs.get(
+            "estimated_completed_at",
+            getattr(self.instance, "estimated_completed_at", None),
+        )
+        completed_at = attrs.get(
+            "completed_at",
+            getattr(self.instance, "completed_at", None),
+        )
+
+        if estimated_completed_at and completed_at and completed_at < estimated_completed_at:
+            raise serializers.ValidationError({
+                "completed_at": "La fecha de finalizacion no puede ser menor que la fecha estimada."
+            })
+
+        return attrs
+
+    def create(self, validated_data):
+        self.assign_target_tenant(validated_data)
+        validated_data.pop("hotel_settings", None)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self.assign_target_tenant(validated_data)
+        validated_data.pop("hotel_settings", None)
+        return super().update(instance, validated_data)
+
+class CleaningTaskSerializer(TenantSerializerMixin, serializers.ModelSerializer):
+    tenant_field_name = "hotel_settings"
+
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
     room_number = serializers.CharField(source="room.number", read_only=True)
     task_type = MasterDataCodeField(group=MasterData.Group.CLEANING_TASK_TYPE)
     status = MasterDataCodeField(group=MasterData.Group.CLEANING_STATUS)
@@ -205,6 +550,7 @@ class CleaningTaskSerializer(serializers.ModelSerializer):
         model = CleaningTask
         fields = (
             "id",
+            "hotel_settings",
             "room",
             "room_number",
             "task_type",
@@ -220,6 +566,72 @@ class CleaningTaskSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id", "created_at")
 
+    def resolve_target_tenant(self, attrs):
+        tenant = super().resolve_target_tenant(attrs)
+        if tenant is not None:
+            return tenant
+
+        room = attrs.get("room", getattr(self.instance, "room", None))
+        floor = getattr(room, "floor", None)
+        return getattr(floor, "hotel_settings", None)
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+            fields["room"].queryset = Room.objects.filter(
+                floor__hotel_settings_id=user.hotel_settings_id
+            )
+        return fields
+
+    def validate(self, attrs):
+        room = attrs.get("room", getattr(self.instance, "room", None))
+
+        if room is None:
+            raise serializers.ValidationError({
+                "room": "La habitacion es obligatoria."
+            })
+
+        hotel = self.require_target_tenant(attrs)
+
+        actor = self.get_actor()
+        if (
+            self.instance
+            and actor
+            and actor.is_authenticated
+            and not self.is_global_admin()
+            and self.instance.room.floor.hotel_settings_id != hotel.id
+        ):
+            raise serializers.ValidationError(
+                "No puedes modificar tareas de limpieza de otro hotel."
+            )
+
+        if room.floor.hotel_settings_id != hotel.id:
+            raise serializers.ValidationError({
+                "room": "La habitacion no pertenece al hotel seleccionado."
+            })
+
+        scheduled_for = attrs.get("scheduled_for", getattr(self.instance, "scheduled_for", None))
+        completed_at = attrs.get("completed_at", getattr(self.instance, "completed_at", None))
+
+        if scheduled_for and completed_at and completed_at.date() < scheduled_for:
+            raise serializers.ValidationError({
+                "completed_at": "La fecha de finalizacion no puede ser menor que la fecha programada."
+            })
+
+        return attrs
+
+    def create(self, validated_data):
+        self.assign_target_tenant(validated_data)
+        validated_data.pop("hotel_settings", None)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self.assign_target_tenant(validated_data)
+        validated_data.pop("hotel_settings", None)
+        return super().update(instance, validated_data)
 
 class RoomAmenityMiniSerializer(serializers.ModelSerializer):
     class Meta:
@@ -344,3 +756,4 @@ class RoomPanelSerializer(serializers.ModelSerializer):
                 ),
             },
         }
+

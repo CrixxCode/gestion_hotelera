@@ -51,6 +51,7 @@ export class Header implements OnInit {
   private readonly defaultAvatar = 'avatar/default-avatar.png';
   private readonly logoutAnimationDuration = 1000;
   private readonly maxNotificationAgeDays = 7;
+  private readonly reservationAutoCancelMarker = 'AUTOCANCEL_OVERDUE:';
   private readonly themePrimaryStorageKey = 'gh_theme_primary';
   private readonly themeSecondaryStorageKey = 'gh_theme_secondary';
   private readonly defaultThemePrimaryColor = '#0f1f41';
@@ -350,6 +351,29 @@ export class Header implements OnInit {
         });
       });
 
+    reservations
+      .filter((reservation) => this.isCanceledReservation(reservation))
+      .map((reservation) => ({
+        reservation,
+        cancelledAt: this.extractReservationAutoCancelDate(reservation),
+      }))
+      .filter((entry) => !!entry.cancelledAt && !this.isOlderThanMaxDays(entry.cancelledAt, this.maxNotificationAgeDays))
+      .sort((a, b) => (b.cancelledAt?.getTime() || 0) - (a.cancelledAt?.getTime() || 0))
+      .slice(0, 3)
+      .forEach(({ reservation, cancelledAt }) => {
+        notifications.push({
+          id: `res-autocancel-${reservation.id}`,
+          title: 'Reserva auto-cancelada',
+          detail: `${reservation.client_full_name || `Cliente #${reservation.client}`} - sin check-in`,
+          age: this.relativeFromNow(cancelledAt),
+          icon: 'fa-solid fa-ban',
+          tone: 'warning',
+          route: '/reservas',
+          unread: true,
+          queryParams: { search: String(reservation.id) },
+        });
+      });
+
     if (!notifications.length) {
       return [
         {
@@ -370,6 +394,19 @@ export class Header implements OnInit {
 
   private isCanceledReservation(reservation: ReservationI): boolean {
     return String(reservation.status_code || reservation.status_name || '').toUpperCase().includes('CANCEL');
+  }
+
+  private extractReservationAutoCancelDate(reservation: ReservationI): Date | null {
+    const notes = String(reservation.notes || '');
+    if (!notes) return null;
+
+    const pattern = new RegExp(`${this.reservationAutoCancelMarker}([^\\]\\s]+)`, 'i');
+    const match = pattern.exec(notes);
+    if (!match || !match[1]) return null;
+
+    const parsed = new Date(match[1]);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
   }
 
   private getToday(): Date {

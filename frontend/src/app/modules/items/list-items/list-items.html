@@ -110,6 +110,51 @@
     </div>
   </section>
 
+  <section class="gh-filters-card" *ngIf="!loading && deletedItemsCount > 0">
+    <div class="gh-filters-actions">
+      <p class="state-note">
+        Hay {{ deletedItemsCount }} item(s) eliminados logicamente.
+      </p>
+      <div class="gh-action-group">
+        <button type="button" class="gh-btn gh-btn-light" (click)="showDeletedItems = !showDeletedItems">
+          <i class="fa-solid" [class.fa-eye]="!showDeletedItems" [class.fa-eye-slash]="showDeletedItems"></i>
+          {{ showDeletedItems ? 'Ocultar eliminados' : 'Ver eliminados' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="table-scroll" *ngIf="showDeletedItems">
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th>Codigo</th>
+            <th>Item</th>
+            <th>Categoria</th>
+            <th>Unidad</th>
+            <th>Estado operativo</th>
+            <th>Accion</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of deletedItems; trackBy: trackByItem">
+            <td class="code-cell">{{ getItemCode(item) }}</td>
+            <td>{{ item.name }}</td>
+            <td>{{ getItemTypeLabel(item) }}</td>
+            <td>{{ getUnitLabel(item) }}</td>
+            <td>{{ item.is_active ? 'Activo' : 'Inactivo' }}</td>
+            <td>
+              <div class="table-actions">
+                <button type="button" class="row-btn" title="Restaurar" (click)="restoreItem(item)">
+                  <i class="fa-solid fa-rotate-left"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
   <section class="state-message" *ngIf="loading || errorMessage || infoMessage || filteredItems.length === 0">
     <p *ngIf="loading">Cargando catalogo de items...</p>
     <p class="error" *ngIf="!loading && errorMessage">{{ errorMessage }}</p>

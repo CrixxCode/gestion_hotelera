@@ -6,6 +6,15 @@ from apps.billing.services import (
     get_invoice_reconciliation,
     get_or_create_default_payment_refund_status,
 )
+from apps.packages.models import Package
+from apps.reservations.models import Reservation
+from apps.services.models import Service
+
+
+def _get_serializer_user(serializer):
+    request = serializer.context.get("request")
+    return getattr(request, "user", None)
+
 
 class ChargeSerializer(serializers.ModelSerializer):
     charge_type_name = serializers.CharField(source="charge_type.name", read_only=True)
@@ -42,6 +51,23 @@ class ChargeSerializer(serializers.ModelSerializer):
             "unit_price": {"required": False},
         }
 
+    def get_fields(self):
+        fields = super().get_fields()
+        user = _get_serializer_user(self)
+
+        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+            fields["reservation"].queryset = Reservation.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+            fields["service"].queryset = Service.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+            fields["package"].queryset = Package.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+
+        return fields
+
     @staticmethod
     def _normalize_text(value) -> str:
         return str(value or "").strip()
@@ -75,7 +101,25 @@ class ChargeSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+
+        user = _get_serializer_user(self)
         reservation = attrs.get("reservation", getattr(self.instance, "reservation", None))
+        service = attrs.get("service", getattr(self.instance, "service", None))
+        package = attrs.get("package", getattr(self.instance, "package", None))
+        charge_type = attrs.get("charge_type", getattr(self.instance, "charge_type", None))
+
+        if reservation is None:
+            raise serializers.ValidationError({"reservation": "La reserva es obligatoria."})
+
+        if user and user.is_authenticated and not user.is_superuser:
+            if user.hotel_settings_id is None:
+                raise serializers.ValidationError(
+                    {"reservation": "El usuario autenticado no tiene un hotel asignado."}
+                )
+            if reservation.hotel_settings_id != user.hotel_settings_id:
+                raise serializers.ValidationError(
+                    {"reservation": "La reserva no pertenece al hotel del usuario autenticado."}
+                )
 
         if self._is_checked_out_reservation(reservation):
             raise serializers.ValidationError(
@@ -84,13 +128,19 @@ class ChargeSerializer(serializers.ModelSerializer):
                 }
             )
 
-        service = attrs.get("service", getattr(self.instance, "service", None))
-        package = attrs.get("package", getattr(self.instance, "package", None))
-        charge_type = attrs.get("charge_type", getattr(self.instance, "charge_type", None))
-
         if service and package:
             raise serializers.ValidationError(
                 {"package": "A charge should reference either a service or a package, not both."}
+            )
+
+        if service and service.hotel_settings_id != reservation.hotel_settings_id:
+            raise serializers.ValidationError(
+                {"service": "El servicio no pertenece al mismo hotel de la reserva."}
+            )
+
+        if package and package.hotel_settings_id != reservation.hotel_settings_id:
+            raise serializers.ValidationError(
+                {"package": "El paquete no pertenece al mismo hotel de la reserva."}
             )
 
         if service:
@@ -136,6 +186,7 @@ class ChargeSerializer(serializers.ModelSerializer):
 
         return attrs
 
+
 class InvoiceChargeSerializer(serializers.ModelSerializer):
     charge_description = serializers.CharField(source="charge.description", read_only=True)
     charge_total_amount = serializers.DecimalField(
@@ -157,9 +208,24 @@ class InvoiceChargeSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ("id", "created_at")
 
+    def get_fields(self):
+        fields = super().get_fields()
+        user = _get_serializer_user(self)
+
+        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+            fields["invoice"].queryset = Invoice.objects.filter(
+                reservation__hotel_settings_id=user.hotel_settings_id
+            )
+            fields["charge"].queryset = Charge.objects.filter(
+                reservation__hotel_settings_id=user.hotel_settings_id
+            )
+
+        return fields
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
 
+        user = _get_serializer_user(self)
         invoice = attrs.get("invoice", getattr(self.instance, "invoice", None))
         charge = attrs.get("charge", getattr(self.instance, "charge", None))
 
@@ -167,6 +233,16 @@ class InvoiceChargeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"charge": "The charge must belong to the same reservation as the invoice."}
             )
+
+        if user and user.is_authenticated and not user.is_superuser:
+            if invoice and invoice.reservation.hotel_settings_id != user.hotel_settings_id:
+                raise serializers.ValidationError(
+                    {"invoice": "La factura no pertenece al hotel del usuario autenticado."}
+                )
+            if charge and charge.reservation.hotel_settings_id != user.hotel_settings_id:
+                raise serializers.ValidationError(
+                    {"charge": "El cargo no pertenece al hotel del usuario autenticado."}
+                )
 
         return attrs
 
@@ -211,6 +287,17 @@ class InvoiceSerializer(serializers.ModelSerializer):
             "updated_at",
         )
 
+    def get_fields(self):
+        fields = super().get_fields()
+        user = _get_serializer_user(self)
+
+        if user and user.is_authenticated and not user.is_superuser:
+            fields["reservation"].queryset = Reservation.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+
+        return fields
+
     def validate_subtotal(self, value):
         if value < 0:
             raise serializers.ValidationError("Subtotal cannot be negative.")
@@ -220,6 +307,20 @@ class InvoiceSerializer(serializers.ModelSerializer):
         if value < 0:
             raise serializers.ValidationError("Tax amount cannot be negative.")
         return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        user = _get_serializer_user(self)
+        reservation = attrs.get("reservation", getattr(self.instance, "reservation", None))
+
+        if user and user.is_authenticated and not user.is_superuser:
+            if reservation and reservation.hotel_settings_id != user.hotel_settings_id:
+                raise serializers.ValidationError(
+                    {"reservation": "La reserva no pertenece al hotel del usuario autenticado."}
+                )
+
+        return attrs
 
     @staticmethod
     def _reconciliation(obj):
@@ -236,7 +337,8 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
     def get_pending_balance(self, obj):
         return self._reconciliation(obj).get("pending_balance")
-    
+
+
 class PaymentSerializer(serializers.ModelSerializer):
     payment_method_name = serializers.CharField(source="payment_method.name", read_only=True)
     payment_method_code = serializers.CharField(source="payment_method.code", read_only=True)
@@ -266,6 +368,17 @@ class PaymentSerializer(serializers.ModelSerializer):
             "updated_at",
         )
 
+    def get_fields(self):
+        fields = super().get_fields()
+        user = _get_serializer_user(self)
+
+        if user and user.is_authenticated and not user.is_superuser:
+            fields["invoice"].queryset = Invoice.objects.filter(
+                reservation__hotel_settings_id=user.hotel_settings_id
+            )
+
+        return fields
+
     def validate_amount(self, value):
         if value <= 0:
             raise serializers.ValidationError("Payment amount must be greater than 0.")
@@ -274,8 +387,15 @@ class PaymentSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
 
+        user = _get_serializer_user(self)
         invoice = attrs.get("invoice", getattr(self.instance, "invoice", None))
         amount = attrs.get("amount", getattr(self.instance, "amount", None))
+
+        if user and user.is_authenticated and not user.is_superuser:
+            if invoice and invoice.reservation.hotel_settings_id != user.hotel_settings_id:
+                raise serializers.ValidationError(
+                    {"invoice": "La factura no pertenece al hotel del usuario autenticado."}
+                )
 
         if invoice and amount:
             total_paid = sum(
@@ -354,6 +474,17 @@ class PaymentRefundSerializer(serializers.ModelSerializer):
             "status": {"required": False, "allow_null": True},
         }
 
+    def get_fields(self):
+        fields = super().get_fields()
+        user = _get_serializer_user(self)
+
+        if user and user.is_authenticated and not user.is_superuser:
+            fields["payment"].queryset = Payment.objects.filter(
+                invoice__reservation__hotel_settings_id=user.hotel_settings_id
+            )
+
+        return fields
+
     def validate_amount(self, value):
         if value <= 0:
             raise serializers.ValidationError("Refund amount must be greater than 0.")
@@ -362,9 +493,16 @@ class PaymentRefundSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
 
+        user = _get_serializer_user(self)
         payment = attrs.get("payment", getattr(self.instance, "payment", None))
         amount = attrs.get("amount", getattr(self.instance, "amount", None))
         status = attrs.get("status", getattr(self.instance, "status", None))
+
+        if user and user.is_authenticated and not user.is_superuser:
+            if payment and payment.invoice.reservation.hotel_settings_id != user.hotel_settings_id:
+                raise serializers.ValidationError(
+                    {"payment": "El pago no pertenece al hotel del usuario autenticado."}
+                )
 
         if payment and not payment.is_active:
             raise serializers.ValidationError(
@@ -437,6 +575,17 @@ class CreditNoteSerializer(serializers.ModelSerializer):
             "updated_at",
         )
 
+    def get_fields(self):
+        fields = super().get_fields()
+        user = _get_serializer_user(self)
+
+        if user and user.is_authenticated and not user.is_superuser:
+            fields["invoice"].queryset = Invoice.objects.filter(
+                reservation__hotel_settings_id=user.hotel_settings_id
+            )
+
+        return fields
+
     def validate_amount(self, value):
         if value <= 0:
             raise serializers.ValidationError("Credit note amount must be greater than 0.")
@@ -445,8 +594,15 @@ class CreditNoteSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
 
+        user = _get_serializer_user(self)
         invoice = attrs.get("invoice", getattr(self.instance, "invoice", None))
         amount = attrs.get("amount", getattr(self.instance, "amount", None))
+
+        if user and user.is_authenticated and not user.is_superuser:
+            if invoice and invoice.reservation.hotel_settings_id != user.hotel_settings_id:
+                raise serializers.ValidationError(
+                    {"invoice": "La factura no pertenece al hotel del usuario autenticado."}
+                )
 
         if invoice and amount:
             total_active_credit_notes = sum(

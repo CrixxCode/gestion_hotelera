@@ -2,6 +2,7 @@ import uuid
 from django.contrib.auth.models import AbstractUser
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from jsonschema import ValidationError
 
 
 class User(AbstractUser):
@@ -11,6 +12,14 @@ class User(AbstractUser):
         blank=True,
         null=True,
         default='avatars/default-avatar.png',
+    )
+
+    hotel_settings = models.ForeignKey(
+        "hotel_settings.HotelSettings",
+        on_delete=models.PROTECT,
+        related_name="users",
+        null=True,
+        blank=True,
     )
 
     def resource_keys(self) -> set[str]:
@@ -31,6 +40,13 @@ class User(AbstractUser):
             .distinct()
         )
         return set(keys_qs)
+    def clean(self):
+        super().clean()
+
+        if not self.is_superuser and self.hotel_settings is None:
+            raise ValidationError({
+                "hotel_settings": "Este usuario debe pertenecer a un hotel."
+            })
 
 
 class Role(models.Model):

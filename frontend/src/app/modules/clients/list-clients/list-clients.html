@@ -71,6 +71,51 @@
     </div>
   </section>
 
+  <section class="gh-filters-card" *ngIf="!loading && deletedClientsCount > 0">
+    <div class="gh-filters-actions">
+      <p class="state-note">
+        Hay {{ deletedClientsCount }} cliente(s) eliminados logicamente.
+      </p>
+      <div class="gh-action-group">
+        <button type="button" class="gh-btn gh-btn-light" (click)="showDeletedClients = !showDeletedClients">
+          <i class="fa-solid" [class.fa-eye]="!showDeletedClients" [class.fa-eye-slash]="showDeletedClients"></i>
+          {{ showDeletedClients ? 'Ocultar eliminados' : 'Ver eliminados' }}
+        </button>
+      </div>
+    </div>
+
+    <article class="table-card" *ngIf="showDeletedClients">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Correo</th>
+              <th>Tipo</th>
+              <th>Estado operativo</th>
+              <th>Accion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let client of deletedClients; trackBy: trackByClient">
+              <td>{{ client.full_name || (client.first_name + ' ' + client.last_name) }}</td>
+              <td>{{ client.email || 'Sin correo' }}</td>
+              <td>{{ getTypeLabel(client.client_type) }}</td>
+              <td>{{ getStatusLabel(client.status) }}</td>
+              <td>
+                <div class="row-actions">
+                  <button type="button" class="row-btn" title="Restaurar" (click)="restoreClient(client)">
+                    <i class="fa-solid fa-rotate-left"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
   <section class="table-card">
 
     <div class="table-wrap">

@@ -95,6 +95,47 @@
     </div>
   </section>
 
+  <section class="gh-filters-card" *ngIf="!loading && deletedPackagesCount > 0">
+    <div class="gh-filters-actions">
+      <p class="state-note">Hay {{ deletedPackagesCount }} paquete(s) eliminados logicamente.</p>
+      <div class="gh-action-group">
+        <button type="button" class="gh-btn gh-btn-light" (click)="showDeletedPackages = !showDeletedPackages">
+          <i class="fa-solid" [class.fa-eye]="!showDeletedPackages" [class.fa-eye-slash]="showDeletedPackages"></i>
+          {{ showDeletedPackages ? 'Ocultar eliminados' : 'Ver eliminados' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="table-scroll" *ngIf="showDeletedPackages">
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Categoria</th>
+            <th>Precio base</th>
+            <th>Estado operativo</th>
+            <th>Accion</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let pkg of deletedPackages; trackBy: trackByPackage">
+            <td>{{ pkg.name }}</td>
+            <td>{{ getCategoryLabel(pkg) }}</td>
+            <td>{{ getPriceLabel(pkg) }}</td>
+            <td>{{ pkg.is_active ? 'Activo' : 'Inactivo' }}</td>
+            <td>
+              <div class="table-actions">
+                <button type="button" class="row-btn" title="Restaurar" (click)="restorePackage(pkg)">
+                  <i class="fa-solid fa-rotate-left"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
   <section class="state-message" *ngIf="loading || errorMessage || infoMessage || groupedPackages.length === 0">
     <p *ngIf="loading">Cargando catalogo de paquetes...</p>
     <p class="error" *ngIf="!loading && errorMessage">{{ errorMessage }}</p>

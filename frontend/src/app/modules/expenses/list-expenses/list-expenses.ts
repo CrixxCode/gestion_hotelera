@@ -141,7 +141,7 @@ export class ListExpenses implements OnInit {
 
     forkJoin({
       expenses: this.expenseService
-        .listExpenses({ ordering: '-expense_date,-id' })
+        .listExpenses({ ordering: '-expense_date,-id', include_inactive: true })
         .pipe(catchError(() => of([] as ExpenseI[]))),
       expenseCategories: this.masterDataService
         .listMasterData({ group: 'EXPENSE_CATEGORY', is_active: 'true', ordering: 'sort_order,name' })

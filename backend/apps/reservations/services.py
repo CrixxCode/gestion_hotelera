@@ -13,6 +13,7 @@ from apps.inventory.models import Item, RoomInventory
 from apps.master_data.models import MasterData
 from apps.rooms.models import CleaningTask, Room
 from apps.reservations.models import (
+    Reservation,
     ReservationInventoryCheck,
     ReservationInventoryCheckLine,
     ReservationRoom,
@@ -218,6 +219,46 @@ def get_finished_reservation_status():
 
 def get_cancelled_reservation_status():
     return get_reservation_status_by_codes(RESERVATION_STATUS_CANCELLED_CODES)
+
+
+def auto_cancel_overdue_unchecked_reservations() -> int:
+    cancelled_status = get_cancelled_reservation_status()
+    if not cancelled_status:
+        return 0
+
+    today = timezone.localdate()
+    target_codes = tuple(
+        _normalize_code(code)
+        for code in (
+            *RESERVATION_STATUS_PENDING_CODES,
+            *RESERVATION_STATUS_CONFIRMED_CODES,
+        )
+        if _normalize_code(code)
+    )
+    active_overdue_queryset = Reservation.objects.select_related("status").filter(
+        real_check_in__isnull=True,
+        real_check_out__isnull=True,
+        expected_check_out__lt=today,
+        status__code__in=target_codes,
+    )
+
+    reservations_to_cancel = list(active_overdue_queryset)
+    if not reservations_to_cancel:
+        return 0
+
+    marker = f"AUTOCANCEL_OVERDUE:{timezone.now().isoformat()}"
+    note_line = (
+        f"[{marker}] Reserva cancelada automaticamente por check-out vencido "
+        "sin check-in registrado."
+    )
+
+    for reservation in reservations_to_cancel:
+        reservation.status = cancelled_status
+        existing_notes = (reservation.notes or "").strip()
+        reservation.notes = f"{existing_notes}\n{note_line}" if existing_notes else note_line
+
+    Reservation.objects.bulk_update(reservations_to_cancel, ["status", "notes"])
+    return len(reservations_to_cancel)
 
 
 def has_active_rate_for_room_type(room_type_id: int | None) -> bool:
@@ -1330,10 +1371,12 @@ def validate_checkout_inventory_review_payload(
         )
         requested_item_ids.add(item_id)
 
+    reservation_hotel_id = getattr(reservation, "hotel_settings_id", None)
     if requested_item_ids:
-        existing_item_ids = set(
-            Item.objects.filter(id__in=requested_item_ids).values_list("id", flat=True)
+        item_rows = list(
+            Item.objects.filter(id__in=requested_item_ids).values_list("id", "hotel_settings_id")
         )
+        existing_item_ids = {item_id for item_id, _ in item_rows}
         missing_item_ids = sorted(requested_item_ids - existing_item_ids)
         if missing_item_ids:
             raise ValidationError(
@@ -1345,6 +1388,23 @@ def validate_checkout_inventory_review_payload(
                     )
                 }
             )
+
+        if reservation_hotel_id is not None:
+            invalid_hotel_item_ids = sorted(
+                item_id
+                for item_id, hotel_id in item_rows
+                if hotel_id != reservation_hotel_id
+            )
+            if invalid_hotel_item_ids:
+                raise ValidationError(
+                    {
+                        "inventory_review": (
+                            "Los siguientes items no pertenecen al mismo hotel de la reserva: "
+                            + ", ".join(str(item_id) for item_id in invalid_hotel_item_ids)
+                            + "."
+                        )
+                    }
+                )
 
     return normalized_lines
 
@@ -1382,6 +1442,8 @@ def create_check_in_inventory_snapshot(
     room_inventory_rows = RoomInventory.objects.filter(
         room_id__in=room_ids,
         is_active=True,
+        room__floor__hotel_settings_id=reservation.hotel_settings_id,
+        item__hotel_settings_id=reservation.hotel_settings_id,
     ).values("room_id", "item_id", "quantity")
 
     lines_to_create = []
@@ -1452,6 +1514,8 @@ def create_checkout_inventory_comparison(
         room_inventory_rows = RoomInventory.objects.filter(
             room_id__in=room_ids,
             is_active=True,
+            room__floor__hotel_settings_id=reservation.hotel_settings_id,
+            item__hotel_settings_id=reservation.hotel_settings_id,
         ).values("room_id", "item_id", "quantity")
         for row in room_inventory_rows:
             key = (row["room_id"], row["item_id"])
@@ -1473,7 +1537,10 @@ def create_checkout_inventory_comparison(
     item_ids = sorted({item_id for _, item_id in comparison_keys})
     item_name_by_id = {
         item_id: name
-        for item_id, name in Item.objects.filter(id__in=item_ids).values_list("id", "name")
+        for item_id, name in Item.objects.filter(
+            id__in=item_ids,
+            hotel_settings_id=reservation.hotel_settings_id,
+        ).values_list("id", "name")
     }
 
     default_notes = f"Revision de inventario post check-out de reserva #{reservation.id}."
@@ -1596,21 +1663,37 @@ def _to_local_date(value) -> date_cls | None:
     return None
 
 
-def sync_client_stay_metrics_by_id(client_id: int | None) -> bool:
+def sync_client_stay_metrics_by_id(
+    client_id: int | None,
+    *,
+    expected_hotel_settings_id: int | None = None,
+) -> bool:
     if not client_id:
         return False
 
-    client = Client.objects.select_related("client_type").filter(id=client_id).first()
+    queryset = Client.objects.select_related("client_type").filter(id=client_id)
+    if expected_hotel_settings_id is not None:
+        queryset = queryset.filter(hotel_settings_id=expected_hotel_settings_id)
+    client = queryset.first()
     if not client:
         return False
 
     total_stay_nights = 0
     last_stay: date_cls | None = None
 
-    completed_stays = client.reservations.filter(
+    completed_stays_queryset = client.reservations.filter(
         real_check_in__isnull=False,
         real_check_out__isnull=False,
-    ).values_list("expected_check_in", "expected_check_out", "real_check_out")
+    )
+    if expected_hotel_settings_id is not None:
+        completed_stays_queryset = completed_stays_queryset.filter(
+            hotel_settings_id=expected_hotel_settings_id
+        )
+    completed_stays = completed_stays_queryset.values_list(
+        "expected_check_in",
+        "expected_check_out",
+        "real_check_out",
+    )
 
     for expected_check_in, expected_check_out, real_check_out in completed_stays:
         total_stay_nights += _resolve_reservation_stay_nights(
@@ -1647,21 +1730,39 @@ def sync_client_stay_metrics_by_id(client_id: int | None) -> bool:
 
 
 def sync_client_stay_metrics_for_reservation(reservation) -> bool:
-    return sync_client_stay_metrics_by_id(getattr(reservation, "client_id", None))
+    return sync_client_stay_metrics_by_id(
+        getattr(reservation, "client_id", None),
+        expected_hotel_settings_id=getattr(reservation, "hotel_settings_id", None),
+    )
 
 
-def sync_client_status_by_id(client_id: int | None) -> bool:
+def sync_client_status_by_id(
+    client_id: int | None,
+    *,
+    expected_hotel_settings_id: int | None = None,
+) -> bool:
     if not client_id:
         return False
 
-    client = Client.objects.select_related("status").filter(id=client_id).first()
+    queryset = Client.objects.select_related("status").filter(id=client_id)
+    if expected_hotel_settings_id is not None:
+        queryset = queryset.filter(hotel_settings_id=expected_hotel_settings_id)
+    client = queryset.first()
     if not client:
         return False
 
-    has_in_house_reservation = ReservationRoom.objects.select_related("reservation", "reservation__status").filter(
+    reservation_room_queryset = ReservationRoom.objects.select_related(
+        "reservation",
+        "reservation__status",
+    ).filter(
         reservation__client_id=client_id,
         reservation__real_check_out__isnull=True,
-    ).exclude(
+    )
+    if expected_hotel_settings_id is not None:
+        reservation_room_queryset = reservation_room_queryset.filter(
+            reservation__hotel_settings_id=expected_hotel_settings_id
+        )
+    has_in_house_reservation = reservation_room_queryset.exclude(
         reservation__status__code__in=INACTIVE_RESERVATION_STATUS_CODES
     ).filter(
         reservation__real_check_in__isnull=False
@@ -1673,7 +1774,10 @@ def sync_client_status_by_id(client_id: int | None) -> bool:
         target_status = get_master_data_code(MasterData.Group.CLIENT_STATUS, CLIENT_STATUS_CURRENT_GUEST)
         if not target_status or client.status_id == target_status.id:
             return False
-        Client.objects.filter(id=client_id).update(status=target_status)
+        update_queryset = Client.objects.filter(id=client_id)
+        if expected_hotel_settings_id is not None:
+            update_queryset = update_queryset.filter(hotel_settings_id=expected_hotel_settings_id)
+        update_queryset.update(status=target_status)
         client.status = target_status
         return True
 
@@ -1684,13 +1788,19 @@ def sync_client_status_by_id(client_id: int | None) -> bool:
     if not fallback_status or client.status_id == fallback_status.id:
         return False
 
-    Client.objects.filter(id=client_id).update(status=fallback_status)
+    update_queryset = Client.objects.filter(id=client_id)
+    if expected_hotel_settings_id is not None:
+        update_queryset = update_queryset.filter(hotel_settings_id=expected_hotel_settings_id)
+    update_queryset.update(status=fallback_status)
     client.status = fallback_status
     return True
 
 
 def sync_client_status_for_reservation(reservation) -> bool:
-    return sync_client_status_by_id(getattr(reservation, "client_id", None))
+    return sync_client_status_by_id(
+        getattr(reservation, "client_id", None),
+        expected_hotel_settings_id=getattr(reservation, "hotel_settings_id", None),
+    )
 
 
 def sync_all_room_statuses() -> tuple[int, int]:

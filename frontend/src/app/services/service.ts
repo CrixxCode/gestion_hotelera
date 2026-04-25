@@ -24,6 +24,8 @@ export class ServicesService {
   listServices(filters?: {
     search?: string;
     ordering?: string;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<ServiceI[]> {
     let params = new HttpParams();
 
@@ -33,6 +35,14 @@ export class ServicesService {
 
     if (filters?.ordering?.trim()) {
       params = params.set('ordering', filters.ordering.trim());
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -65,6 +75,10 @@ export class ServicesService {
 
   deleteService(id: number): Observable<void> {
     return this.http.delete<void>(`${this.servicesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
+  restoreService(id: number): Observable<ServiceI> {
+    return this.http.post<ServiceI>(`${this.servicesUrl}${id}/restore/`, {}, this.auth.buildCsrfRequestOptions());
   }
 
   private unwrapArray<T>(res: unknown): T[] {

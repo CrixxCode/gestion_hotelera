@@ -66,6 +66,13 @@ class Charge(models.Model):
         if self.service and self.package:
             errors["package"] = "A charge should reference either a service or a package, not both."
 
+        reservation_hotel_id = getattr(getattr(self, "reservation", None), "hotel_settings_id", None)
+        if self.service and reservation_hotel_id and self.service.hotel_settings_id != reservation_hotel_id:
+            errors["service"] = "The service must belong to the same hotel as the reservation."
+
+        if self.package and reservation_hotel_id and self.package.hotel_settings_id != reservation_hotel_id:
+            errors["package"] = "The package must belong to the same hotel as the reservation."
+
         if errors:
             raise ValidationError(errors)
 

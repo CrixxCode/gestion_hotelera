@@ -1,0 +1,248 @@
+<div class="ghl-page">
+  <header class="ghl-header">
+    <div class="ghl-container ghl-header__inner">
+      <a class="ghl-brand" href="#inicio">
+        <img src="logo.png" alt="HotelManager Pro" />
+        <span>HotelManager <strong>Pro</strong></span>
+      </a>
+
+      <nav class="ghl-nav" aria-label="Principal">
+        <a href="#funciones">Funciones</a>
+        <a href="#modulos">Modulos</a>
+        <a href="#flujo">Flujo</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+
+      <a class="ghl-btn ghl-btn--dark" routerLink="/login">Iniciar sesion</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="ghl-hero" id="inicio">
+      <div class="ghl-hero__veil"></div>
+      <div class="ghl-container ghl-hero__grid">
+        <article class="ghl-hero__copy ghl-reveal" style="animation-delay: 70ms">
+          <span class="ghl-chip">Sistema real de gestion hotelera</span>
+          <h1>
+            Administra tu hotel con
+            <span>modulos ya implementados</span>
+            y listos para operar
+          </h1>
+          <p>
+            HotelManager Pro integra recepcion, habitaciones, facturacion, inventario, reportes y seguridad
+            en una sola plataforma. Todo el contenido de esta landing refleja funcionalidades existentes en el
+            proyecto actual.
+          </p>
+
+          <div class="ghl-actions">
+            <a class="ghl-btn ghl-btn--gold" routerLink="/login">Entrar al sistema</a>
+            <a class="ghl-btn ghl-btn--ghost" href="#modulos">Ver modulos</a>
+          </div>
+
+          <ul class="ghl-bullets">
+            <li>Check-in y check-out en flujo operativo</li>
+            <li>RBAC con roles, recursos y permisos por scope</li>
+            <li>Reportes de ingresos, ocupacion y servicios</li>
+          </ul>
+        </article>
+
+        <aside class="ghl-hero__panel ghl-reveal" style="animation-delay: 190ms" aria-label="Resumen tecnico">
+          <header>
+            <h2>Panel tecnico del proyecto</h2>
+            <p>Datos verificados desde la configuracion y rutas actuales</p>
+          </header>
+
+          <div class="ghl-mini-stats">
+            <article *ngFor="let stat of stats; let i = index; trackBy: trackByIndex">
+              <span class="value">{{ stat.value }}</span>
+              <span class="label">{{ stat.label }}</span>
+            </article>
+          </div>
+
+          <div class="ghl-mini-list">
+            <div>
+              <strong>Backend</strong>
+              <span>accounts, reservations, billing, inventory, finance, reports</span>
+            </div>
+            <div>
+              <strong>Frontend</strong>
+              <span>Rutas publicas + modulo autenticado con carga diferida</span>
+            </div>
+            <div>
+              <strong>Operaciones</strong>
+              <span>Reservas, facturacion, inventario por habitacion y actividad</span>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="ghl-trust">
+      <div class="ghl-container ghl-stats-grid">
+        <article
+          class="ghl-stat-card ghl-reveal"
+          *ngFor="let stat of stats; let i = index; trackBy: trackByIndex"
+          [style.animationDelay.ms]="120 + i * 90">
+          <h3>{{ stat.value }}</h3>
+          <p>{{ stat.label }}</p>
+          <small>{{ stat.detail }}</small>
+        </article>
+      </div>
+    </section>
+
+    <section class="ghl-section ghl-overview" id="funciones">
+      <div class="ghl-container ghl-overview__grid">
+        <article class="ghl-overview__copy ghl-reveal" style="animation-delay: 90ms">
+          <span class="ghl-chip ghl-chip--light">Flujo operativo real</span>
+          <h2>Un panel pensado para recepcion, administracion y control</h2>
+          <p>
+            El sistema incluye vistas de uso diario para reservas, habitaciones, facturacion, pagos, inventario,
+            mantenimiento y reportes. Tambien incorpora configuracion del hotel, politicas y seguridad por rol.
+          </p>
+          <ul>
+            <li>Dashboard con eventos del dia, alertas de stock y mantenimientos</li>
+            <li>Facturacion por reserva con control de estado y cobro pendiente</li>
+            <li>Inventario con niveles minimo/maximo y movimientos auditables</li>
+            <li>Exportaciones en CSV y PDF para gestion administrativa</li>
+          </ul>
+        </article>
+
+        <div class="ghl-overview__visual ghl-reveal" style="animation-delay: 200ms">
+          <img src="login/fondo-login-6.jpg" alt="Vista de habitacion de hotel" />
+          <div class="ghl-float-card">
+            <strong>Reportes activos</strong>
+            <p>Ejecutivo | Ingresos | Ocupacion | Servicios</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ghl-section" id="modulos">
+      <div class="ghl-container">
+        <div class="ghl-section-head">
+          <span class="ghl-chip ghl-chip--light">Modulos implementados</span>
+          <h2>Funcionalidades disponibles en el estado actual del proyecto</h2>
+          <p>Estos bloques corresponden a rutas y componentes operativos que ya existen en el frontend.</p>
+        </div>
+
+        <div class="ghl-modules-grid">
+          <article
+            class="ghl-module-card ghl-reveal"
+            *ngFor="let module of modules; let i = index; trackBy: trackByIndex"
+            [style.animationDelay.ms]="80 + i * 80">
+            <span class="ghl-module-icon" [attr.data-tone]="module.tone">{{ module.icon }}</span>
+            <h3>{{ module.title }}</h3>
+            <p>{{ module.description }}</p>
+            <code>{{ module.routes }}</code>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="ghl-section ghl-process" id="flujo">
+      <div class="ghl-container">
+        <div class="ghl-section-head ghl-section-head--inverse">
+          <span class="ghl-chip">Operacion en 3 pasos</span>
+          <h2>Implementacion practica para empezar sin friccion</h2>
+          <p>El flujo coincide con los modulos reales disponibles en el sistema.</p>
+        </div>
+
+        <div class="ghl-process-grid">
+          <article
+            class="ghl-process-card ghl-reveal"
+            *ngFor="let step of steps; let i = index; trackBy: trackByIndex"
+            [style.animationDelay.ms]="120 + i * 110">
+            <span class="ghl-step">{{ i + 1 }}</span>
+            <h3>{{ step.title }}</h3>
+            <p>{{ step.description }}</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="ghl-section ghl-architecture">
+      <div class="ghl-container">
+        <div class="ghl-section-head">
+          <span class="ghl-chip ghl-chip--light">Arquitectura real</span>
+          <h2>Base tecnica del proyecto de gestion hotelera</h2>
+        </div>
+
+        <div class="ghl-arch-grid">
+          <article
+            class="ghl-arch-card ghl-reveal"
+            *ngFor="let block of architecture; let i = index; trackBy: trackByIndex"
+            [style.animationDelay.ms]="90 + i * 90">
+            <h3>{{ block.title }}</h3>
+            <p class="stack">{{ block.stack }}</p>
+            <ul>
+              <li *ngFor="let bullet of block.bullets; trackBy: trackByIndex">{{ bullet }}</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="ghl-section ghl-faq" id="faq">
+      <div class="ghl-container">
+        <div class="ghl-section-head">
+          <span class="ghl-chip ghl-chip--light">Preguntas frecuentes</span>
+          <h2>Respuestas sobre el alcance actual del sistema</h2>
+        </div>
+
+        <div class="ghl-faq-list">
+          <article class="ghl-faq-item" *ngFor="let faq of faqs; let i = index; trackBy: trackByIndex">
+            <button type="button" (click)="toggleFaq(i)" [attr.aria-expanded]="activeFaqIndex === i">
+              <span>{{ faq.question }}</span>
+              <span class="ghl-faq-toggle" [class.is-open]="activeFaqIndex === i">+</span>
+            </button>
+            <p *ngIf="activeFaqIndex === i">{{ faq.answer }}</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="ghl-cta">
+      <div class="ghl-cta__veil"></div>
+      <div class="ghl-container ghl-cta__content">
+        <span class="ghl-chip">Proyecto gestion_hotelera</span>
+        <h2>Listo para seguir evolucionando sobre una base funcional</h2>
+        <p>
+          La aplicacion ya tiene estructura modular, seguridad por roles y operaciones clave de hoteleria.
+          Puedes usar esta landing como portada institucional del proyecto.
+        </p>
+        <div class="ghl-actions">
+          <a class="ghl-btn ghl-btn--gold" routerLink="/login">Acceder al sistema</a>
+          <a class="ghl-btn ghl-btn--ghost" href="#inicio">Volver arriba</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="ghl-footer">
+    <div class="ghl-container ghl-footer__grid">
+      <div>
+        <a class="ghl-brand" href="#inicio">
+          <img src="logo.png" alt="HotelManager Pro" />
+          <span>HotelManager <strong>Pro</strong></span>
+        </a>
+        <p>Plataforma de gestion hotelera basada en Angular + Django para operacion y control administrativo.</p>
+      </div>
+
+      <div>
+        <h4>Producto</h4>
+        <a href="#funciones">Funciones</a>
+        <a href="#modulos">Modulos</a>
+        <a href="#flujo">Flujo</a>
+      </div>
+
+      <div>
+        <h4>Acceso</h4>
+        <a routerLink="/login">Iniciar sesion</a>
+        <a href="#faq">FAQ</a>
+      </div>
+    </div>
+    <div class="ghl-container ghl-footer__copy">
+      <small>HotelManager Pro | Proyecto gestion_hotelera</small>
+    </div>
+  </footer>
+</div>

@@ -30,6 +30,8 @@ export class PackagesService {
   listPackages(filters?: {
     search?: string;
     ordering?: string;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<PackageI[]> {
     let params = new HttpParams();
 
@@ -39,6 +41,14 @@ export class PackagesService {
 
     if (filters?.ordering?.trim()) {
       params = params.set('ordering', filters.ordering.trim());
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -73,11 +83,22 @@ export class PackagesService {
     return this.http.delete<void>(`${this.packagesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
   }
 
-  listPackageServices(filters?: { ordering?: string }): Observable<PackageServiceI[]> {
+  restorePackage(id: number): Observable<PackageI> {
+    return this.http.post<PackageI>(`${this.packagesUrl}${id}/restore/`, {}, this.auth.buildCsrfRequestOptions());
+  }
+
+  listPackageServices(filters?: {
+    ordering?: string;
+    include_deleted?: boolean;
+  }): Observable<PackageServiceI[]> {
     let params = new HttpParams();
 
     if (filters?.ordering?.trim()) {
       params = params.set('ordering', filters.ordering.trim());
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -106,6 +127,14 @@ export class PackagesService {
 
   deletePackageService(id: number): Observable<void> {
     return this.http.delete<void>(`${this.packageServicesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
+  restorePackageService(id: number): Observable<PackageServiceI> {
+    return this.http.post<PackageServiceI>(
+      `${this.packageServicesUrl}${id}/restore/`,
+      {},
+      this.auth.buildCsrfRequestOptions()
+    );
   }
 
   private unwrapArray<T>(res: unknown): T[] {

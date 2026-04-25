@@ -16,10 +16,14 @@ from apps.billing.models import Payment
 from apps.inventory.services import apply_checkout_consumption_inventory
 from apps.reservations.models import (
     Reservation,
+    ReservationInventoryCheck,
+    ReservationInventoryCheckLine,
     ReservationRoom,
     ReservationGuest,
 )
 from apps.reservations.serializers import (
+    ReservationInventoryCheckLineSerializer,
+    ReservationInventoryCheckSerializer,
     ReservationListSerializer,
     ReservationDetailSerializer,
     ReservationWriteSerializer,
@@ -112,10 +116,11 @@ class ReservationViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         return max(days, 0)
 
     def get_queryset(self):
+        user = self.request.user
+
         queryset = (
-            super()
-            .get_queryset()
-            .select_related(
+            Reservation.objects.select_related(
+                "hotel_settings",
                 "client",
                 "status",
                 "origin",
@@ -124,6 +129,15 @@ class ReservationViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
             )
             .order_by("-id")
         )
+
+        if not user.is_authenticated:
+            return Reservation.objects.none()
+
+        if not user.is_superuser:
+            if user.hotel_settings_id is None:
+                return Reservation.objects.none()
+
+            queryset = queryset.filter(hotel_settings_id=user.hotel_settings_id)
 
         if self.action == "list":
             queryset = queryset.prefetch_related(
@@ -428,7 +442,10 @@ class ReservationViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
                     reservation,
                     inventory_comparison=inventory_comparison,
                 )
-                issue_default_invoice_for_reservation(reservation.id)
+                issue_default_invoice_for_reservation(
+                    reservation.id,
+                    expected_hotel_settings_id=reservation.hotel_settings_id,
+                )
             except ValidationError as exc:
                 return self._error(self._validation_error_message(exc))
             except ValueError as exc:
@@ -469,14 +486,7 @@ class ReservationViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 
 
 class ReservationRoomViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
-    queryset = (
-        ReservationRoom.objects.select_related(
-            "reservation",
-            "room",
-            "meal_plan",
-        )
-        .order_by("-id")
-    )
+    queryset = ReservationRoom.objects.all()
     serializer_class = ReservationRoomSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -496,6 +506,32 @@ class ReservationRoomViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     ]
     ordering = ["-id"]
 
+    def get_queryset(self):
+        user = self.request.user
+        qs = (
+            ReservationRoom.objects.select_related(
+                "reservation",
+                "reservation__hotel_settings",
+                "room",
+                "room__floor",
+                "room__floor__hotel_settings",
+                "meal_plan",
+            )
+            .all()
+            .order_by("-id")
+        )
+
+        if not user.is_authenticated:
+            return ReservationRoom.objects.none()
+
+        if user.is_superuser:
+            return qs
+
+        if user.hotel_settings_id is None:
+            return ReservationRoom.objects.none()
+
+        return qs.filter(reservation__hotel_settings_id=user.hotel_settings_id)
+
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return ["reservation_rooms.write"]
@@ -505,15 +541,8 @@ class ReservationRoomViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
-
 class ReservationGuestViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
-    queryset = (
-        ReservationGuest.objects.select_related(
-            "reservation",
-            "document_type",
-        )
-        .order_by("-id")
-    )
+    queryset = ReservationGuest.objects.all()
     serializer_class = ReservationGuestSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -536,6 +565,29 @@ class ReservationGuestViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     ]
     ordering = ["-id"]
 
+    def get_queryset(self):
+        user = self.request.user
+        qs = (
+            ReservationGuest.objects.select_related(
+                "reservation",
+                "reservation__hotel_settings",
+                "document_type",
+            )
+            .all()
+            .order_by("-id")
+        )
+
+        if not user.is_authenticated:
+            return ReservationGuest.objects.none()
+
+        if user.is_superuser:
+            return qs
+
+        if user.hotel_settings_id is None:
+            return ReservationGuest.objects.none()
+
+        return qs.filter(reservation__hotel_settings_id=user.hotel_settings_id)
+
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return ["reservation_guests.write"]
@@ -547,16 +599,7 @@ class ReservationGuestViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 
 
 class ReservationDepositViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
-    queryset = (
-        Payment.objects.select_related(
-            "invoice",
-            "invoice__reservation",
-            "payment_method",
-        )
-        .prefetch_related("refunds__status")
-        .annotate(deposit_date=F("payment_date"))
-        .order_by("-id")
-    )
+    queryset = Payment.objects.all()
     serializer_class = ReservationDepositSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -577,9 +620,141 @@ class ReservationDepositViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet
     ]
     ordering = ["-id"]
 
+    def get_queryset(self):
+        user = self.request.user
+        qs = (
+            Payment.objects.select_related(
+                "invoice",
+                "invoice__reservation",
+                "invoice__reservation__hotel_settings",
+                "payment_method",
+            )
+            .prefetch_related("refunds__status")
+            .annotate(deposit_date=F("payment_date"))
+            .order_by("-id")
+        )
+
+        if not user.is_authenticated:
+            return Payment.objects.none()
+
+        if user.is_superuser:
+            return qs
+
+        if user.hotel_settings_id is None:
+            return Payment.objects.none()
+
+        return qs.filter(invoice__reservation__hotel_settings_id=user.hotel_settings_id)
+
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return ["reservation_deposits.write"]
+        return self.required_scopes
+
+    def get_permissions(self):
+        self.required_scopes = self.get_required_scopes()
+        return super().get_permissions()
+
+class ReservationInventoryCheckViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+    queryset = ReservationInventoryCheck.objects.all()
+    serializer_class = ReservationInventoryCheckSerializer
+    pagination_class = None
+    permission_classes = [HasResourcePermission]
+    required_scopes = ["reservation_inventory_checks.read"]
+
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = [
+        "reservation__id",
+        "check_type",
+        "notes",
+        "created_by__username",
+    ]
+    ordering_fields = ["id", "check_type", "created_at"]
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = (
+            ReservationInventoryCheck.objects.select_related(
+                "reservation",
+                "reservation__hotel_settings",
+                "created_by",
+            )
+            .all()
+            .order_by("-created_at")
+        )
+
+        if not user.is_authenticated:
+            return ReservationInventoryCheck.objects.none()
+
+        if user.is_superuser:
+            return qs
+
+        if user.hotel_settings_id is None:
+            return ReservationInventoryCheck.objects.none()
+
+        return qs.filter(reservation__hotel_settings_id=user.hotel_settings_id)
+
+    def get_required_scopes(self):
+        if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            return ["reservation_inventory_checks.write"]
+        return self.required_scopes
+
+    def get_permissions(self):
+        self.required_scopes = self.get_required_scopes()
+        return super().get_permissions()
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+class ReservationInventoryCheckLineViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+    queryset = ReservationInventoryCheckLine.objects.all()
+    serializer_class = ReservationInventoryCheckLineSerializer
+    pagination_class = None
+    permission_classes = [HasResourcePermission]
+    required_scopes = ["reservation_inventory_check_lines.read"]
+
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = [
+        "inventory_check__reservation__id",
+        "room__number",
+        "item__name",
+        "notes",
+    ]
+    ordering_fields = ["id", "room__number", "item__name", "created_at"]
+    ordering = ["room__number", "item__name", "id"]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = (
+            ReservationInventoryCheckLine.objects.select_related(
+                "inventory_check",
+                "inventory_check__reservation",
+                "inventory_check__reservation__hotel_settings",
+                "reservation_room",
+                "room",
+                "room__floor",
+                "item",
+            )
+            .all()
+            .order_by("room__number", "item__name", "id")
+        )
+
+        if not user.is_authenticated:
+            return ReservationInventoryCheckLine.objects.none()
+
+        if user.is_superuser:
+            return qs
+
+        if user.hotel_settings_id is None:
+            return ReservationInventoryCheckLine.objects.none()
+
+        return qs.filter(
+            inventory_check__reservation__hotel_settings_id=user.hotel_settings_id
+        )
+
+    def get_required_scopes(self):
+        if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            return ["reservation_inventory_check_lines.write"]
         return self.required_scopes
 
     def get_permissions(self):

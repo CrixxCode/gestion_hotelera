@@ -1,9 +1,20 @@
 from rest_framework import serializers
-from .models import HotelSettings, HotelFloor, ReservationPolicy
+
+from accounts.tenancy import TenantSerializerMixin
+
+from .models import HotelFloor, HotelSettings, ReservationPolicy
 
 
-class HotelFloorSerializer(serializers.ModelSerializer):
-    # Rango visual calculado para el frontend
+class HotelFloorSerializer(TenantSerializerMixin, serializers.ModelSerializer):
+    tenant_field_name = "hotel_settings"
+
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
+    # Display range for frontend cards.
     range_display = serializers.SerializerMethodField()
 
     class Meta:
@@ -17,13 +28,9 @@ class HotelFloorSerializer(serializers.ModelSerializer):
             "room_count",
             "range_display",
         )
+        validators = []
 
     def get_range_display(self, obj):
-        """
-        Construye un rango visual como:
-        101 - 106
-        201 - 206
-        """
         if obj.room_count <= 0:
             return ""
 
@@ -32,27 +39,42 @@ class HotelFloorSerializer(serializers.ModelSerializer):
         return f"{start} - {end}"
 
     def validate_room_count(self, value):
-        """
-        Validar que el piso tenga al menos una habitación.
-        """
         if value < 1:
             raise serializers.ValidationError("Room count must be greater than 0.")
         return value
 
     def validate_floor_number(self, value):
-        """
-        Validar que el número de piso sea válido.
-        """
         if value < 1:
             raise serializers.ValidationError("Floor number must be greater than 0.")
         return value
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        hotel = self.require_target_tenant(attrs)
+        floor_number = attrs.get("floor_number", getattr(self.instance, "floor_number", None))
+
+        qs = HotelFloor.objects.filter(hotel_settings=hotel)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if floor_number and qs.filter(floor_number=floor_number).exists():
+            raise serializers.ValidationError(
+                {"floor_number": "Ya existe un piso con este numero en este hotel."}
+            )
+        return attrs
+
+    def create(self, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().update(instance, validated_data)
+
 
 class HotelSettingsSerializer(serializers.ModelSerializer):
-    # Lista anidada de pisos
     floors = HotelFloorSerializer(many=True, read_only=True)
 
-    # Estadísticas calculadas para mostrar en tarjetas del frontend
     total_floors = serializers.SerializerMethodField()
     total_rooms = serializers.SerializerMethodField()
     average_rooms_per_floor = serializers.SerializerMethodField()
@@ -104,21 +126,12 @@ class HotelSettingsSerializer(serializers.ModelSerializer):
         )
 
     def get_total_floors(self, obj):
-        """
-        Devuelve la cantidad total de pisos configurados.
-        """
         return obj.floors.count()
 
     def get_total_rooms(self, obj):
-        """
-        Devuelve el total de habitaciones sumando todos los pisos.
-        """
         return sum(floor.room_count for floor in obj.floors.all())
 
     def get_average_rooms_per_floor(self, obj):
-        """
-        Devuelve el promedio de habitaciones por piso.
-        """
         floors_count = obj.floors.count()
         if floors_count == 0:
             return 0
@@ -127,44 +140,41 @@ class HotelSettingsSerializer(serializers.ModelSerializer):
         return round(total_rooms / floors_count, 1)
 
     def validate_stars(self, value):
-        """
-        Validar que las estrellas estén entre 1 y 5.
-        """
         if value < 1 or value > 5:
             raise serializers.ValidationError("Stars must be between 1 and 5.")
         return value
 
     def validate_tax_rate(self, value):
-        """
-        Validar que el impuesto esté entre 0 y 100.
-        """
         if value < 0 or value > 100:
             raise serializers.ValidationError("Tax rate must be between 0 and 100.")
         return value
 
     def validate_max_guests_per_room(self, value):
-        """
-        Validar que el máximo de huéspedes sea al menos 1.
-        """
         if value < 1:
             raise serializers.ValidationError("Max guests per room must be greater than 0.")
         return value
 
     def validate(self, attrs):
-        """
-        Validaciones cruzadas del modelo.
-        """
         check_in_time = attrs.get("check_in_time")
         check_out_time = attrs.get("check_out_time")
 
         if check_in_time and check_out_time and check_in_time == check_out_time:
-            raise serializers.ValidationError({
-                "check_out_time": "Check-out time must be different from check-in time."
-            })
+            raise serializers.ValidationError(
+                {"check_out_time": "Check-out time must be different from check-in time."}
+            )
 
         return attrs
-    
-class ReservationPolicySerializer(serializers.ModelSerializer):
+
+
+class ReservationPolicySerializer(TenantSerializerMixin, serializers.ModelSerializer):
+    tenant_field_name = "hotel_settings"
+
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
     policy_type_name = serializers.CharField(source="policy_type.name", read_only=True)
     policy_type_code = serializers.CharField(source="policy_type.code", read_only=True)
 
@@ -194,6 +204,7 @@ class ReservationPolicySerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ("id", "created_at", "updated_at")
+        validators = []
 
     def validate_penalty_value(self, value):
         if value is not None and value < 0:
@@ -207,9 +218,19 @@ class ReservationPolicySerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        hotel = self.require_target_tenant(attrs)
 
         penalty_type = attrs.get("penalty_type", getattr(self.instance, "penalty_type", None))
         penalty_value = attrs.get("penalty_value", getattr(self.instance, "penalty_value", None))
+        name = attrs.get("name", getattr(self.instance, "name", None))
+
+        qs = ReservationPolicy.objects.filter(hotel_settings=hotel)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if name and qs.filter(name=name.strip()).exists():
+            raise serializers.ValidationError(
+                {"name": "Ya existe una politica con este nombre en este hotel."}
+            )
 
         if penalty_type:
             penalty_code = str(penalty_type.code or "").strip().upper()
@@ -225,3 +246,11 @@ class ReservationPolicySerializer(serializers.ModelSerializer):
                     )
 
         return attrs
+
+    def create(self, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().update(instance, validated_data)

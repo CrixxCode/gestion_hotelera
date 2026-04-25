@@ -7,6 +7,34 @@
       </div>
     </header>
 
+    @if (isSuperAdmin) {
+      <section class="rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4">
+        <div class="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+          <label class="grid gap-1">
+            <span class="text-sm font-semibold text-slate-700">Hotel a gestionar</span>
+            <select
+              [(ngModel)]="selectedHotelSettingsId"
+              (change)="onSuperAdminHotelChange()"
+              class="rounded-xl border border-blue-300 bg-white px-3 py-2.5 outline-none focus:border-blue-500"
+            >
+              <option [ngValue]="null">Selecciona un hotel</option>
+              @for (hotel of superAdminHotelOptions; track hotel.id) {
+                <option [ngValue]="hotel.id">{{ hotel.hotel_name || ('Hotel #' + hotel.id) }}</option>
+              }
+            </select>
+          </label>
+
+          <div class="text-xs text-slate-600 md:text-right">
+            @if (selectedHotelSettingsId) {
+              Editando hotel #{{ selectedHotelSettingsId }}
+            } @else {
+              Selecciona un hotel para habilitar la configuracion.
+            }
+          </div>
+        </div>
+      </section>
+    }
+
     <section class="stats-grid">
       <article class="stat-card">
         <div class="stat-head">
@@ -1006,7 +1034,7 @@
         <button
           type="button"
           class="rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-          [disabled]="loading || saving || !canEdit || !settingsId"
+          [disabled]="loading || saving || !canEdit || !settingsId || !canManageSelectedHotel"
           (click)="clearAllSettings()"
         >
           Borrar configuracion
@@ -1015,7 +1043,7 @@
         <button
           type="button"
           class="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-          [disabled]="loading || !hasChanges || saving || !canEdit"
+          [disabled]="loading || !hasChanges || saving || !canEdit || !canManageSelectedHotel"
           (click)="discardChanges()"
         >
           Descartar cambios
@@ -1024,7 +1052,7 @@
         <button
           type="button"
           class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-          [disabled]="loading || saving || !canEdit"
+          [disabled]="loading || saving || !canEdit || !canManageSelectedHotel"
           (click)="saveSettings()"
         >
           @if (saving) {

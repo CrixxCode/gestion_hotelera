@@ -191,9 +191,13 @@ def create_inventory_missing_charges_for_checkout(
         return 0
 
     item_ids = {int(line.get("item_id")) for line in shortage_lines if line.get("item_id")}
+    reservation_hotel_settings_id = getattr(reservation, "hotel_settings_id", None)
     item_by_id = {
         item.id: item
-        for item in Item.objects.filter(id__in=item_ids).only("id", "name", "sale_price")
+        for item in Item.objects.filter(
+            id__in=item_ids,
+            hotel_settings_id=reservation_hotel_settings_id,
+        ).only("id", "name", "sale_price")
     }
 
     check_id = inventory_comparison.get("check_id")
@@ -355,24 +359,48 @@ def _generate_invoice_number(reservation_id: int) -> str:
     return f"{base}-{suffix}"
 
 
-def _get_existing_default_invoice(reservation_id: int):
+def _get_existing_default_invoice(
+    reservation_id: int,
+    *,
+    expected_hotel_settings_id: int | None = None,
+):
+    queryset = Invoice.objects.filter(
+        reservation_id=reservation_id,
+        is_active=True,
+    )
+    if expected_hotel_settings_id is not None:
+        queryset = queryset.filter(
+            reservation__hotel_settings_id=expected_hotel_settings_id
+        )
     return (
-        Invoice.objects.filter(reservation_id=reservation_id, is_active=True)
+        queryset
         .select_related("reservation")
         .order_by("id")
         .first()
     )
 
 
-def ensure_default_invoice_for_reservation(reservation_id: int | None):
+def ensure_default_invoice_for_reservation(
+    reservation_id: int | None,
+    *,
+    expected_hotel_settings_id: int | None = None,
+):
     if not reservation_id:
         return None
 
-    existing_invoice = _get_existing_default_invoice(reservation_id)
+    existing_invoice = _get_existing_default_invoice(
+        reservation_id,
+        expected_hotel_settings_id=expected_hotel_settings_id,
+    )
     if existing_invoice:
         return existing_invoice
 
-    reservation = Reservation.objects.filter(pk=reservation_id).first()
+    reservation_queryset = Reservation.objects.filter(pk=reservation_id)
+    if expected_hotel_settings_id is not None:
+        reservation_queryset = reservation_queryset.filter(
+            hotel_settings_id=expected_hotel_settings_id
+        )
+    reservation = reservation_queryset.first()
     if not reservation:
         return None
 
@@ -395,7 +423,10 @@ def ensure_default_invoice_for_reservation(reservation_id: int | None):
         except IntegrityError:
             continue
 
-    return _get_existing_default_invoice(reservation_id)
+    return _get_existing_default_invoice(
+        reservation_id,
+        expected_hotel_settings_id=expected_hotel_settings_id,
+    )
 
 
 def get_invoice_reconciliation(invoice: Invoice | None) -> dict[str, Decimal | bool]:
@@ -507,8 +538,15 @@ def sync_invoice_status(invoice: Invoice | None):
     return invoice
 
 
-def sync_default_invoice_for_reservation(reservation_id: int | None):
-    invoice = ensure_default_invoice_for_reservation(reservation_id)
+def sync_default_invoice_for_reservation(
+    reservation_id: int | None,
+    *,
+    expected_hotel_settings_id: int | None = None,
+):
+    invoice = ensure_default_invoice_for_reservation(
+        reservation_id,
+        expected_hotel_settings_id=expected_hotel_settings_id,
+    )
     if not invoice:
         return None
 
@@ -527,8 +565,15 @@ def sync_default_invoice_for_reservation(reservation_id: int | None):
     return invoice
 
 
-def issue_default_invoice_for_reservation(reservation_id: int | None):
-    invoice = ensure_default_invoice_for_reservation(reservation_id)
+def issue_default_invoice_for_reservation(
+    reservation_id: int | None,
+    *,
+    expected_hotel_settings_id: int | None = None,
+):
+    invoice = ensure_default_invoice_for_reservation(
+        reservation_id,
+        expected_hotel_settings_id=expected_hotel_settings_id,
+    )
     if not invoice or not invoice.is_active:
         return invoice
 

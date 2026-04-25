@@ -112,6 +112,55 @@
     </div>
   </section>
 
+  <section class="gh-filters-card" *ngIf="!loading && deletedMovementsCount > 0">
+    <div class="gh-filters-actions">
+      <p class="state-note">
+        Hay {{ deletedMovementsCount }} movimiento(s) eliminados logicamente.
+      </p>
+      <div class="gh-action-group">
+        <button type="button" class="gh-btn gh-btn-light" (click)="showDeletedMovements = !showDeletedMovements">
+          <i class="fa-solid" [class.fa-eye]="!showDeletedMovements" [class.fa-eye-slash]="showDeletedMovements"></i>
+          {{ showDeletedMovements ? 'Ocultar eliminados' : 'Ver eliminados' }}
+        </button>
+      </div>
+    </div>
+
+    <article class="table-card" *ngIf="showDeletedMovements">
+      <div class="table-scroll">
+        <table class="movements-table">
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Item</th>
+              <th>Tipo</th>
+              <th>Cantidad</th>
+              <th>Fecha</th>
+              <th>Estado operativo</th>
+              <th>Accion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let movement of deletedMovements; trackBy: trackByMovement">
+              <td class="code-cell">{{ getMovementCode(movement) }}</td>
+              <td>{{ getItemLabel(movement) }}</td>
+              <td>{{ getMovementTypeLabel(movement) }}</td>
+              <td>{{ getQuantitySignedLabel(movement) }}</td>
+              <td>{{ getMovementDateTimeLabel(movement) }}</td>
+              <td>{{ movement.is_active ? 'Activo' : 'Inactivo' }}</td>
+              <td>
+                <div class="table-actions">
+                  <button type="button" class="row-btn" title="Restaurar" (click)="restoreMovement(movement)">
+                    <i class="fa-solid fa-rotate-left"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
   <section class="state-message" *ngIf="loading || errorMessage || infoMessage || filteredMovements.length === 0">
     <p *ngIf="loading">Cargando movimientos de inventario...</p>
     <p class="error" *ngIf="!loading && errorMessage">{{ errorMessage }}</p>

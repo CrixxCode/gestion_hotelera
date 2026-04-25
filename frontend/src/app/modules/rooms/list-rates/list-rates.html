@@ -111,6 +111,53 @@
     </div>
   </section>
 
+  <section class="gh-filters-card" *ngIf="!loading && deletedRatesCount > 0">
+    <div class="gh-filters-actions">
+      <p class="state-note">
+        Hay {{ deletedRatesCount }} tarifa(s) eliminadas logicamente.
+      </p>
+      <div class="gh-action-group">
+        <button type="button" class="gh-btn gh-btn-light" (click)="showDeletedRates = !showDeletedRates">
+          <i class="fa-solid" [class.fa-eye]="!showDeletedRates" [class.fa-eye-slash]="showDeletedRates"></i>
+          {{ showDeletedRates ? 'Ocultar eliminadas' : 'Ver eliminadas' }}
+        </button>
+      </div>
+    </div>
+
+    <article class="table-card" *ngIf="showDeletedRates">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Tipo habitacion</th>
+              <th>Precio</th>
+              <th>Vigencia</th>
+              <th>Estado operativo</th>
+              <th>Accion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let rate of deletedRates; trackBy: trackByRate">
+              <td>{{ rate.name || 'Sin nombre' }}</td>
+              <td>{{ getRoomTypeLabel(rate) }}</td>
+              <td>{{ getPriceLabel(rate) }}</td>
+              <td>{{ getRangeLabel(rate) }}</td>
+              <td>{{ rate.is_active === false ? 'Inactiva' : 'Activa' }}</td>
+              <td>
+                <div class="table-actions">
+                  <button type="button" class="row-btn" title="Restaurar" (click)="restoreRate(rate)">
+                    <i class="fa-solid fa-rotate-left"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
   <section class="state-message" *ngIf="loading || errorMessage || infoMessage || groupedRates.length === 0">
     <p *ngIf="loading">Cargando tarifas...</p>
     <p class="error" *ngIf="!loading && errorMessage">{{ errorMessage }}</p>

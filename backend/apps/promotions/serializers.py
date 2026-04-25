@@ -1,9 +1,32 @@
 from rest_framework import serializers
 
 from apps.promotions.models import Promotion
+from accounts.tenancy import TenantSerializerMixin
+from apps.hotel_settings.models import HotelSettings
+from apps.packages.models import Package
+from apps.services.models import Service
 
 
-class PromotionSerializer(serializers.ModelSerializer):
+class PromotionSerializer(TenantSerializerMixin, serializers.ModelSerializer):
+    tenant_field_name = "hotel_settings"
+
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    service = serializers.PrimaryKeyRelatedField(
+        queryset=Service.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    package = serializers.PrimaryKeyRelatedField(
+        queryset=Package.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
     hotel_name = serializers.CharField(source="hotel_settings.hotel_name", read_only=True)
     discount_type_name = serializers.CharField(source="discount_type.name", read_only=True)
     discount_type_code = serializers.CharField(source="discount_type.code", read_only=True)
@@ -35,6 +58,21 @@ class PromotionSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ("id", "created_at", "updated_at")
+        validators = []
+
+    def get_fields(self):
+        fields = super().get_fields()
+        user = self.get_actor()
+
+        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+            fields["service"].queryset = Service.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+            fields["package"].queryset = Package.objects.filter(
+                hotel_settings_id=user.hotel_settings_id
+            )
+
+        return fields
 
     def validate_discount_value(self, value):
         if value <= 0:
@@ -44,13 +82,29 @@ class PromotionSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
 
-        hotel_settings = attrs.get("hotel_settings", getattr(self.instance, "hotel_settings", None))
+        hotel = self.require_target_tenant(attrs)
+        name = attrs.get("name", getattr(self.instance, "name", None))
+        code = attrs.get("code", getattr(self.instance, "code", None))
         discount_type = attrs.get("discount_type", getattr(self.instance, "discount_type", None))
         service = attrs.get("service", getattr(self.instance, "service", None))
         package = attrs.get("package", getattr(self.instance, "package", None))
         discount_value = attrs.get("discount_value", getattr(self.instance, "discount_value", None))
         start_date = attrs.get("start_date", getattr(self.instance, "start_date", None))
         end_date = attrs.get("end_date", getattr(self.instance, "end_date", None))
+
+        qs = Promotion.objects.filter(hotel_settings=hotel)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if name and qs.filter(name=name.strip()).exists():
+            raise serializers.ValidationError(
+                {"name": "Ya existe una promocion con este nombre en este hotel."}
+            )
+
+        if code and qs.filter(code=code).exists():
+            raise serializers.ValidationError(
+                {"code": "Ya existe una promocion con este codigo en este hotel."}
+            )
 
         if start_date and end_date and end_date < start_date:
             raise serializers.ValidationError(
@@ -69,14 +123,22 @@ class PromotionSerializer(serializers.ModelSerializer):
                     {"discount_value": "Percentage discount cannot be greater than 100."}
                 )
 
-        if hotel_settings and service and hotel_settings.id != service.hotel_settings_id:
+        if service and service.hotel_settings_id != hotel.id:
             raise serializers.ValidationError(
                 {"service": "The service must belong to the same hotel as the promotion."}
             )
 
-        if hotel_settings and package and hotel_settings.id != package.hotel_settings_id:
+        if package and package.hotel_settings_id != hotel.id:
             raise serializers.ValidationError(
                 {"package": "The package must belong to the same hotel as the promotion."}
             )
 
         return attrs
+
+    def create(self, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        self.assign_target_tenant(validated_data)
+        return super().update(instance, validated_data)

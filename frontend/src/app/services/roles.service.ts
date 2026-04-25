@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../enviorements/environment';
 import { AuthService } from './auth/auth';
@@ -57,8 +57,19 @@ export class RolesService {
     return [];
   }
 
-  listRoles(): Observable<Role[]> {
-    return this.http.get<any>(this.rolesUrl, { withCredentials: true }).pipe(
+  listRoles(filters?: {
+    include_inactive?: boolean;
+    include_deleted?: boolean;
+  }): Observable<Role[]> {
+    let params = new HttpParams();
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
+    }
+
+    return this.http.get<any>(this.rolesUrl, { withCredentials: true, params }).pipe(
       map((res) => this.unwrapArray<Role>(res))
     );
   }
@@ -75,8 +86,20 @@ export class RolesService {
     return this.http.delete(`${this.rolesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
   }
 
-  roleUsers(roleId: string): Observable<UserMini[]> {
-    return this.http.get<any>(`${this.rolesUrl}${roleId}/users/`, { withCredentials: true }).pipe(
+  restoreRole(id: string): Observable<Role> {
+    return this.http.post<Role>(`${this.rolesUrl}${id}/restore/`, {}, this.auth.buildCsrfRequestOptions());
+  }
+
+  roleUsers(roleId: string, filters?: { include_inactive?: boolean; include_deleted?: boolean }): Observable<UserMini[]> {
+    let params = new HttpParams();
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
+    }
+
+    return this.http.get<any>(`${this.rolesUrl}${roleId}/users/`, { withCredentials: true, params }).pipe(
       map((res) => this.unwrapArray<UserMini>(res))
     );
   }
@@ -104,9 +127,17 @@ export class RolesService {
     );
   }
 
-  listResources(q: string = ''): Observable<ResourcePermission[]> {
-    const qs = q ? `?q=${encodeURIComponent(q)}` : '';
-    return this.http.get<any>(`${this.resourcesUrl}${qs}`, { withCredentials: true }).pipe(
+  listResources(q: string = '', filters?: { include_inactive?: boolean; include_deleted?: boolean }): Observable<ResourcePermission[]> {
+    let params = new HttpParams();
+    if (q) params = params.set('q', q);
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
+    }
+
+    return this.http.get<any>(this.resourcesUrl, { withCredentials: true, params }).pipe(
       map((res) => this.unwrapArray<ResourcePermission>(res))
     );
   }

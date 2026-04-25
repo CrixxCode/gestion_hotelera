@@ -93,10 +93,13 @@ export class HotelSettings implements OnInit {
   canEditPolicies = false;
   canReadFinancialConfig = false;
   canEditFinancialConfig = false;
+  isSuperAdmin = false;
 
   activeTab: SettingsTab = 'general';
   settingsId: number | null = null;
   updatedAt: string | null = null;
+  selectedHotelSettingsId: number | null = null;
+  superAdminHotelOptions: HotelSettingsModel[] = [];
 
   form: SettingsForm = this.buildDefaultForm();
   floors: HotelFloor[] = [];
@@ -163,7 +166,6 @@ export class HotelSettings implements OnInit {
   ngOnInit(): void {
     this.loadThemeCustomization();
     this.resolvePermissions();
-    this.loadCurrentSettings();
   }
 
   selectTab(tab: SettingsTab): void {
@@ -209,8 +211,13 @@ export class HotelSettings implements OnInit {
   }
 
   get isActiveTabReadOnly(): boolean {
+    if (!this.canManageSelectedHotel) return true;
     if (this.activeTab === 'policies') return !this.canEditPolicies;
     return !this.canEdit;
+  }
+
+  get canManageSelectedHotel(): boolean {
+    return !this.isSuperAdmin || this.selectedHotelSettingsId !== null;
   }
 
   get activePoliciesCount(): number {
@@ -422,6 +429,11 @@ export class HotelSettings implements OnInit {
     this.errorMessage = '';
     this.successMessage = '';
 
+    if (!this.canManageSelectedHotel) {
+      this.errorMessage = 'Selecciona un hotel para poder guardar cambios.';
+      return;
+    }
+
     const validation = this.validateBeforeSave();
     if (validation) {
       this.errorMessage = validation;
@@ -438,18 +450,22 @@ export class HotelSettings implements OnInit {
       .pipe(
         switchMap((saved) => {
           this.settingsId = saved.id ?? null;
+          if (this.isSuperAdmin && this.settingsId) {
+            this.selectedHotelSettingsId = this.settingsId;
+          }
           this.updatedAt = this.extractUpdatedAt(saved);
           if (!saved.id) return of(saved);
 
           return this.syncFloors(saved.id).pipe(map(() => saved));
         }),
-        switchMap(() => this.settingsSvc.getCurrentSettings())
+        switchMap(() => this.settingsSvc.getCurrentSettings(this.getCurrentHotelContextId()))
       )
       .subscribe({
         next: (fresh) => {
           this.saving = false;
           this.selectedLogoFile = null;
           this.applySettings(fresh);
+          this.refreshSuperAdminHotelOptions();
           this.notifyBrandingUpdated();
           this.initialSnapshot = this.currentSnapshot();
           this.successMessage = successActionAlert('save', 'configuracion del hotel');
@@ -463,13 +479,18 @@ export class HotelSettings implements OnInit {
 
   discardChanges(): void {
     if (!this.canEdit) return;
+    if (!this.canManageSelectedHotel) return;
     this.errorMessage = '';
     this.successMessage = '';
-    this.loadCurrentSettings();
+    this.loadCurrentSettings(this.getCurrentHotelContextId());
   }
 
   clearAllSettings(): void {
     if (!this.canEdit || this.saving) return;
+    if (!this.canManageSelectedHotel) {
+      this.errorMessage = 'Selecciona un hotel para poder eliminar su configuracion.';
+      return;
+    }
 
     if (!this.settingsId) {
       this.errorMessage = 'No hay configuracion activa para eliminar.';
@@ -485,13 +506,17 @@ export class HotelSettings implements OnInit {
         this.successMessage = '';
 
         this.settingsSvc
-          .clearSettings()
-          .pipe(switchMap(() => this.settingsSvc.getCurrentSettings()))
+          .clearSettings(this.settingsId)
+          .pipe(switchMap(() => this.settingsSvc.getCurrentSettings(this.getCurrentHotelContextId())))
           .subscribe({
             next: (fresh) => {
               this.saving = false;
               this.selectedLogoFile = null;
               this.applySettings(fresh);
+              if (!fresh && this.isSuperAdmin) {
+                this.selectedHotelSettingsId = null;
+              }
+              this.refreshSuperAdminHotelOptions();
               this.notifyBrandingUpdated();
               this.initialSnapshot = this.currentSnapshot();
               this.successMessage = successActionAlert('delete', 'configuracion del hotel');
@@ -501,6 +526,10 @@ export class HotelSettings implements OnInit {
               if (error?.status === 404) {
                 this.selectedLogoFile = null;
                 this.applySettings(null);
+                if (this.isSuperAdmin) {
+                  this.selectedHotelSettingsId = null;
+                }
+                this.refreshSuperAdminHotelOptions();
                 this.notifyBrandingUpdated();
                 this.initialSnapshot = this.currentSnapshot();
                 this.successMessage = 'No habia configuracion activa.';
@@ -606,9 +635,28 @@ export class HotelSettings implements OnInit {
     return floor.id ?? `${floor.floor_number}-${floor.prefix}`;
   }
 
-  private loadCurrentSettings(): void {
+  onSuperAdminHotelChange(): void {
+    if (!this.isSuperAdmin) return;
+
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    const selectedId = this.toOptionalPositiveInt(this.selectedHotelSettingsId);
+    this.selectedHotelSettingsId = selectedId;
+
+    if (!selectedId) {
+      this.loading = false;
+      this.applySettings(null);
+      this.initialSnapshot = this.currentSnapshot();
+      return;
+    }
+
+    this.loadCurrentSettings(selectedId);
+  }
+
+  private loadCurrentSettings(hotelSettingsId?: number | null): void {
     this.loading = true;
-    this.settingsSvc.getCurrentSettings().subscribe({
+    this.settingsSvc.getCurrentSettings(hotelSettingsId).subscribe({
       next: (settings) => {
         this.loading = false;
         this.applySettings(settings);
@@ -627,6 +675,7 @@ export class HotelSettings implements OnInit {
     this.auth.getUserInfo().subscribe({
       next: (user) => {
         const keys = Array.isArray(user.resource_keys) ? user.resource_keys : [];
+        this.isSuperAdmin = this.resolveIsSuperAdmin(user);
         this.canEdit = this.hasSettingsWritePermission(keys);
         this.canReadPolicies = this.hasPoliciesReadPermission(keys);
         this.canEditPolicies = this.hasPoliciesWritePermission(keys);
@@ -642,22 +691,116 @@ export class HotelSettings implements OnInit {
           this.resetPolicyState();
         }
 
-        if (this.canReadFinancialConfig && this.settingsId) {
-          this.loadFinancialConfigForCurrentHotel();
-        } else {
+        if (!this.canReadFinancialConfig) {
           this.resetFinancialConfigState();
         }
+
+        if (this.isSuperAdmin) {
+          this.loadSuperAdminHotelOptions();
+          return;
+        }
+
+        this.selectedHotelSettingsId = null;
+        this.superAdminHotelOptions = [];
+        this.loadCurrentSettings();
       },
       error: () => {
+        this.loading = false;
+        this.isSuperAdmin = false;
         this.canEdit = false;
         this.canReadPolicies = false;
         this.canEditPolicies = false;
         this.canReadFinancialConfig = false;
         this.canEditFinancialConfig = false;
+        this.selectedHotelSettingsId = null;
+        this.superAdminHotelOptions = [];
         this.resetPolicyState();
         this.resetFinancialConfigState();
+        this.applySettings(null);
+        this.initialSnapshot = this.currentSnapshot();
       }
     });
+  }
+
+  private resolveIsSuperAdmin(user: unknown): boolean {
+    if (!user || typeof user !== 'object') return false;
+
+    const normalizedUser = user as {
+      is_superuser?: boolean;
+      is_staff?: boolean;
+      hotel_settings?: unknown;
+    };
+
+    const explicitFlag = normalizedUser.is_superuser;
+    if (typeof explicitFlag === 'boolean') {
+      return explicitFlag;
+    }
+
+    const isStaff = Boolean(normalizedUser.is_staff);
+    const hasHotel = Boolean(normalizedUser.hotel_settings);
+    return isStaff && !hasHotel;
+  }
+
+  private loadSuperAdminHotelOptions(preferredHotelId?: number | null): void {
+    this.loading = true;
+    this.settingsSvc.listSettings().subscribe({
+      next: (hotels) => {
+        this.superAdminHotelOptions = [...hotels]
+          .filter((hotel) => this.toOptionalPositiveInt(hotel.id) !== null)
+          .sort((left, right) =>
+            String(left.hotel_name || '').localeCompare(String(right.hotel_name || ''), 'es-CO')
+          );
+
+        const preferredId = this.toOptionalPositiveInt(preferredHotelId);
+        const hasPreferredSelection =
+          preferredId !== null &&
+          this.superAdminHotelOptions.some((hotel) => hotel.id === preferredId);
+        this.selectedHotelSettingsId = hasPreferredSelection ? preferredId : null;
+
+        if (!this.selectedHotelSettingsId) {
+          this.loading = false;
+          this.applySettings(null);
+          this.initialSnapshot = this.currentSnapshot();
+          return;
+        }
+
+        this.loadCurrentSettings(this.selectedHotelSettingsId);
+      },
+      error: () => {
+        this.loading = false;
+        this.superAdminHotelOptions = [];
+        this.selectedHotelSettingsId = null;
+        this.applySettings(null);
+        this.initialSnapshot = this.currentSnapshot();
+        this.errorMessage = 'No se pudo cargar el listado de hoteles.';
+      }
+    });
+  }
+
+  private refreshSuperAdminHotelOptions(): void {
+    if (!this.isSuperAdmin) return;
+
+    this.settingsSvc
+      .listSettings()
+      .pipe(catchError(() => of([] as HotelSettingsModel[])))
+      .subscribe((hotels) => {
+        this.superAdminHotelOptions = [...hotels]
+          .filter((hotel) => this.toOptionalPositiveInt(hotel.id) !== null)
+          .sort((left, right) =>
+            String(left.hotel_name || '').localeCompare(String(right.hotel_name || ''), 'es-CO')
+          );
+
+        if (
+          this.selectedHotelSettingsId !== null &&
+          !this.superAdminHotelOptions.some((hotel) => hotel.id === this.selectedHotelSettingsId)
+        ) {
+          this.selectedHotelSettingsId = null;
+        }
+      });
+  }
+
+  private getCurrentHotelContextId(): number | null {
+    return this.isSuperAdmin ? this.selectedHotelSettingsId : this.settingsId;
   }
 
   private hasSettingsWritePermission(resourceKeys: string[]): boolean {

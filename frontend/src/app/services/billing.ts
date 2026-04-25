@@ -13,6 +13,8 @@ import {
   InvoiceI,
   PaymentCreatePayloadI,
   PaymentI,
+  PosChargeBatchPayloadI,
+  PosChargeBatchResponseI,
   PaymentRefundCreatePayloadI,
   PaymentRefundI
 } from '../modules/billing/billing-model';
@@ -43,6 +45,8 @@ export class BillingService {
     ordering?: string;
     reservation?: number;
     is_active?: boolean;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<InvoiceI[]> {
     let params = new HttpParams();
 
@@ -60,6 +64,14 @@ export class BillingService {
 
     if (typeof filters?.is_active === 'boolean') {
       params = params.set('is_active', String(filters.is_active));
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -101,11 +113,17 @@ export class BillingService {
     return this.http.delete<void>(`${this.invoicesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
   }
 
+  restoreInvoice(id: number): Observable<InvoiceI> {
+    return this.http.post<InvoiceI>(`${this.invoicesUrl}${id}/restore/`, {}, this.auth.buildCsrfRequestOptions());
+  }
+
   listCharges(filters?: {
     search?: string;
     ordering?: string;
     reservation?: number;
     is_active?: boolean;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<ChargeI[]> {
     let params = new HttpParams();
 
@@ -123,6 +141,14 @@ export class BillingService {
 
     if (typeof filters?.is_active === 'boolean') {
       params = params.set('is_active', String(filters.is_active));
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -157,10 +183,23 @@ export class BillingService {
     return this.http.delete<void>(`${this.chargesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
   }
 
+  restoreCharge(id: number): Observable<ChargeI> {
+    return this.http.post<ChargeI>(`${this.chargesUrl}${id}/restore/`, {}, this.auth.buildCsrfRequestOptions());
+  }
+
+  createPosChargeBatch(payload: PosChargeBatchPayloadI): Observable<PosChargeBatchResponseI> {
+    return this.http.post<PosChargeBatchResponseI>(
+      `${this.chargesUrl}pos-batch/`,
+      this.normalizePosChargeBatchPayload(payload),
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
   listInvoiceCharges(filters?: {
     search?: string;
     ordering?: string;
     invoice?: number;
+    include_deleted?: boolean;
   }): Observable<InvoiceChargeI[]> {
     let params = new HttpParams();
 
@@ -174,6 +213,10 @@ export class BillingService {
 
     if (typeof filters?.invoice === 'number' && Number.isFinite(filters.invoice) && filters.invoice > 0) {
       params = params.set('invoice', String(filters.invoice));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -192,12 +235,21 @@ export class BillingService {
     return this.http.delete<void>(`${this.invoiceChargesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
   }
 
+  restoreInvoiceCharge(id: number): Observable<InvoiceChargeI> {
+    return this.http.post<InvoiceChargeI>(
+      `${this.invoiceChargesUrl}${id}/restore/`,
+      {},
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
   listPayments(filters?: {
     search?: string;
     ordering?: string;
     invoice?: number;
     is_active?: boolean;
     include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<PaymentI[]> {
     let params = new HttpParams();
 
@@ -219,6 +271,10 @@ export class BillingService {
 
     if (typeof filters?.include_inactive === 'boolean') {
       params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -253,6 +309,10 @@ export class BillingService {
     return this.http.delete<void>(`${this.paymentsUrl}${id}/`, this.auth.buildCsrfRequestOptions());
   }
 
+  restorePayment(id: number): Observable<PaymentI> {
+    return this.http.post<PaymentI>(`${this.paymentsUrl}${id}/restore/`, {}, this.auth.buildCsrfRequestOptions());
+  }
+
   listPaymentRefunds(filters?: {
     search?: string;
     ordering?: string;
@@ -260,6 +320,8 @@ export class BillingService {
     invoice?: number;
     status?: number;
     is_active?: boolean;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<PaymentRefundI[]> {
     let params = new HttpParams();
 
@@ -285,6 +347,14 @@ export class BillingService {
 
     if (typeof filters?.is_active === 'boolean') {
       params = params.set('is_active', String(filters.is_active));
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -351,11 +421,21 @@ export class BillingService {
     return this.http.delete<void>(`${this.paymentRefundsUrl}${id}/`, this.auth.buildCsrfRequestOptions());
   }
 
+  restorePaymentRefund(id: number): Observable<PaymentRefundI> {
+    return this.http.post<PaymentRefundI>(
+      `${this.paymentRefundsUrl}${id}/restore/`,
+      {},
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
   listCreditNotes(filters?: {
     search?: string;
     ordering?: string;
     invoice?: number;
     is_active?: boolean;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
   }): Observable<CreditNoteI[]> {
     let params = new HttpParams();
 
@@ -373,6 +453,14 @@ export class BillingService {
 
     if (typeof filters?.is_active === 'boolean') {
       params = params.set('is_active', String(filters.is_active));
+    }
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
     }
 
     return this.http
@@ -405,6 +493,14 @@ export class BillingService {
 
   deleteCreditNote(id: number): Observable<void> {
     return this.http.delete<void>(`${this.creditNotesUrl}${id}/`, this.auth.buildCsrfRequestOptions());
+  }
+
+  restoreCreditNote(id: number): Observable<CreditNoteI> {
+    return this.http.post<CreditNoteI>(
+      `${this.creditNotesUrl}${id}/restore/`,
+      {},
+      this.auth.buildCsrfRequestOptions()
+    );
   }
 
   private unwrapArray<T>(res: unknown): T[] {
@@ -497,6 +593,35 @@ export class BillingService {
     }
 
     return normalized;
+  }
+
+  private normalizePosChargeBatchPayload(payload: PosChargeBatchPayloadI): PosChargeBatchPayloadI {
+    const reservation = Number(payload?.reservation || 0);
+    const reference = payload?.reference ? String(payload.reference).trim() : null;
+    const chargeTypeCode = payload?.charge_type_code
+      ? String(payload.charge_type_code).trim().toUpperCase()
+      : null;
+    const lines = Array.isArray(payload?.lines)
+      ? payload.lines
+          .map((line) => ({
+            item: Number(line?.item || 0),
+            quantity: Math.max(1, Math.round(Number(line?.quantity || 1))),
+            unit_price:
+              typeof line?.unit_price === 'number' && Number.isFinite(line.unit_price) && line.unit_price >= 0
+                ? Number(line.unit_price)
+                : undefined,
+            description: line?.description ? String(line.description).trim() : undefined,
+            notes: line?.notes ? String(line.notes).trim() : null
+          }))
+          .filter((line) => line.item > 0)
+      : [];
+
+    return {
+      reservation,
+      reference,
+      charge_type_code: chargeTypeCode,
+      lines
+    };
   }
 
   private normalizePaymentPayload(

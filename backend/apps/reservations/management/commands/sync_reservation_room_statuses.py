@@ -1,6 +1,9 @@
 from django.core.management.base import BaseCommand
 
-from apps.reservations.services import sync_all_room_statuses
+from apps.reservations.services import (
+    auto_cancel_overdue_unchecked_reservations,
+    sync_all_room_statuses,
+)
 
 
 class Command(BaseCommand):
@@ -12,9 +15,12 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # Este comando permite recalcular estados por paso del tiempo,
         # incluso cuando no hubo eventos de guardado en reservas/habitaciones.
+        auto_cancelled = auto_cancel_overdue_unchecked_reservations()
         processed, changed = sync_all_room_statuses()
         self.stdout.write(
             self.style.SUCCESS(
-                f"Sync completed. Rooms processed: {processed}. Rooms updated: {changed}."
+                "Sync completed. "
+                f"Auto-cancelled reservations: {auto_cancelled}. "
+                f"Rooms processed: {processed}. Rooms updated: {changed}."
             )
         )

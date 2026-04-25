@@ -4,6 +4,7 @@ from rest_framework.response import Response
 
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
+from accounts.tenancy import TenantScopeMixin
 from apps.reservations.services import sync_room_status_for_room_ids
 from .models import Rate, Amenity, Room, MaintenanceOrder, CleaningTask, RoomType
 from .serializers import (
@@ -17,12 +18,13 @@ from .serializers import (
 )
 
 
-class RoomTypeViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
-    queryset = RoomType.objects.all().order_by("sort_order", "name")
+class RoomTypeViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
+    queryset = RoomType.objects.select_related("hotel_settings").all()
     serializer_class = RoomTypeSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
     required_scopes = ["room_type.read"]
+    tenant_filter = "hotel_settings"
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["code", "name", "description", "bed_type"]
@@ -38,12 +40,13 @@ class RoomTypeViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
-class RateViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
-    queryset = Rate.objects.select_related("room_type").all().order_by("-created_at")
+class RateViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
+    queryset = Rate.objects.select_related("hotel_settings", "room_type").all()
     serializer_class = RateSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
     required_scopes = ["rates.read"]
+    tenant_filter = "hotel_settings"
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "room_type__name", "room_type__code"]
@@ -59,13 +62,13 @@ class RateViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
-
-class AmenityViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
-    queryset = Amenity.objects.all().order_by("name")
+class AmenityViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
+    queryset = Amenity.objects.select_related("hotel_settings").all()
     serializer_class = AmenitySerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
     required_scopes = ["amenities.read"]
+    tenant_filter = "hotel_settings"
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "description", "icon"]
@@ -82,9 +85,14 @@ class AmenityViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         return super().get_permissions()
 
 
-class RoomViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+class RoomViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
     queryset = (
-        Room.objects.select_related("room_type", "floor", "status")
+        Room.objects.select_related(
+            "room_type",
+            "floor",
+            "floor__hotel_settings",
+            "status",
+        )
         .prefetch_related(
             "amenities",
             "maintenance_orders",
@@ -92,12 +100,12 @@ class RoomViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
             "reservation_details__reservation__client",
         )
         .all()
-        .order_by("number")
     )
     serializer_class = RoomSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
     required_scopes = ["rooms.read"]
+    tenant_filter = "floor__hotel_settings"
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [
@@ -123,21 +131,24 @@ class RoomViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+
         status_code = (self.request.query_params.get("status") or "").strip().upper()
         floor = (self.request.query_params.get("floor") or "").strip()
         room_type = (self.request.query_params.get("room_type") or "").strip()
 
         if status_code:
             queryset = queryset.filter(status__code=status_code)
+
         if floor.isdigit():
             queryset = queryset.filter(floor_id=int(floor))
+
         if room_type:
             if room_type.isdigit():
                 queryset = queryset.filter(room_type_id=int(room_type))
             else:
                 queryset = queryset.filter(room_type__code=room_type.upper())
 
-        return queryset
+        return queryset.order_by("number")
 
     @action(detail=True, methods=["GET"], name="panel")
     def panel(self, request, pk=None):
@@ -146,12 +157,23 @@ class RoomViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-class MaintenanceOrderViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
-    queryset = MaintenanceOrder.objects.select_related("room", "priority", "status").all().order_by("-reported_at")
+class MaintenanceOrderViewSet(
+    LogicalDeleteViewSetMixin,
+    TenantScopeMixin,
+    viewsets.ModelViewSet,
+):
+    queryset = MaintenanceOrder.objects.select_related(
+        "room",
+        "room__floor",
+        "room__floor__hotel_settings",
+        "priority",
+        "status",
+    ).all()
     serializer_class = MaintenanceOrderSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
     required_scopes = ["maintenance_orders.read"]
+    tenant_filter = "room__floor__hotel_settings"
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [
@@ -176,16 +198,20 @@ class MaintenanceOrderViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         return super().get_permissions()
 
 
-class CleaningTaskViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
-    queryset = (
-        CleaningTask.objects.select_related("room", "task_type", "status", "priority")
-        .all()
-        .order_by("-created_at")
-    )
+class CleaningTaskViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
+    queryset = CleaningTask.objects.select_related(
+        "room",
+        "room__floor",
+        "room__floor__hotel_settings",
+        "task_type",
+        "status",
+        "priority",
+    ).all()
     serializer_class = CleaningTaskSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
     required_scopes = ["cleaning_tasks.read"]
+    tenant_filter = "room__floor__hotel_settings"
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [

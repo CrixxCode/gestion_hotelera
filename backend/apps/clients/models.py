@@ -1,9 +1,18 @@
 from django.db import models
+from django.db.models import Q
 
 from apps.master_data.models import MasterData
 
 
 class Client(models.Model):
+    hotel_settings = models.ForeignKey(
+        "hotel_settings.HotelSettings",
+        on_delete=models.PROTECT,
+        related_name="clients",
+        null=False,   # True temporal para migración
+        blank=False,  # True temporal para migración
+    )
+
     # Personal data
     document_type = models.ForeignKey(
         MasterData,
@@ -11,10 +20,10 @@ class Client(models.Model):
         related_name="clients_document_type",
         limit_choices_to={"group": MasterData.Group.DOCUMENT_TYPE},
     )
-    document_number = models.CharField(max_length=40, unique=True)
+    document_number = models.CharField(max_length=40)
     first_name = models.CharField(max_length=120)
     last_name = models.CharField(max_length=120)
-    email = models.EmailField(max_length=120, unique=True)
+    email = models.EmailField(max_length=120)
     phone = models.CharField(max_length=40, blank=True, null=True)
     country = models.CharField(max_length=80, blank=True, null=True)
 
@@ -39,6 +48,17 @@ class Client(models.Model):
     class Meta:
         db_table = "client"
         ordering = ["-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["hotel_settings", "document_number"],
+                name="uq_client_hotel_document_number",
+            ),
+            models.UniqueConstraint(
+                fields=["hotel_settings", "email"],
+                name="uq_client_hotel_email",
+                condition=~Q(email="") & Q(email__isnull=False),
+            ),
+        ]
 
     @property
     def full_name(self):
@@ -65,7 +85,6 @@ class Client(models.Model):
         return "REGULAR"
 
     def save(self, *args, **kwargs):
-        # Keep client_type synchronized with accumulated nights.
         auto_client_type_code = self.resolve_client_type_code_by_stay_nights()
         auto_client_type = MasterData.objects.filter(
             group=MasterData.Group.CLIENT_TYPE,
@@ -74,6 +93,12 @@ class Client(models.Model):
 
         if auto_client_type:
             self.client_type = auto_client_type
+
+        if self.email:
+            self.email = self.email.strip().lower()
+
+        if self.document_number:
+            self.document_number = self.document_number.strip()
 
         super().save(*args, **kwargs)
 

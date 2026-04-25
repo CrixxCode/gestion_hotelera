@@ -97,6 +97,53 @@
     </div>
   </section>
 
+  <section class="gh-filters-card" *ngIf="!loading && deletedRoomTypesCount > 0">
+    <div class="gh-filters-actions">
+      <p class="state-note">
+        Hay {{ deletedRoomTypesCount }} tipo(s) de habitacion eliminados logicamente.
+      </p>
+      <div class="gh-action-group">
+        <button type="button" class="gh-btn gh-btn-light" (click)="showDeletedRoomTypes = !showDeletedRoomTypes">
+          <i class="fa-solid" [class.fa-eye]="!showDeletedRoomTypes" [class.fa-eye-slash]="showDeletedRoomTypes"></i>
+          {{ showDeletedRoomTypes ? 'Ocultar eliminados' : 'Ver eliminados' }}
+        </button>
+      </div>
+    </div>
+
+    <article class="table-card" *ngIf="showDeletedRoomTypes">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Tipo</th>
+              <th>Capacidad</th>
+              <th>Camas</th>
+              <th>Estado operativo</th>
+              <th>Accion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let roomType of deletedRoomTypes; trackBy: trackByRoomType">
+              <td>{{ roomType.code || '-' }}</td>
+              <td>{{ roomType.name || '-' }}</td>
+              <td>{{ getCapacityLabel(roomType) }}</td>
+              <td>{{ getBedSummary(roomType) }}</td>
+              <td>{{ roomType.is_active === false ? 'Inactivo' : 'Activo' }}</td>
+              <td>
+                <div class="table-actions">
+                  <button type="button" class="row-btn" title="Restaurar" (click)="restoreRoomType(roomType)">
+                    <i class="fa-solid fa-rotate-left"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
   <section class="state-message" *ngIf="loading || errorMessage || infoMessage || filteredRoomTypes.length === 0">
     <p *ngIf="loading">Cargando tipos de habitacion...</p>
     <p class="error" *ngIf="!loading && errorMessage">{{ errorMessage }}</p>

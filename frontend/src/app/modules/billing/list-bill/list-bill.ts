@@ -98,7 +98,7 @@ export class ListBill implements OnInit {
 
     forkJoin({
       invoices: this.billingService
-        .listInvoices({ ordering: '-id' })
+        .listInvoices({ ordering: '-id', include_inactive: true })
         .pipe(catchError(() => of([] as InvoiceI[]))),
       reservationsPage: this.reservationService
         .listReservationsPage({ include_finished: true, ordering: '-id', page: 1, page_size: 100 })

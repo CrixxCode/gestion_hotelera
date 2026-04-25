@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { UserI } from '../modules/users/user-model';
 import { AuthService } from './auth/auth';
@@ -23,11 +23,27 @@ export class UserService {
   ) { }
 
   /** Obtiene la lista de usuarios */
-  getUsers(): Observable<UserI[]> {
+  getUsers(filters?: {
+    include_inactive?: boolean;
+    include_deleted?: boolean;
+  }): Observable<UserI[]> {
+    let params = new HttpParams();
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
+    }
+
     return this.http
       .get<UserI[] | PaginatedResponse<UserI>>(
         this.usersUrl,
-        this.authService.buildCsrfRequestOptions()
+        {
+          ...this.authService.buildCsrfRequestOptions(),
+          params
+        }
       )
       .pipe(
         map((response): UserI[] =>
@@ -127,6 +143,14 @@ export class UserService {
     return this.http.patch<UserI>(
       `${this.usersUrl}${id}/`,
       body,
+      this.authService.buildCsrfRequestOptions()
+    );
+  }
+
+  restoreUser(id: number): Observable<UserI> {
+    return this.http.post<UserI>(
+      `${this.usersUrl}${id}/restore/`,
+      {},
       this.authService.buildCsrfRequestOptions()
     );
   }

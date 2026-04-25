@@ -5,7 +5,15 @@ from apps.master_data.models import MasterData
 
 
 class RoomType(models.Model):
-    code = models.CharField(max_length=80, unique=True)
+    hotel_settings = models.ForeignKey(
+        "hotel_settings.HotelSettings",
+        on_delete=models.PROTECT,
+        related_name="room_types",
+        null=False,   # temporal para migración
+        blank=False,  # temporal para migración
+    )
+
+    code = models.CharField(max_length=80)
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True, null=True)
     capacity = models.PositiveIntegerField(default=1)
@@ -19,6 +27,12 @@ class RoomType(models.Model):
     class Meta:
         db_table = "room_type"
         ordering = ["sort_order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["hotel_settings", "code"],
+                name="uq_room_type_hotel_code",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         if self.code:
@@ -30,6 +44,13 @@ class RoomType(models.Model):
 
 
 class Rate(models.Model):
+    hotel_settings = models.ForeignKey(
+        "hotel_settings.HotelSettings",
+        on_delete=models.PROTECT,
+        related_name="rates",
+        null=False,   # temporal para migración
+        blank=False,  # temporal para migración
+    )
     room_type = models.ForeignKey(RoomType, on_delete=models.CASCADE, related_name="rates")
     name = models.CharField(max_length=100)
     price = models.DecimalField(max_digits=10, decimal_places=2)
@@ -47,7 +68,15 @@ class Rate(models.Model):
 
 
 class Amenity(models.Model):
-    name = models.CharField(max_length=100, unique=True)
+    hotel_settings = models.ForeignKey(
+        "hotel_settings.HotelSettings",
+        on_delete=models.PROTECT,
+        related_name="amenities",
+        null=False,   # temporal para migración
+        blank=False,  # temporal para migración
+    )
+
+    name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
     icon = models.CharField(max_length=50, blank=True, null=True)
     is_active = models.BooleanField(default=True)
@@ -56,13 +85,19 @@ class Amenity(models.Model):
     class Meta:
         db_table = "amenity"
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["hotel_settings", "name"],
+                name="uq_amenity_hotel_name",
+            ),
+        ]
 
     def __str__(self):
         return self.name
 
 
 class Room(models.Model):
-    number = models.CharField(max_length=20, unique=True)
+    number = models.CharField(max_length=20)
     room_type = models.ForeignKey(
         RoomType,
         on_delete=models.SET_NULL,
@@ -92,6 +127,12 @@ class Room(models.Model):
     class Meta:
         db_table = "room"
         ordering = ["number"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["floor", "number"],
+                name="uq_room_floor_number",
+            ),
+        ]
 
     @property
     def status_code(self):

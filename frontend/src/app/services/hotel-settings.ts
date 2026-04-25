@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../enviorements/environment';
 import { AuthService } from './auth/auth';
@@ -19,11 +19,20 @@ export class HotelSettingsService {
   /**
    * Obtiene la configuración actual del hotel
    */
-  getCurrentSettings(): Observable<HotelSettings | null> {
+  getCurrentSettings(hotelSettingsId?: number | null): Observable<HotelSettings | null> {
+    let params = new HttpParams();
+    if (hotelSettingsId && Number.isFinite(hotelSettingsId) && hotelSettingsId > 0) {
+      params = params.set('hotel_settings', String(hotelSettingsId));
+    }
+
     return this.http.get<HotelSettings | null>(
       `${this.settingsUrl}current/`,
-      { withCredentials: true }
+      { withCredentials: true, params }
     );
+  }
+
+  listSettings(): Observable<HotelSettings[]> {
+    return this.http.get<HotelSettings[]>(this.settingsUrl, { withCredentials: true });
   }
 
   /**
@@ -51,11 +60,17 @@ export class HotelSettingsService {
   /**
    * Borrar completamente la configuración
    */
-  clearSettings(): Observable<any> {
+  clearSettings(hotelSettingsId?: number | null): Observable<any> {
+    let params = new HttpParams();
+    if (hotelSettingsId && Number.isFinite(hotelSettingsId) && hotelSettingsId > 0) {
+      params = params.set('hotel_settings', String(hotelSettingsId));
+    }
+
+    const options = this.auth.buildCsrfRequestOptions();
     return this.http.post(
       `${this.settingsUrl}clear/`,
       {},
-      this.auth.buildCsrfRequestOptions()
+      { ...options, params }
     );
   }
 

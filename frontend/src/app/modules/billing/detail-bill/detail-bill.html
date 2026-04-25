@@ -44,6 +44,15 @@
           *ngIf="canManageCharges"
           type="button"
           class="btn btn-dark"
+          (click)="togglePosBarForm()">
+          <i class="fa-solid fa-store"></i>
+          {{ showPosBarForm ? 'Ocultar bar/tienda' : 'Bar / Mini tienda' }}
+        </button>
+
+        <button
+          *ngIf="canManageCharges"
+          type="button"
+          class="btn btn-dark"
           (click)="toggleCreateChargeForm()">
           <i class="fa-solid fa-plus"></i>
           {{ showCreateChargeForm ? 'Ocultar cargo' : 'Agregar cargo' }}
@@ -82,6 +91,13 @@
         <p class="error" *ngIf="!loading && errorMessage">{{ errorMessage }}</p>
         <p class="info" *ngIf="!loading && !errorMessage && infoMessage">{{ infoMessage }}</p>
       </section>
+
+      <app-pos-bar
+        *ngIf="!loading && showPosBarForm && canManageCharges"
+        [reservationId]="activeInvoice?.reservation || null"
+        (created)="onPosChargesCreated($event)"
+        (cancelled)="onPosBarCancelled()">
+      </app-pos-bar>
 
       <app-create-bill
         *ngIf="!loading && showCreateChargeForm"

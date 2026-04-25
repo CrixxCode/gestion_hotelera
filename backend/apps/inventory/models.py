@@ -206,7 +206,11 @@ class RoomInventory(models.Model):
             errors["minimum_quantity"] = "Minimum quantity cannot be negative."
 
         if self.room and self.item:
-            room_hotel_settings_id = getattr(self.room, "hotel_settings_id", None)
+            room_hotel_settings_id = getattr(
+                getattr(self.room, "floor", None),
+                "hotel_settings_id",
+                None,
+            )
             item_hotel_settings_id = getattr(self.item, "hotel_settings_id", None)
 
             if room_hotel_settings_id and item_hotel_settings_id:

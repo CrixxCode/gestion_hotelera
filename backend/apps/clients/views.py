@@ -8,6 +8,7 @@ from rest_framework.response import Response
 
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
+from accounts.tenancy import TenantScopeMixin
 from apps.master_data.models import MasterData
 
 from .models import Client
@@ -19,11 +20,17 @@ from .serializers import (
 )
 
 
-class ClientViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
-    queryset = Client.objects.select_related("document_type", "client_type", "status").all().order_by("-id")
+class ClientViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
+    queryset = Client.objects.select_related(
+        "hotel_settings",
+        "document_type",
+        "client_type",
+        "status",
+    ).all()
     serializer_class = ClientSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
+    tenant_filter = "hotel_settings"
 
     required_scopes = ["clients.read"]
 
@@ -73,7 +80,10 @@ class ClientViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         client = serializer.save()
 
-        response_data = ClientSerializer(client, context=self.get_serializer_context()).data
+        response_data = ClientSerializer(
+            client,
+            context=self.get_serializer_context(),
+        ).data
         return Response(response_data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["post"], url_path="register")
@@ -82,18 +92,21 @@ class ClientViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         client = serializer.save()
 
-        data = ClientSerializer(client, context=self.get_serializer_context()).data
+        data = ClientSerializer(
+            client,
+            context=self.get_serializer_context(),
+        ).data
         return Response(data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["patch"], url_path="set-status")
     def set_status(self, request, pk=None):
         client = self.get_object()
+
         try:
             new_status = normalize_status(request.data.get("status"))
         except ValidationError as exc:
             return Response({"status": exc.detail}, status=status.HTTP_400_BAD_REQUEST)
 
-        status_obj = None
         if isinstance(new_status, int) or (isinstance(new_status, str) and str(new_status).isdigit()):
             status_obj = MasterData.objects.filter(
                 group=MasterData.Group.CLIENT_STATUS,
@@ -114,17 +127,19 @@ class ClientViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         client.status = status_obj
         client.save(update_fields=["status"])
 
-        return Response(ClientSerializer(client, context=self.get_serializer_context()).data)
+        return Response(
+            ClientSerializer(client, context=self.get_serializer_context()).data
+        )
 
     @action(detail=True, methods=["patch"], url_path="set-client-type")
     def set_client_type(self, request, pk=None):
         client = self.get_object()
+
         try:
             new_type = normalize_client_type(request.data.get("client_type"))
         except ValidationError as exc:
             return Response({"client_type": exc.detail}, status=status.HTTP_400_BAD_REQUEST)
 
-        type_obj = None
         if isinstance(new_type, int) or (isinstance(new_type, str) and str(new_type).isdigit()):
             type_obj = MasterData.objects.filter(
                 group=MasterData.Group.CLIENT_TYPE,
@@ -145,4 +160,6 @@ class ClientViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         client.client_type = type_obj
         client.save(update_fields=["client_type"])
 
-        return Response(ClientSerializer(client, context=self.get_serializer_context()).data)
+        return Response(
+            ClientSerializer(client, context=self.get_serializer_context()).data
+        )

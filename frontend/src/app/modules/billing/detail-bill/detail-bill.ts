@@ -17,6 +17,7 @@ import { CreatePayment } from '../../payments/create-payment/create-payment';
 import { ChargeI, CreditNoteI, InvoiceI, PaymentI } from '../billing-model';
 import { CreateBill } from '../create-bill/create-bill';
 import { CreditNoteList } from '../credit-note/credit-note-list/credit-note-list';
+import { PosBar } from '../pos-bar/pos-bar';
 
 type ChargeGroupTone = {
   icon: string;
@@ -167,7 +168,7 @@ const PAYMENT_METHOD_TONES: Record<string, PaymentMethodTone> = {
 @Component({
   selector: 'app-detail-bill',
   standalone: true,
-  imports: [CommonModule, CreateBill, CreatePayment, CreditNoteList],
+  imports: [CommonModule, CreateBill, CreatePayment, CreditNoteList, PosBar],
   templateUrl: './detail-bill.html',
   styleUrls: ['./detail-bill.css']
 })
@@ -187,6 +188,7 @@ export class DetailBill implements OnChanges {
 
   showCreateChargeForm = false;
   showCreatePaymentForm = false;
+  showPosBarForm = false;
   showCreditNotesModal = false;
 
   activeInvoice: InvoiceI | null = null;
@@ -355,6 +357,7 @@ export class DetailBill implements OnChanges {
     this.showCreateChargeForm = !this.showCreateChargeForm;
     if (this.showCreateChargeForm) {
       this.showCreatePaymentForm = false;
+      this.showPosBarForm = false;
     }
     this.errorMessage = '';
   }
@@ -365,6 +368,18 @@ export class DetailBill implements OnChanges {
     this.showCreatePaymentForm = !this.showCreatePaymentForm;
     if (this.showCreatePaymentForm) {
       this.showCreateChargeForm = false;
+      this.showPosBarForm = false;
+    }
+    this.errorMessage = '';
+  }
+
+  togglePosBarForm(): void {
+    if (!this.showPosBarForm && !this.canManageCharges) return;
+
+    this.showPosBarForm = !this.showPosBarForm;
+    if (this.showPosBarForm) {
+      this.showCreateChargeForm = false;
+      this.showCreatePaymentForm = false;
     }
     this.errorMessage = '';
   }
@@ -401,6 +416,19 @@ export class DetailBill implements OnChanges {
 
   onCreatePaymentCancelled(): void {
     this.showCreatePaymentForm = false;
+  }
+
+  onPosBarCancelled(): void {
+    this.showPosBarForm = false;
+  }
+
+  onPosChargesCreated(payload: { count: number; totalLabel: string }): void {
+    const count = Number(payload?.count || 0);
+    this.infoMessage = count
+      ? `Se registraron ${count} consumo(s) desde bar/mini tienda.`
+      : 'Se registraron consumos desde bar/mini tienda.';
+    this.showPosBarForm = false;
+    this.refreshInvoiceData();
   }
 
   deactivateCharge(charge: ChargeI): void {
@@ -542,6 +570,7 @@ export class DetailBill implements OnChanges {
     this.infoMessage = '';
     this.showCreateChargeForm = false;
     this.showCreatePaymentForm = false;
+    this.showPosBarForm = false;
     this.showCreditNotesModal = false;
 
     forkJoin({
@@ -563,7 +592,7 @@ export class DetailBill implements OnChanges {
         .listPayments({ invoice: invoiceId, ordering: '-payment_date,-id', include_inactive: true })
         .pipe(catchError(() => of([] as PaymentI[]))),
       creditNotes: this.billingService
-        .listCreditNotes({ invoice: invoiceId, ordering: '-issue_date,-id' })
+        .listCreditNotes({ invoice: invoiceId, ordering: '-issue_date,-id', include_inactive: true })
         .pipe(catchError(() => of([] as CreditNoteI[]))),
       services: this.servicesService
         .listServices({ ordering: 'name' })
@@ -628,7 +657,8 @@ export class DetailBill implements OnChanges {
       creditNotes: this.billingService
         .listCreditNotes({
           invoice: this.activeInvoice.id,
-          ordering: '-issue_date,-id'
+          ordering: '-issue_date,-id',
+          include_inactive: true
         })
         .pipe(catchError(() => of([] as CreditNoteI[])))
     }).subscribe({

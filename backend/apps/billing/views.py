@@ -1,11 +1,14 @@
 import re
+from decimal import Decimal, InvalidOperation
 
+from django.db import transaction
+from django.db.models import F, Q
 from django.http import HttpResponse
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.billing.models import Charge, Invoice, InvoiceCharge, Payment, PaymentRefund, CreditNote
@@ -18,19 +21,29 @@ from apps.billing.serializers import (
     PaymentRefundSerializer,
     CreditNoteSerializer,
 )
-from apps.billing.services import get_or_create_default_payment_refund_status
+from apps.billing.services import (
+    get_or_create_default_charge_type,
+    get_or_create_default_payment_refund_status,
+)
+from apps.inventory.models import InventoryMovement, Item
+from apps.inventory.services import get_or_create_inventory_movement_type
+from apps.reservations.models import Reservation
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
+from accounts.tenancy import TenantScopeMixin
 
-class ChargeViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+
+class ChargeViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         Charge.objects.select_related(
             "reservation",
+            "reservation__hotel_settings",
             "charge_type",
             "service",
             "package",
-        ).order_by("-id")
+        )
     )
+    tenant_filter = "reservation__hotel_settings"
     serializer_class = ChargeSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -57,14 +70,18 @@ class ChargeViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     ]
     ordering = ["-id"]
 
+    def get_base_queryset(self):
+        return self.queryset.filter(
+            Q(service__isnull=True) | Q(service__hotel_settings_id=F("reservation__hotel_settings_id")),
+            Q(package__isnull=True) | Q(package__hotel_settings_id=F("reservation__hotel_settings_id")),
+        ).order_by("-id")
+
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return ["charges.write"]
         return self.required_scopes
 
     def get_permissions(self):
-        if self.action == "create":
-            return [IsAuthenticated()]
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
@@ -93,8 +110,31 @@ class ChargeViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
                 }
             )
 
+    def _ensure_reservation_tenant_access(self, reservation):
+        user = self.request.user
+        if not user.is_authenticated:
+            raise PermissionDenied("Debes autenticarte.")
+        if user.is_superuser:
+            return
+        if user.hotel_settings_id is None:
+            raise PermissionDenied("El usuario autenticado no tiene un hotel asignado.")
+        if reservation.hotel_settings_id != user.hotel_settings_id:
+            raise PermissionDenied("La reserva no pertenece al hotel del usuario autenticado.")
+
+    def _ensure_item_tenant_access(self, item):
+        user = self.request.user
+        if not user.is_authenticated:
+            raise PermissionDenied("Debes autenticarte.")
+        if user.is_superuser:
+            return
+        if user.hotel_settings_id is None:
+            raise PermissionDenied("El usuario autenticado no tiene un hotel asignado.")
+        if item.hotel_settings_id != user.hotel_settings_id:
+            raise PermissionDenied("El item no pertenece al hotel del usuario autenticado.")
+
     def perform_create(self, serializer):
         reservation = serializer.validated_data.get("reservation")
+        self._ensure_reservation_tenant_access(reservation)
         self._ensure_charge_mutation_allowed(reservation)
         serializer.save()
 
@@ -103,17 +143,243 @@ class ChargeViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
             "reservation",
             getattr(serializer.instance, "reservation", None),
         )
+        self._ensure_reservation_tenant_access(reservation)
         self._ensure_charge_mutation_allowed(reservation)
         serializer.save()
 
     def perform_destroy(self, instance):
+        self._ensure_reservation_tenant_access(getattr(instance, "reservation", None))
         self._ensure_charge_mutation_allowed(getattr(instance, "reservation", None))
         super().perform_destroy(instance)
 
-class InvoiceViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+    @action(detail=False, methods=["post"], url_path="pos-batch")
+    def pos_batch(self, request):
+        raw_reservation = request.data.get("reservation")
+        raw_lines = request.data.get("lines")
+        raw_reference = request.data.get("reference")
+        raw_charge_type_code = request.data.get("charge_type_code")
+
+        reservation_id = self._parse_positive_int(
+            raw_reservation,
+            field_name="reservation",
+        )
+        if reservation_id is None:
+            raise ValidationError({"reservation": "Debes enviar una reserva valida."})
+
+        if not isinstance(raw_lines, list) or not raw_lines:
+            raise ValidationError(
+                {"lines": "Debes enviar al menos una linea de consumo para registrar."}
+            )
+
+        charge_type_code = str(raw_charge_type_code or "BAR").strip().upper() or "BAR"
+        charge_type = get_or_create_default_charge_type(charge_type_code)
+        if not charge_type:
+            raise ValidationError(
+                {"charge_type_code": "No fue posible resolver el tipo de cargo para POS."}
+            )
+
+        movement_type = get_or_create_inventory_movement_type(
+            "OUT",
+            "Salida de inventario",
+            sort_order=1,
+        )
+        if not movement_type:
+            raise ValidationError(
+                {"movement_type": "No fue posible resolver el tipo de movimiento de inventario OUT."}
+            )
+
+        reference = str(raw_reference or "").strip()
+        operation_reference = reference or self._build_operation_reference(reservation_id)
+
+        with transaction.atomic():
+            reservation_queryset = Reservation.objects.select_for_update().filter(id=reservation_id)
+            if not request.user.is_superuser and request.user.hotel_settings_id is not None:
+                reservation_queryset = reservation_queryset.filter(
+                    hotel_settings_id=request.user.hotel_settings_id
+                )
+            reservation = reservation_queryset.first()
+            if not reservation:
+                raise ValidationError({"reservation": "La reserva indicada no existe."})
+
+            self._ensure_reservation_tenant_access(reservation)
+            self._ensure_charge_mutation_allowed(reservation)
+
+            created_charges: list[Charge] = []
+            total_amount = Decimal("0.00")
+
+            for index, raw_line in enumerate(raw_lines, start=1):
+                if not isinstance(raw_line, dict):
+                    raise ValidationError(
+                        {"lines": f"La linea {index} no tiene un formato valido."}
+                    )
+
+                item_id = self._parse_positive_int(
+                    raw_line.get("item"),
+                    field_name="item",
+                    line_number=index,
+                )
+                if item_id is None:
+                    raise ValidationError(
+                        {"lines": f"La linea {index} debe incluir un item valido."}
+                    )
+
+                quantity = self._parse_positive_int(
+                    raw_line.get("quantity"),
+                    field_name="quantity",
+                    line_number=index,
+                )
+                if quantity is None:
+                    raise ValidationError(
+                        {"lines": f"La linea {index} debe incluir una cantidad mayor o igual a 1."}
+                    )
+
+                item_queryset = Item.objects.select_for_update().filter(
+                    id=item_id,
+                    is_active=True,
+                )
+                if not request.user.is_superuser and request.user.hotel_settings_id is not None:
+                    item_queryset = item_queryset.filter(
+                        hotel_settings_id=request.user.hotel_settings_id
+                    )
+                item = item_queryset.first()
+                if not item:
+                    raise ValidationError(
+                        {"lines": f"La linea {index} referencia un item inactivo o inexistente."}
+                    )
+
+                self._ensure_item_tenant_access(item)
+
+                available_stock = int(item.stock or 0)
+                if quantity > available_stock:
+                    raise ValidationError(
+                        {
+                            "lines": (
+                                f"La linea {index} excede el stock disponible para "
+                                f"{item.name} (disponible: {available_stock})."
+                            )
+                        }
+                    )
+
+                unit_price = self._parse_non_negative_decimal(
+                    raw_line.get("unit_price"),
+                    default=item.sale_price,
+                    field_name="unit_price",
+                    line_number=index,
+                )
+                description = str(raw_line.get("description") or "").strip()
+                if not description:
+                    description = f"Consumo bar/mini tienda: {item.name}"
+
+                movement_notes = str(raw_line.get("notes") or "").strip()
+                if not movement_notes:
+                    movement_notes = (
+                        f"Salida por POS bar/mini tienda para reserva #{reservation.id}. "
+                        f"Item: {item.name}."
+                    )
+
+                line_reference = f"{operation_reference}:{index}"
+
+                InventoryMovement.objects.create(
+                    item=item,
+                    movement_type=movement_type,
+                    quantity=quantity,
+                    reference=line_reference,
+                    notes=movement_notes,
+                    is_active=True,
+                )
+
+                charge = Charge.objects.create(
+                    reservation=reservation,
+                    charge_type=charge_type,
+                    service=None,
+                    package=None,
+                    description=description,
+                    quantity=quantity,
+                    unit_price=unit_price,
+                    is_active=True,
+                    is_automatic=False,
+                )
+                created_charges.append(charge)
+                total_amount += charge.total_amount or Decimal("0.00")
+
+            serialized_charges = ChargeSerializer(created_charges, many=True).data
+
+        return Response(
+            {
+                "reservation": reservation_id,
+                "reference": operation_reference,
+                "charge_type_code": charge_type.code,
+                "charges_created": len(created_charges),
+                "total_amount": str(total_amount),
+                "charges": serialized_charges,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @staticmethod
+    def _build_operation_reference(reservation_id: int) -> str:
+        stamp = timezone.now().strftime("%Y%m%d%H%M%S%f")
+        return f"POS:{reservation_id}:{stamp}"
+
+    @staticmethod
+    def _parse_positive_int(value, *, field_name: str, line_number: int | None = None) -> int | None:
+        if value is None or value == "":
+            return None
+
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            if line_number is None:
+                raise ValidationError({field_name: f"El campo {field_name} debe ser numerico."})
+            raise ValidationError(
+                {"lines": f"La linea {line_number} debe incluir un {field_name} numerico."}
+            )
+
+        if parsed < 1:
+            if line_number is None:
+                raise ValidationError(
+                    {field_name: f"El campo {field_name} debe ser mayor o igual a 1."}
+                )
+            raise ValidationError(
+                {
+                    "lines": (
+                        f"La linea {line_number} debe incluir un {field_name} mayor o igual a 1."
+                    )
+                }
+            )
+
+        return parsed
+
+    @staticmethod
+    def _parse_non_negative_decimal(
+        value,
+        *,
+        default,
+        field_name: str,
+        line_number: int,
+    ) -> Decimal:
+        candidate = default if value in (None, "") else value
+
+        try:
+            parsed = Decimal(str(candidate))
+        except (InvalidOperation, TypeError, ValueError):
+            raise ValidationError(
+                {"lines": f"La linea {line_number} incluye un {field_name} invalido."}
+            )
+
+        if parsed < 0:
+            raise ValidationError(
+                {"lines": f"La linea {line_number} no permite {field_name} negativo."}
+            )
+
+        return parsed
+
+
+class InvoiceViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         Invoice.objects.select_related(
             "reservation",
+            "reservation__hotel_settings",
             "reservation__client",
             "reservation__origin",
             "status",
@@ -122,8 +388,8 @@ class InvoiceViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
             "invoice_charges__charge",
             "reservation__rooms_detail__room__floor__hotel_settings",
         )
-        .order_by("-id")
     )
+    tenant_filter = "reservation__hotel_settings"
     serializer_class = InvoiceSerializer
     permission_classes = [HasResourcePermission]
     required_scopes = ["invoices.read"]
@@ -149,6 +415,9 @@ class InvoiceViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     ]
     ordering = ["-id"]
 
+    def get_base_queryset(self):
+        return self.queryset.order_by("-id")
+
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return ["invoices.write"]
@@ -163,7 +432,14 @@ class InvoiceViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         invoice = self.get_object()
         charges = (
             Charge.objects.select_related("charge_type")
-            .filter(reservation_id=invoice.reservation_id, is_active=True)
+            .filter(
+                reservation_id=invoice.reservation_id,
+                is_active=True,
+            )
+            .filter(
+                Q(service__isnull=True) | Q(service__hotel_settings_id=F("reservation__hotel_settings_id")),
+                Q(package__isnull=True) | Q(package__hotel_settings_id=F("reservation__hotel_settings_id")),
+            )
             .order_by("charge_date", "id")
         )
         payments = (
@@ -194,13 +470,16 @@ class InvoiceViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         return response
 
 
-class InvoiceChargeViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+class InvoiceChargeViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         InvoiceCharge.objects.select_related(
             "invoice",
+            "invoice__reservation",
+            "invoice__reservation__hotel_settings",
             "charge",
-        ).order_by("id")
+        )
     )
+    tenant_filter = "invoice__reservation__hotel_settings"
     serializer_class = InvoiceChargeSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -219,6 +498,9 @@ class InvoiceChargeViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     ]
     ordering = ["id"]
 
+    def get_base_queryset(self):
+        return self.queryset.order_by("id")
+
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
             return ["invoices.write"]
@@ -227,14 +509,18 @@ class InvoiceChargeViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     def get_permissions(self):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
-    
-class PaymentViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+
+
+class PaymentViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         Payment.objects.select_related(
             "invoice",
+            "invoice__reservation",
+            "invoice__reservation__hotel_settings",
             "payment_method",
-        ).order_by("-id")
+        )
     )
+    tenant_filter = "invoice__reservation__hotel_settings"
     serializer_class = PaymentSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -257,6 +543,9 @@ class PaymentViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         "updated_at",
     ]
     ordering = ["-id"]
+
+    def get_base_queryset(self):
+        return self.queryset.order_by("-id")
 
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
@@ -293,15 +582,18 @@ class PaymentViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         ).exists()
 
 
-class PaymentRefundViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+class PaymentRefundViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         PaymentRefund.objects.select_related(
             "payment",
             "payment__invoice",
+            "payment__invoice__reservation",
+            "payment__invoice__reservation__hotel_settings",
             "payment__payment_method",
             "status",
-        ).order_by("-id")
+        )
     )
+    tenant_filter = "payment__invoice__reservation__hotel_settings"
     serializer_class = PaymentRefundSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -335,6 +627,20 @@ class PaymentRefundViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         "ANULADO": set(),
     }
 
+    def get_base_queryset(self):
+        return self.queryset.order_by("-id")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        invoice_id = self.request.query_params.get("invoice")
+        if invoice_id is not None:
+            try:
+                invoice_id_value = int(invoice_id)
+            except (TypeError, ValueError):
+                return queryset.none()
+            queryset = queryset.filter(payment__invoice_id=invoice_id_value)
+        return queryset
+
     def get_required_scopes(self):
         if self.action == "create":
             return ["payments.read"]
@@ -347,17 +653,6 @@ class PaymentRefundViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     def get_permissions(self):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        invoice_id = self.request.query_params.get("invoice")
-        if invoice_id is not None:
-            try:
-                invoice_id_value = int(invoice_id)
-            except (TypeError, ValueError):
-                return queryset.none()
-            queryset = queryset.filter(payment__invoice_id=invoice_id_value)
-        return queryset
 
     def perform_create(self, serializer):
         pending_status = get_or_create_default_payment_refund_status("PENDIENTE")
@@ -443,13 +738,16 @@ class PaymentRefundViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-class CreditNoteViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
+class CreditNoteViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         CreditNote.objects.select_related(
             "invoice",
+            "invoice__reservation",
+            "invoice__reservation__hotel_settings",
             "status",
-        ).order_by("-id")
+        )
     )
+    tenant_filter = "invoice__reservation__hotel_settings"
     serializer_class = CreditNoteSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
@@ -474,6 +772,9 @@ class CreditNoteViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         "updated_at",
     ]
     ordering = ["-id"]
+
+    def get_base_queryset(self):
+        return self.queryset.order_by("-id")
 
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):

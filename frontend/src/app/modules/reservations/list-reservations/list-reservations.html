@@ -124,6 +124,52 @@
     </button>
   </div>
 
+  <section class="filters-card" *ngIf="!loading && deletedReservationsCount > 0">
+    <div class="filters-actions">
+      <p class="state-note">
+        Hay {{ deletedReservationsCount }} reserva(s) eliminadas logicamente.
+      </p>
+      <div class="action-group">
+        <button type="button" class="btn btn-light" (click)="showDeletedReservations = !showDeletedReservations">
+          <i class="fa-solid" [class.fa-eye]="!showDeletedReservations" [class.fa-eye-slash]="showDeletedReservations"></i>
+          {{ showDeletedReservations ? 'Ocultar eliminadas' : 'Ver eliminadas' }}
+        </button>
+      </div>
+    </div>
+
+    <article class="table-card" *ngIf="showDeletedReservations">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th># Reserva</th>
+              <th>Huesped</th>
+              <th>Estancia</th>
+              <th>Estado</th>
+              <th>Origen</th>
+              <th>Accion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let reservation of deletedReservations; trackBy: trackByReservation">
+              <td>{{ getReservationCode(reservation) }}</td>
+              <td>{{ reservation.client_full_name || 'Cliente sin nombre' }}</td>
+              <td>{{ getStayLabel(reservation) }}</td>
+              <td>{{ getStatusStyle(reservation).label }}</td>
+              <td>{{ getOriginLabel(reservation) }}</td>
+              <td>
+                <div class="row-actions">
+                  <button type="button" class="row-btn" title="Restaurar" (click)="restoreReservation(reservation)">
+                    <i class="fa-solid fa-rotate-left"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
   <section class="state-message" *ngIf="loading || errorMessage || (!loading && filteredReservations.length === 0)">
     <p *ngIf="loading">Cargando reservas...</p>
     <p *ngIf="!loading && errorMessage">{{ errorMessage }}</p>
@@ -199,6 +245,15 @@
                 <button type="button" class="row-btn" title="Ver detalle" (click)="$event.stopPropagation(); openDetail(reservation)">
                   <i class="fa-regular fa-eye"></i>
                 </button>
+                <button
+                  type="button"
+                  class="row-btn checkin"
+                  *ngIf="canCheckInReservation(reservation)"
+                  [disabled]="isCheckInLoading(reservation)"
+                  title="Registrar check-in"
+                  (click)="$event.stopPropagation(); performCheckInFromList(reservation)">
+                  <i [class]="isCheckInLoading(reservation) ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-right-to-bracket'"></i>
+                </button>
                 <button type="button" class="row-btn" *ngIf="canEditReservation(reservation)" title="Editar" (click)="$event.stopPropagation(); openUpdateOverlay(reservation)">
                   <i class="fa-regular fa-pen-to-square"></i>
                 </button>
@@ -263,7 +318,8 @@
           type="button"
           class="btn card-action-btn"
           [ngClass]="getCardActionClass(reservation)"
-          (click)="$event.stopPropagation(); openDetail(reservation)">
+          [disabled]="isCheckInLoading(reservation)"
+          (click)="$event.stopPropagation(); handleCardPrimaryAction(reservation)">
           <i [class]="getCardActionIcon(reservation)"></i>
           {{ getCardActionLabel(reservation) }}
         </button>
@@ -385,4 +441,5 @@
     (flowChanged)="onReservationFlowChanged($event)">
   </app-detail-reservation>
 </div>
+
 

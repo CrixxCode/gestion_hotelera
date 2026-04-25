@@ -7,6 +7,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.models import Resource, Role
 from apps.billing.models import Charge, Invoice, Payment, PaymentRefund
 from apps.clients.models import Client
 from apps.finance.models import (
@@ -429,6 +430,7 @@ class FinancialControlApiTests(APITestCase):
             Decimal("120000.00"),
         )
 
+
     def test_revpar_uses_only_room_revenue(self):
         service_charge = Charge.objects.create(
             reservation=self.reservation,
@@ -683,6 +685,63 @@ class FinancialControlApiTests(APITestCase):
             ),
             Decimal("60000.00"),
         )
+
+
+class FinancialControlTenantIsolationTests(APITestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.hotel_a = HotelSettings.objects.create(
+            hotel_name="Hotel Tenant A",
+            legal_name="Hotel Tenant A SAS",
+            city="Riohacha",
+            currency="COP",
+        )
+        self.hotel_b = HotelSettings.objects.create(
+            hotel_name="Hotel Tenant B",
+            legal_name="Hotel Tenant B SAS",
+            city="Riohacha",
+            currency="COP",
+        )
+
+        role = Role.objects.create(name="Finance Tenant Role", slug="finance-tenant-role")
+        resources = [
+            Resource.objects.create(
+                key=key,
+                name=f"Permiso {key}",
+                link_backend="/api/financial-control/",
+            )
+            for key in ("financial_control.read", "financial_control.write")
+        ]
+        role.resources.add(*resources)
+
+        self.user = User.objects.create_user(
+            username="finance_tenant_user",
+            email="finance_tenant_user@test.local",
+            password="test-pass-123",
+            hotel_settings=self.hotel_a,
+        )
+        self.user.roles.add(role)
+        self.client.force_authenticate(user=self.user)
+
+    def test_dashboard_rejects_cross_tenant_hotel_settings_for_non_superuser(self):
+        response = self.client.get(
+            "/api/financial-control/dashboard/",
+            {"hotel_settings": self.hotel_b.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("hotel_settings", response.data)
+
+    def test_operational_alert_sync_rejects_cross_tenant_hotel_settings_for_non_superuser(self):
+        response = self.client.post(
+            "/api/operational-alerts/sync/",
+            {"hotel_settings": self.hotel_b.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("hotel_settings", response.data)
 
 
 class OperationalAlertsAutomationTests(TestCase):

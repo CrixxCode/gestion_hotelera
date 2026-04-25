@@ -78,7 +78,9 @@ export class ListReservations implements OnInit {
   errorMessage = '';
 
   reservations: ReservationI[] = [];
+  deletedReservations: ReservationI[] = [];
   filteredReservations: ReservationI[] = [];
+  showDeletedReservations = false;
 
   statuses: MasterDataI[] = [];
   origins: MasterDataI[] = [];
@@ -113,6 +115,7 @@ export class ListReservations implements OnInit {
   calendarStartDate = this.startOfDay(new Date());
   calendarDays: CalendarDayI[] = [];
   calendarRows: CalendarRoomRowI[] = [];
+  checkInLoadingIds = new Set<number>();
   private detailsCache = new Map<number, ReservationDetailI>();
   private roomMap = new Map<number, RoomI>();
   private pendingRouteReservationId: number | null = null;
@@ -152,6 +155,10 @@ export class ListReservations implements OnInit {
   get totalPages(): number {
     if (this.totalReservationsCount <= 0) return 1;
     return Math.max(1, Math.ceil(this.totalReservationsCount / this.pageSize));
+  }
+
+  get deletedReservationsCount(): number {
+    return this.deletedReservations.length;
   }
 
   get inProgressCount(): number {
@@ -215,6 +222,19 @@ export class ListReservations implements OnInit {
               } as PaginatedResponseI<ReservationI>)
           )
         ),
+      deletedReservationsPage: this.reservationService
+        .listReservationsPage(this.buildDeletedReservationPageFilters())
+        .pipe(
+          catchError(
+            () =>
+              of({
+                count: 0,
+                next: null,
+                previous: null,
+                results: [] as ReservationI[],
+              } as PaginatedResponseI<ReservationI>)
+          )
+        ),
       statuses: this.masterDataService
         .listMasterData({ group: 'RESERVATION_STATUS', is_active: 'true', ordering: 'sort_order,name' })
         .pipe(catchError(() => of([] as MasterDataI[]))),
@@ -242,6 +262,7 @@ export class ListReservations implements OnInit {
     }).subscribe({
       next: ({
         reservationsPage,
+        deletedReservationsPage,
         statuses,
         origins,
         documentTypes,
@@ -256,6 +277,7 @@ export class ListReservations implements OnInit {
         this.loading = false;
 
         this.setReservationPageData(reservationsPage);
+        this.setDeletedReservationPageData(deletedReservationsPage);
         this.statuses = this.dedupeMasterDataByCode(statuses);
         this.origins = this.dedupeMasterDataByCode(origins);
         this.documentTypes = this.dedupeMasterDataByCode(documentTypes);
@@ -305,20 +327,34 @@ export class ListReservations implements OnInit {
     this.loading = true;
     this.errorMessage = '';
 
-    this.reservationService
-      .listReservationsPage(this.buildReservationPageFilters())
-      .subscribe({
-        next: (reservationsPage) => {
-          this.loading = false;
-          this.setReservationPageData(reservationsPage);
-          this.applyFilters();
-          this.consumePendingRouteReservationAction();
-        },
-        error: () => {
-          this.loading = false;
-          this.errorMessage = 'No se pudieron actualizar las reservas.';
-        }
-      });
+    forkJoin({
+      reservationsPage: this.reservationService.listReservationsPage(this.buildReservationPageFilters()),
+      deletedReservationsPage: this.reservationService
+        .listReservationsPage(this.buildDeletedReservationPageFilters())
+        .pipe(
+          catchError(
+            () =>
+              of({
+                count: 0,
+                next: null,
+                previous: null,
+                results: [] as ReservationI[],
+              } as PaginatedResponseI<ReservationI>)
+          )
+        )
+    }).subscribe({
+      next: ({ reservationsPage, deletedReservationsPage }) => {
+        this.loading = false;
+        this.setReservationPageData(reservationsPage);
+        this.setDeletedReservationPageData(deletedReservationsPage);
+        this.applyFilters();
+        this.consumePendingRouteReservationAction();
+      },
+      error: () => {
+        this.loading = false;
+        this.errorMessage = 'No se pudieron actualizar las reservas.';
+      }
+    });
   }
 
   applyFilters(): void {
@@ -417,8 +453,7 @@ export class ListReservations implements OnInit {
   }
 
   onReservationFlowChanged(detail: ReservationDetailI): void {
-    this.detailsCache.set(detail.id, detail);
-    this.selectedReservationDetail = detail;
+    this.syncReservationDetail(detail);
     this.refreshReservations();
   }
 
@@ -465,6 +500,27 @@ export class ListReservations implements OnInit {
           },
           error: () => {
             this.errorMessage = 'No se pudo eliminar la reserva seleccionada.';
+          }
+        });
+      }
+    });
+  }
+
+  restoreReservation(reservation: ReservationI): void {
+    const reservationCode = this.getReservationCode(reservation);
+
+    openActionConfirmation(this.confirmationService, {
+      action: 'restore',
+      target: reservationCode,
+      key: 'reservationDelete',
+      onAccept: () => {
+        this.reservationService.restoreReservation(reservation.id).subscribe({
+          next: () => {
+            this.detailsCache.delete(reservation.id);
+            this.refreshReservations();
+          },
+          error: () => {
+            this.errorMessage = 'No se pudo restaurar la reserva seleccionada.';
           }
         });
       }
@@ -708,6 +764,10 @@ export class ListReservations implements OnInit {
   }
 
   getCardActionLabel(reservation: ReservationI): string {
+    if (this.canCheckInReservation(reservation) && this.isCheckInLoading(reservation)) {
+      return 'Procesando...';
+    }
+
     const visual = this.getVisualStatus(reservation);
 
     if (visual === 'CONFIRMADA') return 'Check-In';
@@ -726,12 +786,69 @@ export class ListReservations implements OnInit {
   }
 
   getCardActionIcon(reservation: ReservationI): string {
+    if (this.canCheckInReservation(reservation) && this.isCheckInLoading(reservation)) {
+      return 'fa-solid fa-spinner fa-spin';
+    }
+
     const visual = this.getVisualStatus(reservation);
 
     if (visual === 'CONFIRMADA') return 'fa-solid fa-arrow-right-to-bracket';
     if (visual === 'EN_CURSO' || visual === 'POR_SALIR_HOY') return 'fa-solid fa-arrow-right-from-bracket';
 
     return 'fa-regular fa-eye';
+  }
+
+  handleCardPrimaryAction(reservation: ReservationI): void {
+    if (this.canCheckInReservation(reservation)) {
+      this.performCheckInFromList(reservation);
+      return;
+    }
+
+    this.openDetail(reservation);
+  }
+
+  canCheckInReservation(reservation: ReservationI | ReservationDetailI | null | undefined): boolean {
+    if (!reservation) return false;
+
+    if (typeof reservation.can_check_in === 'boolean') {
+      return reservation.can_check_in && !reservation.real_check_in && !reservation.real_check_out;
+    }
+
+    const statusCode = this.normalizeCode(reservation.status_code);
+    return statusCode === 'CONFIRMADA' && !reservation.real_check_in && !reservation.real_check_out;
+  }
+
+  isCheckInLoading(reservation: ReservationI | ReservationDetailI | null | undefined): boolean {
+    const reservationId = Number(reservation?.id || 0);
+    if (!Number.isFinite(reservationId) || reservationId <= 0) return false;
+    return this.checkInLoadingIds.has(reservationId);
+  }
+
+  performCheckInFromList(reservation: ReservationI | ReservationDetailI | null | undefined): void {
+    if (!reservation) return;
+
+    const reservationId = Number(reservation.id);
+    if (!Number.isFinite(reservationId) || reservationId <= 0) return;
+    if (!this.canCheckInReservation(reservation)) return;
+    if (this.checkInLoadingIds.has(reservationId)) return;
+
+    this.errorMessage = '';
+    this.checkInLoadingIds.add(reservationId);
+
+    this.reservationService.checkInReservation(reservationId).subscribe({
+      next: (detail) => {
+        this.checkInLoadingIds.delete(reservationId);
+        this.syncReservationDetail(detail);
+        this.refreshReservations();
+      },
+      error: (error: unknown) => {
+        this.checkInLoadingIds.delete(reservationId);
+        this.errorMessage = this.extractReservationActionError(
+          error,
+          'No se pudo registrar el check-in de la reserva.'
+        );
+      }
+    });
   }
 
   canEditReservation(reservation: ReservationI | ReservationDetailI | null | undefined): boolean {
@@ -866,10 +983,12 @@ export class ListReservations implements OnInit {
     });
   }
 
-  private buildReservationPageFilters(): {
+  private buildReservationPageFilters(includeDeleted = false): {
     search?: string;
     ordering?: string;
     include_finished?: boolean;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
     page: number;
     page_size: number;
   } {
@@ -878,8 +997,25 @@ export class ListReservations implements OnInit {
     return {
       search: query || undefined,
       ordering: '-id',
+      include_deleted: includeDeleted ? true : undefined,
       page: this.currentPage,
       page_size: this.pageSize,
+    };
+  }
+
+  private buildDeletedReservationPageFilters(): {
+    ordering?: string;
+    include_inactive?: boolean;
+    include_deleted?: boolean;
+    page: number;
+    page_size: number;
+  } {
+    return {
+      ordering: '-id',
+      include_inactive: true,
+      include_deleted: true,
+      page: 1,
+      page_size: 200,
     };
   }
 
@@ -888,6 +1024,23 @@ export class ListReservations implements OnInit {
     this.totalReservationsCount = Number.isFinite(pageData.count) ? pageData.count : this.reservations.length;
     this.hasNextPage = !!pageData.next;
     this.hasPreviousPage = !!pageData.previous;
+  }
+
+  private setDeletedReservationPageData(pageData: PaginatedResponseI<ReservationI>): void {
+    this.deletedReservations = (pageData.results || []).filter((reservation) =>
+      this.isReservationDeleted(reservation)
+    );
+  }
+
+  private isReservationDeleted(reservation: ReservationI): boolean {
+    const record = reservation as unknown as Record<string, unknown>;
+    const isDeletedFlag = record['is_deleted'];
+    if (typeof isDeletedFlag === 'boolean') return isDeletedFlag;
+
+    const deletedAt = record['deleted_at'];
+    if (typeof deletedAt === 'string' && deletedAt.trim()) return true;
+
+    return false;
   }
 
   private preloadReservationDetails(ids: number[]): void {
@@ -1232,6 +1385,36 @@ export class ListReservations implements OnInit {
       const amount = Number(deposit.amount || 0);
       return sum + (Number.isNaN(amount) ? 0 : amount);
     }, 0);
+  }
+
+  private syncReservationDetail(detail: ReservationDetailI): void {
+    this.detailsCache.set(detail.id, detail);
+
+    if (this.selectedReservationId === detail.id) {
+      this.selectedReservationDetail = detail;
+    }
+
+    if (this.reservationToEdit?.id === detail.id) {
+      this.reservationToEdit = detail;
+    }
+  }
+
+  private extractReservationActionError(error: unknown, fallback: string): string {
+    if (!error || typeof error !== 'object') return fallback;
+
+    const payload = (error as { error?: unknown }).error;
+    if (!payload || typeof payload !== 'object') return fallback;
+
+    const detail = (payload as Record<string, unknown>)['detail'];
+    if (typeof detail === 'string' && detail.trim()) return detail;
+
+    for (const key of Object.keys(payload as Record<string, unknown>)) {
+      const value = (payload as Record<string, unknown>)[key];
+      if (typeof value === 'string' && value.trim()) return value;
+      if (Array.isArray(value) && value.length && typeof value[0] === 'string') return value[0];
+    }
+
+    return fallback;
   }
 
   private normalizeCode(value: string | undefined): string {

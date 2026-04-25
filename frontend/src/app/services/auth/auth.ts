@@ -32,6 +32,7 @@ export class AuthService {
   private loginUrl = `${this.apiBase}/api/auth/login/`;
   private logoutUrl = `${this.apiBase}/api/auth/logout/`;
   private meUrl = `${this.apiBase}/api/auth/me/`;
+  private passwordChangeUrl = `${this.apiBase}/api/auth/password/change/`;
   private passwordResetRequestUrl = `${this.apiBase}/api/auth/password/reset/`;
   private passwordResetConfirmUrl = `${this.apiBase}/api/auth/password/reset/confirm/`;
 
@@ -82,6 +83,14 @@ export class AuthService {
     return this.http.post(
       this.passwordResetRequestUrl,
       { email, base_url: baseUrl },
+      this.buildCsrfRequestOptions()
+    );
+  }
+
+  changePassword(old_password: string, new_password: string): Observable<any> {
+    return this.http.post(
+      this.passwordChangeUrl,
+      { old_password, new_password },
       this.buildCsrfRequestOptions()
     );
   }

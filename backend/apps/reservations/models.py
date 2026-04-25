@@ -33,6 +33,15 @@ class Reservation(models.Model):
         blank=True,
         null=True,
     )
+    
+    hotel_settings = models.ForeignKey(
+        "hotel_settings.HotelSettings",
+        on_delete=models.PROTECT,
+        related_name="reservations",
+        null=False,   # temporal para migración
+        blank=False,  # temporal para migración
+    )
+    
     package_name = models.CharField(max_length=150, blank=True, default="")
     package_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     policies = models.ManyToManyField(
@@ -96,6 +105,14 @@ class Reservation(models.Model):
 
     def clean(self):
         errors = {}
+        
+        if self.client_id and self.hotel_settings_id:
+            if self.client.hotel_settings_id != self.hotel_settings_id:
+                errors["client"] = "El cliente no pertenece al mismo hotel de la reserva."
+
+        if self.package_id and self.hotel_settings_id:
+            if self.package.hotel_settings_id != self.hotel_settings_id:
+                errors["package"] = "El paquete no pertenece al mismo hotel de la reserva."
 
         if self.expected_check_in and self.expected_check_out:
             if self.expected_check_out <= self.expected_check_in:
@@ -166,6 +183,13 @@ class ReservationRoom(models.Model):
 
     def clean(self):
         errors = {}
+        
+        if self.room_id and self.reservation_id:
+            reservation_hotel_id = self.reservation.hotel_settings_id
+            room_hotel_id = getattr(getattr(self.room, "floor", None), "hotel_settings_id", None)
+
+            if reservation_hotel_id and room_hotel_id and reservation_hotel_id != room_hotel_id:
+                errors["room"] = "La habitacion no pertenece al mismo hotel de la reserva."
 
         if self.night_rate is not None and self.night_rate < 0:
             errors["night_rate"] = "Night rate cannot be negative."

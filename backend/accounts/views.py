@@ -112,7 +112,10 @@ class MeSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
+        return Response(
+            UserSerializer(request.user, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
 
 
 class PasswordChangeView(APIView):
@@ -180,11 +183,10 @@ class PasswordResetConfirmView(APIView):
 # -----------------------------
 
 class UserViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
-    queryset = User.objects.all().order_by("date_joined")
     serializer_class = UserSerializer
     pagination_class = None
     permission_classes = [HasResourcePermission]
-    required_scopes = ["users.read"]  # lectura por defecto
+    required_scopes = ["users.read"]
     serializer_action_classes = {
         "create": RegisterSerializer,
         "register": RegisterSerializer,
@@ -194,6 +196,21 @@ class UserViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     search_fields = ["username", "email", "first_name", "last_name"]
     ordering_fields = ["date_joined", "username", "email", "first_name", "last_name"]
     ordering = ["-date_joined"]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = User.objects.all().select_related("hotel_settings")
+
+        if not user.is_authenticated:
+            return User.objects.none()
+
+        if user.is_superuser:
+            return qs
+
+        if user.hotel_settings_id is None:
+            return User.objects.none()
+
+        return qs.filter(hotel_settings_id=user.hotel_settings_id)
 
     def get_serializer_class(self):
         return self.serializer_action_classes.get(self.action, self.serializer_class)
@@ -207,16 +224,13 @@ class UserViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         allow_public_register = getattr(settings, "ALLOW_PUBLIC_USER_REGISTRATION", False)
         if self.action in ("create", "register") and allow_public_register:
             return [AllowAny()]
-        # engancha scopes dinámicos antes de evaluar permisos
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
-        """Override de create para usar RegisterSerializer y devolver UserSerializer"""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        # Devolver usando UserSerializer para consistencia
         response_data = UserSerializer(user, context=self.get_serializer_context()).data
         return Response(response_data, status=status.HTTP_201_CREATED)
 
@@ -248,6 +262,28 @@ class RoleViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
+    def _role_user_scope_queryset(self):
+        user = self.request.user
+        queryset = User.objects.filter(is_active=True)
+
+        if not user or not user.is_authenticated:
+            return queryset.none()
+
+        if user.is_superuser:
+            return queryset
+
+        if user.hotel_settings_id is None:
+            return queryset.none()
+
+        return queryset.filter(hotel_settings_id=user.hotel_settings_id)
+
+    def _resolve_role_user_ids(self, ids):
+        scoped_users = self._role_user_scope_queryset().filter(id__in=ids)
+        resolved_ids = {str(user_id) for user_id in scoped_users.values_list("id", flat=True)}
+        requested_ids = {str(user_id) for user_id in ids}
+        rejected_ids = sorted(requested_ids - resolved_ids)
+        return scoped_users, rejected_ids
+
     # -------------------------
     # Usuarios por rol
     # -------------------------
@@ -260,10 +296,9 @@ class RoleViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         """
         role = self.get_object()
         qs = (
-            User.objects.filter(
+            self._role_user_scope_queryset().filter(
                 userrole__role=role,
                 userrole__is_active=True,
-                is_active=True,
             )
             .distinct()
             .order_by("username")
@@ -282,7 +317,19 @@ class RoleViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         if not isinstance(ids, list):
             return Response({"detail": "user_ids debe ser una lista."}, status=status.HTTP_400_BAD_REQUEST)
 
-        users = User.objects.filter(id__in=ids, is_active=True)
+        users, rejected_ids = self._resolve_role_user_ids(ids)
+        if rejected_ids:
+            return Response(
+                {
+                    "detail": (
+                        "No puedes asignar el rol a usuarios que no pertenezcan al "
+                        "hotel del usuario autenticado."
+                    ),
+                    "rejected_user_ids": rejected_ids,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         for user in users:
             rel, created = UserRole.objects.get_or_create(
                 user=user,
@@ -310,7 +357,19 @@ class RoleViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         if not isinstance(ids, list):
             return Response({"detail": "user_ids debe ser una lista."}, status=status.HTTP_400_BAD_REQUEST)
 
-        users = User.objects.filter(id__in=ids, is_active=True)
+        users, rejected_ids = self._resolve_role_user_ids(ids)
+        if rejected_ids:
+            return Response(
+                {
+                    "detail": (
+                        "No puedes remover el rol de usuarios que no pertenezcan al "
+                        "hotel del usuario autenticado."
+                    ),
+                    "rejected_user_ids": rejected_ids,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         UserRole.objects.filter(role=role, user__in=users, is_active=True).update(is_active=False)
 
         return Response(
@@ -330,7 +389,7 @@ class RoleViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         """
         q = (request.query_params.get("q") or "").strip()
 
-        qs = User.objects.filter(is_active=True).order_by("username")
+        qs = self._role_user_scope_queryset().order_by("username")
         if q:
             qs = qs.filter(
                 models.Q(username__icontains=q)

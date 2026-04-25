@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../enviorements/environment';
 import { AuthService } from './auth/auth';
@@ -26,8 +26,21 @@ export class ClientsService {
     return [];
   }
 
-  listClients(): Observable<ClientI[]> {
-    return this.http.get<any>(this.clientsUrl, { withCredentials: true }).pipe(
+  listClients(filters?: {
+    include_inactive?: boolean;
+    include_deleted?: boolean;
+  }): Observable<ClientI[]> {
+    let params = new HttpParams();
+
+    if (typeof filters?.include_inactive === 'boolean') {
+      params = params.set('include_inactive', String(filters.include_inactive));
+    }
+
+    if (typeof filters?.include_deleted === 'boolean') {
+      params = params.set('include_deleted', String(filters.include_deleted));
+    }
+
+    return this.http.get<any>(this.clientsUrl, { withCredentials: true, params }).pipe(
       map((res) => this.unwrapArray<ClientI>(res))
     );
   }
@@ -55,6 +68,14 @@ export class ClientsService {
   deleteClient(id: number): Observable<any> {
     return this.http.delete(
       `${this.clientsUrl}${id}/`,
+      this.auth.buildCsrfRequestOptions()
+    );
+  }
+
+  restoreClient(id: number): Observable<ClientI> {
+    return this.http.post<ClientI>(
+      `${this.clientsUrl}${id}/restore/`,
+      {},
       this.auth.buildCsrfRequestOptions()
     );
   }

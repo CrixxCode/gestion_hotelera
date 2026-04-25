@@ -337,10 +337,10 @@ export class DetailPayment implements OnInit, OnChanges {
       payment: this.billingService.getPaymentById(paymentId).pipe(catchError(() => of(this.payment as PaymentI))),
       invoice: this.billingService.getInvoiceById(invoiceId).pipe(catchError(() => of(null))),
       invoicePayments: this.billingService
-        .listPayments({ invoice: invoiceId, ordering: '-payment_date,-id' })
+        .listPayments({ invoice: invoiceId, ordering: '-payment_date,-id', include_inactive: true })
         .pipe(catchError(() => of([] as PaymentI[]))),
       invoiceRefunds: this.billingService
-        .listPaymentRefunds({ invoice: invoiceId, ordering: '-refund_date,-id' })
+        .listPaymentRefunds({ invoice: invoiceId, ordering: '-refund_date,-id', include_inactive: true })
         .pipe(catchError(() => of([] as PaymentRefundI[])))
     }).subscribe({
       next: ({ payment, invoice, invoicePayments, invoiceRefunds }) => {

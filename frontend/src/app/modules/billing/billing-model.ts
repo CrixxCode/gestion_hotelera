@@ -29,6 +29,30 @@ export interface ChargeCreatePayloadI {
   is_active?: boolean;
 }
 
+export interface PosChargeLinePayloadI {
+  item: number;
+  quantity: number;
+  unit_price?: number;
+  description?: string;
+  notes?: string | null;
+}
+
+export interface PosChargeBatchPayloadI {
+  reservation: number;
+  reference?: string | null;
+  charge_type_code?: string | null;
+  lines: PosChargeLinePayloadI[];
+}
+
+export interface PosChargeBatchResponseI {
+  reservation: number;
+  reference: string;
+  charge_type_code: string;
+  charges_created: number;
+  total_amount: string | number;
+  charges: ChargeI[];
+}
+
 export interface InvoiceChargeI {
   id: number;
   invoice: number;

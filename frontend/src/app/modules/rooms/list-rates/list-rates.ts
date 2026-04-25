@@ -40,8 +40,10 @@ export class ListRates implements OnInit {
   loading = false;
   errorMessage = '';
   infoMessage = '';
+  showDeletedRates = false;
 
   rates: RateI[] = [];
+  deletedRates: RateI[] = [];
   filteredRates: RateI[] = [];
   groupedRates: RateGroup[] = [];
 
@@ -89,6 +91,10 @@ export class ListRates implements OnInit {
     return this.rates.length;
   }
 
+  get deletedRatesCount(): number {
+    return this.deletedRates.length;
+  }
+
   get activeRates(): number {
     return this.rates.filter((rate) => rate.is_active !== false).length;
   }
@@ -117,12 +123,19 @@ export class ListRates implements OnInit {
     const selectedRateId = this.selectedRate?.id ?? null;
 
     forkJoin({
-      rates: this.roomService.listRates({ ordering: '-created_at' }).pipe(catchError(() => of([] as RateI[]))),
+      rates: this.roomService
+        .listRates({ ordering: '-created_at', include_inactive: true })
+        .pipe(catchError(() => of([] as RateI[]))),
+      allRates: this.roomService
+        .listRates({ ordering: '-created_at', include_inactive: true, include_deleted: true })
+        .pipe(catchError(() => of([] as RateI[]))),
       roomTypes: this.roomService.listRoomTypes().pipe(catchError(() => of([] as RoomTypeI[])))
     }).subscribe({
-      next: ({ rates, roomTypes }) => {
+      next: ({ rates, allRates, roomTypes }) => {
         this.loading = false;
         this.rates = rates;
+        const visibleIds = new Set(rates.map((rate) => rate.id));
+        this.deletedRates = allRates.filter((rate) => !visibleIds.has(rate.id));
         this.roomTypes = roomTypes;
 
         if (selectedRateId) {
@@ -310,6 +323,24 @@ export class ListRates implements OnInit {
           },
           error: () => {
             this.errorMessage = 'No fue posible eliminar la tarifa seleccionada.';
+          }
+        });
+      }
+    });
+  }
+
+  restoreRate(rate: RateI): void {
+    openActionConfirmation(this.confirmationService, {
+      action: 'restore',
+      target: rate.name || 'tarifa',
+      onAccept: () => {
+        this.errorMessage = '';
+        this.roomService.restoreRate(rate.id).subscribe({
+          next: () => {
+            this.refreshRates();
+          },
+          error: () => {
+            this.errorMessage = 'No fue posible restaurar la tarifa seleccionada.';
           }
         });
       }

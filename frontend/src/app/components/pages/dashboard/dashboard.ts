@@ -18,6 +18,7 @@ import { MaintenanceOrdersService } from '../../../services/maintenance-order';
 import { NotificationStateService } from '../../../services/notification-state';
 import { ReservationService } from '../../../services/reservation';
 import { RoomService } from '../../../services/room';
+import { AuthService } from '../../../services/auth/auth';
 
 type MetricTone = 'blue' | 'green' | 'violet' | 'amber' | 'gold';
 type RoomState = 'occupied' | 'free' | 'maintenance' | 'cleaning' | 'reserved';
@@ -110,6 +111,7 @@ export class Dashboard implements OnInit, OnDestroy {
 
   currentTimeLabel = '';
   todayLabel = '';
+  currentUserDisplayName = 'Usuario';
 
   metrics: MetricCard[] = [];
   occupancyChartData: ChartData<'bar'> = { labels: [], datasets: [] };
@@ -170,7 +172,8 @@ export class Dashboard implements OnInit, OnDestroy {
     private itemsService: ItemsService,
     private maintenanceOrdersService: MaintenanceOrdersService,
     private inventoryMovementsService: InventoryMovementsService,
-    private notificationStateService: NotificationStateService
+    private notificationStateService: NotificationStateService,
+    private authService: AuthService
   ) {}
 
   get dayResume(): string {
@@ -192,6 +195,7 @@ export class Dashboard implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.updateClock();
     this.clockTimer = setInterval(() => this.updateClock(), 1000);
+    this.loadCurrentUserDisplayName();
     this.loadReadAlertIds();
     this.refreshData();
   }
@@ -971,5 +975,17 @@ export class Dashboard implements OnInit, OnDestroy {
 
     this.todayLabel = date.charAt(0).toUpperCase() + date.slice(1);
     this.currentTimeLabel = time.replace(/\u00a0/g, ' ').replace('a. m.', 'a.m.').replace('p. m.', 'p.m.');
+  }
+
+  private loadCurrentUserDisplayName(): void {
+    this.authService
+      .getUserInfo()
+      .pipe(catchError(() => of(null)))
+      .subscribe((user) => {
+        const firstName = String(user?.first_name || '').trim();
+        const lastName = String(user?.last_name || '').trim();
+        const fullName = `${firstName} ${lastName}`.trim();
+        this.currentUserDisplayName = fullName || String(user?.username || '').trim() || 'Usuario';
+      });
   }
 }
