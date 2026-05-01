@@ -114,23 +114,30 @@
                 </span>
                 <div>
                   <h3 class="text-xl font-semibold text-slate-900">Logo del Hotel</h3>
-                  <p class="text-sm text-gray-500">Formatos: PNG, JPG, SVG. Máx. 2MB</p>
+                  <p class="text-sm text-gray-500">Usa una URL publica para el logo (PNG, JPG o SVG).</p>
                 </div>
               </div>
 
               <div class="mb-4 grid place-items-center rounded-2xl border border-dashed border-gray-300 bg-gray-50 py-10">
-                <div class="grid h-20 w-20 place-items-center rounded-full bg-amber-400 text-4xl font-semibold text-white">
-                  {{ (form.hotel_name || 'H').charAt(0).toUpperCase() }}
-                </div>
-                <p class="mt-2 text-sm text-gray-500">Sin logo</p>
+                @if (resolveLogoSrc()) {
+                  <img [src]="resolveLogoSrc()" alt="Logo del hotel" class="h-20 w-20 rounded-full object-cover" />
+                  <p class="mt-2 text-sm text-gray-500">Logo cargado por URL</p>
+                } @else {
+                  <div class="grid h-20 w-20 place-items-center rounded-full bg-amber-400 text-4xl font-semibold text-white">
+                    {{ (form.hotel_name || 'H').charAt(0).toUpperCase() }}
+                  </div>
+                  <p class="mt-2 text-sm text-gray-500">Sin logo</p>
+                }
               </div>
 
-              <label
-                class="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
-              >
-                <i class="fa-solid fa-camera"></i>
-                Subir logo
-                <input type="file" class="hidden" accept="image/*" (change)="onHotelLogoSelected($event)" />
+              <label class="grid gap-1">
+                <span class="text-sm font-medium text-slate-700">URL del logo</span>
+                <input
+                  [(ngModel)]="form.logo"
+                  type="url"
+                  placeholder="https://mi-dominio.com/logo.png"
+                  class="rounded-xl border border-gray-300 bg-white px-3 py-2.5 outline-none focus:border-blue-500"
+                />
               </label>
             </div>
 
@@ -1081,3 +1088,4 @@
     }
   </div>
 </div>
+

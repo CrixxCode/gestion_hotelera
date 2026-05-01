@@ -67,6 +67,11 @@ class ReservationFlowTestCase(TestCase):
         self.document_type = self._md(MasterData.Group.DOCUMENT_TYPE, "CC", "Cedula", 1)
         self.client_type = self._md(MasterData.Group.CLIENT_TYPE, "REGULAR", "Regular", 1)
         self.client_status = self._md(MasterData.Group.CLIENT_STATUS, "ACTIVO", "Activo", 1)
+        now_local = timezone.localtime()
+        self.hotel_settings = HotelSettings.objects.create(
+            hotel_name="Hotel Test",
+            check_in_time=(now_local + timedelta(hours=1)).time(),
+        )
 
         self.room_status_available = self._md(MasterData.Group.ROOM_STATUS, "DISPONIBLE", "Disponible", 1)
         self.room_status_reserved = self._md(MasterData.Group.ROOM_STATUS, "RESERVADA", "Reservada", 2)
@@ -74,6 +79,7 @@ class ReservationFlowTestCase(TestCase):
         self.room_status_maintenance = self._md(MasterData.Group.ROOM_STATUS, "MANTENIMIENTO", "Mantenimiento", 4)
         self.room_status_cleaning = self._md(MasterData.Group.ROOM_STATUS, "LIMPIEZA", "Limpieza", 5)
         self.room_type_standard = RoomType.objects.update_or_create(
+            hotel_settings=self.hotel_settings,
             code="STD",
             defaults={
                 "name": "Standard",
@@ -86,6 +92,7 @@ class ReservationFlowTestCase(TestCase):
             },
         )[0]
         self.room_type_suite = RoomType.objects.update_or_create(
+            hotel_settings=self.hotel_settings,
             code="SUI",
             defaults={
                 "name": "Suite",
@@ -103,6 +110,9 @@ class ReservationFlowTestCase(TestCase):
         )
         self.reservation_status_pending = self._md(
             MasterData.Group.RESERVATION_STATUS, "PENDIENTE", "Pendiente", 0
+        )
+        self.reservation_status_in_progress = self._md(
+            MasterData.Group.RESERVATION_STATUS, "EN_CURSO", "En curso", 2
         )
         self.reservation_status_cancelled = self._md(
             MasterData.Group.RESERVATION_STATUS, "CANCELADA", "Cancelada", 2
@@ -129,12 +139,6 @@ class ReservationFlowTestCase(TestCase):
         self.penalty_type = self._md(
             MasterData.Group.RESERVATION_PENALTY_TYPE, "PERCENTAGE", "Percentage", 1
         )
-
-        now_local = timezone.localtime()
-        self.hotel_settings = HotelSettings.objects.create(
-            hotel_name="Hotel Test",
-            check_in_time=(now_local + timedelta(hours=1)).time(),
-        )
         self.floor = HotelFloor.objects.create(
             hotel_settings=self.hotel_settings,
             floor_number=1,
@@ -151,6 +155,7 @@ class ReservationFlowTestCase(TestCase):
         )
 
         self.client = Client.objects.create(
+            hotel_settings=self.hotel_settings,
             document_type=self.document_type,
             document_number="123456789",
             first_name="Ana",
@@ -190,6 +195,7 @@ class ReservationFlowTestCase(TestCase):
 
     def _create_reservation(self, *, check_in, check_out, status=None):
         return Reservation.objects.create(
+            hotel_settings=self.hotel_settings,
             client=self.client,
             status=status or self.reservation_status_confirmed,
             origin=self.reservation_origin,
@@ -420,6 +426,7 @@ class ReservationFlowTestCase(TestCase):
             check_out=today + timedelta(days=3),
         )
         Rate.objects.create(
+            hotel_settings=self.hotel_settings,
             room_type=self.room_type_standard,
             name="Tarifa estandar vigente",
             price=150000,
@@ -448,6 +455,7 @@ class ReservationFlowTestCase(TestCase):
             check_out=today + timedelta(days=3),
         )
         Rate.objects.create(
+            hotel_settings=self.hotel_settings,
             room_type=self.room_type_standard,
             name="Tarifa estandar vigente",
             price=150000,
@@ -970,6 +978,7 @@ class ReservationApiFlowTestCase(APITestCase):
         )
 
         self.client_model = Client.objects.create(
+            hotel_settings=self.hotel_settings,
             document_type=self.document_type,
             document_number="99887766",
             first_name="Cliente",
@@ -989,9 +998,10 @@ class ReservationApiFlowTestCase(APITestCase):
         self.client = APIClient()
         self.client.force_login(self.user)
 
-    def _create_reservation(self, *, check_in_offset=0, check_out_offset=1, status=None):
+    def _create_reservation(self, *, check_in_offset=-1, check_out_offset=1, status=None):
         today = timezone.now().date()
         return Reservation.objects.create(
+            hotel_settings=self.hotel_settings,
             client=self.client_model,
             status=status or self.reservation_status_pending,
             origin=self.reservation_origin,
@@ -1154,6 +1164,7 @@ class ReservationApiFlowTestCase(APITestCase):
 
     def test_check_out_creates_post_checkout_cleaning_task(self):
         standard_type = RoomType.objects.create(
+            hotel_settings=self.hotel_settings,
             code="STD",
             name="Standard",
             capacity=2,
@@ -1215,6 +1226,7 @@ class ReservationApiFlowTestCase(APITestCase):
 
     def test_check_out_assigns_low_cleaning_priority_for_low_occupancy(self):
         family_type = RoomType.objects.create(
+            hotel_settings=self.hotel_settings,
             code="FAM",
             name="Familiar",
             capacity=4,
@@ -1246,6 +1258,7 @@ class ReservationApiFlowTestCase(APITestCase):
 
     def test_post_checkout_cleaning_task_creation_is_idempotent(self):
         standard_type = RoomType.objects.create(
+            hotel_settings=self.hotel_settings,
             code="STD",
             name="Standard",
             capacity=2,

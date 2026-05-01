@@ -41,8 +41,10 @@ class BillingAutomationTestCase(TestCase):
         self.document_type = self._md(MasterData.Group.DOCUMENT_TYPE, "CC", "Cedula", 1)
         self.client_type = self._md(MasterData.Group.CLIENT_TYPE, "REGULAR", "Regular", 1)
         self.client_status = self._md(MasterData.Group.CLIENT_STATUS, "ACTIVO", "Activo", 1)
+        self.hotel_settings = HotelSettings.objects.create(hotel_name="Hotel Test")
 
         self.room_type = RoomType.objects.update_or_create(
+            hotel_settings=self.hotel_settings,
             code="STD",
             defaults={
                 "name": "Standard",
@@ -95,7 +97,6 @@ class BillingAutomationTestCase(TestCase):
             3,
         )
 
-        self.hotel_settings = HotelSettings.objects.create(hotel_name="Hotel Test")
         self.floor = HotelFloor.objects.create(
             hotel_settings=self.hotel_settings,
             floor_number=1,
@@ -110,6 +111,7 @@ class BillingAutomationTestCase(TestCase):
             status=self.room_status,
         )
         self.client = Client.objects.create(
+            hotel_settings=self.hotel_settings,
             document_type=self.document_type,
             document_number="1234567890",
             first_name="Ana",
@@ -137,6 +139,7 @@ class BillingAutomationTestCase(TestCase):
 
         today = timezone.now().date()
         self.reservation = Reservation.objects.create(
+            hotel_settings=self.hotel_settings,
             client=self.client,
             status=self.reservation_status,
             origin=self.reservation_origin,
@@ -659,7 +662,11 @@ class BillingPosBatchApiTestCase(TestCase):
         self.client_api.force_login(self.user)
 
         self.hotel_settings = HotelSettings.objects.create(hotel_name="Hotel POS")
+        self.user.hotel_settings = self.hotel_settings
+        self.user.save(update_fields=["hotel_settings"])
+        self.client_api.force_login(self.user)
         self.client = Client.objects.create(
+            hotel_settings=self.hotel_settings,
             document_type=self.document_type,
             document_number="POS-001",
             first_name="Sara",
@@ -672,6 +679,7 @@ class BillingPosBatchApiTestCase(TestCase):
         )
         today = timezone.now().date()
         self.reservation = Reservation.objects.create(
+            hotel_settings=self.hotel_settings,
             client=self.client,
             status=self.reservation_status,
             origin=self.reservation_origin,
@@ -863,8 +871,13 @@ class BillingApiFilterAndPaginationTestCase(TestCase):
 
         self.client_api = APIClient()
         self.client_api.force_login(self.user)
+        self.hotel_settings = HotelSettings.objects.create(hotel_name="Hotel Billing API")
+        self.user.hotel_settings = self.hotel_settings
+        self.user.save(update_fields=["hotel_settings"])
+        self.client_api.force_login(self.user)
 
         self.client_one = Client.objects.create(
+            hotel_settings=self.hotel_settings,
             document_type=self.document_type,
             document_number="111",
             first_name="Ana",
@@ -876,6 +889,7 @@ class BillingApiFilterAndPaginationTestCase(TestCase):
             status=self.client_status,
         )
         self.client_two = Client.objects.create(
+            hotel_settings=self.hotel_settings,
             document_type=self.document_type,
             document_number="222",
             first_name="Luis",
@@ -889,6 +903,7 @@ class BillingApiFilterAndPaginationTestCase(TestCase):
 
         today = timezone.now().date()
         self.reservation_one = Reservation.objects.create(
+            hotel_settings=self.hotel_settings,
             client=self.client_one,
             status=self.reservation_status,
             origin=self.reservation_origin,
@@ -896,6 +911,7 @@ class BillingApiFilterAndPaginationTestCase(TestCase):
             expected_check_out=today + timedelta(days=5),
         )
         self.reservation_two = Reservation.objects.create(
+            hotel_settings=self.hotel_settings,
             client=self.client_two,
             status=self.reservation_status,
             origin=self.reservation_origin,
@@ -1144,6 +1160,8 @@ class BillingApiFilterAndPaginationTestCase(TestCase):
             password="pass12345",
         )
         writer_user.roles.add(writer_role)
+        writer_user.hotel_settings = self.hotel_settings
+        writer_user.save(update_fields=["hotel_settings"])
 
         writer_client = APIClient()
         writer_client.force_login(writer_user)
@@ -1175,6 +1193,8 @@ class BillingApiFilterAndPaginationTestCase(TestCase):
             password="pass12345",
         )
         admin_user.roles.add(admin_role)
+        admin_user.hotel_settings = self.hotel_settings
+        admin_user.save(update_fields=["hotel_settings"])
 
         admin_client = APIClient()
         admin_client.force_login(admin_user)

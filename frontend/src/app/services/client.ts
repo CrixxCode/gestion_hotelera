@@ -14,7 +14,7 @@ type DRFPaginated<T> = {
 
 @Injectable({ providedIn: 'root' })
 export class ClientsService {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly clientsUrl = `${this.apiBase}/api/clients/`;
 
   constructor(private http: HttpClient, private auth: AuthService) { }

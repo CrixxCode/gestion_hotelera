@@ -22,6 +22,7 @@ type SettingsForm = {
   legal_name: string;
   slogan: string;
   description: string;
+  logo: string;
   stars: number;
   facebook: string;
   instagram: string;
@@ -77,7 +78,7 @@ type FinancialConfigForm = {
   styleUrl: './hotel-settings.css',
 })
 export class HotelSettings implements OnInit {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly floorsUrl = `${this.apiBase}/api/hotel-floors/`;
   private readonly themePrimaryStorageKey = 'gh_theme_primary';
   private readonly themeSecondaryStorageKey = 'gh_theme_secondary';
@@ -123,7 +124,6 @@ export class HotelSettings implements OnInit {
   private readonly defaultDistrictName = 'Riohacha';
   themePrimaryColor = this.defaultThemePrimaryColor;
   themeSecondaryColor = this.defaultThemeSecondaryColor;
-  selectedLogoFile: File | null = null;
 
   readonly tabs: Array<{ key: SettingsTab; label: string; icon: string }> = [
     { key: 'general', label: 'Información General', icon: 'fa-solid fa-building' },
@@ -237,13 +237,8 @@ export class HotelSettings implements OnInit {
     this.form.stars = value;
   }
 
-  onHotelLogoSelected(event: Event): void {
-    if (!this.canEdit) return;
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0] ?? null;
-    if (!file) return;
-    this.selectedLogoFile = file;
-    this.successMessage = `Logo seleccionado: ${file.name}`;
+  resolveLogoSrc(): string {
+    return this.auth.buildMediaUrl(this.form.logo || '');
   }
 
   addFloor(): void {
@@ -463,7 +458,6 @@ export class HotelSettings implements OnInit {
       .subscribe({
         next: (fresh) => {
           this.saving = false;
-          this.selectedLogoFile = null;
           this.applySettings(fresh);
           this.refreshSuperAdminHotelOptions();
           this.notifyBrandingUpdated();
@@ -511,7 +505,6 @@ export class HotelSettings implements OnInit {
           .subscribe({
             next: (fresh) => {
               this.saving = false;
-              this.selectedLogoFile = null;
               this.applySettings(fresh);
               if (!fresh && this.isSuperAdmin) {
                 this.selectedHotelSettingsId = null;
@@ -524,7 +517,6 @@ export class HotelSettings implements OnInit {
             error: (error) => {
               this.saving = false;
               if (error?.status === 404) {
-                this.selectedLogoFile = null;
                 this.applySettings(null);
                 if (this.isSuperAdmin) {
                   this.selectedHotelSettingsId = null;
@@ -881,6 +873,7 @@ export class HotelSettings implements OnInit {
     this.form = {
       ...this.buildDefaultForm(),
       ...settings,
+      logo: this.getTrimmedString(settings.logo),
       stars: settings.stars ?? 3,
       tax_rate: Number(settings.tax_rate ?? 0),
       max_guests_per_room: Number(settings.max_guests_per_room ?? 2),
@@ -1230,6 +1223,7 @@ export class HotelSettings implements OnInit {
       legal_name: this.emptyAsUndefined(this.form.legal_name),
       slogan: this.emptyAsUndefined(this.form.slogan),
       description: this.emptyAsUndefined(this.form.description),
+      logo: this.emptyAsUndefined(this.form.logo),
       stars: Math.max(1, Math.min(5, Number(this.form.stars) || 3)),
       facebook: this.emptyAsUndefined(this.form.facebook),
       instagram: this.emptyAsUndefined(this.form.instagram),
@@ -1254,18 +1248,8 @@ export class HotelSettings implements OnInit {
     };
   }
 
-  private buildSavePayload(): Partial<HotelSettingsModel> | FormData {
-    const payload = this.buildPayload();
-    if (!this.selectedLogoFile) return payload;
-
-    const formData = new FormData();
-    for (const [key, value] of Object.entries(payload)) {
-      if (value === undefined || value === null) continue;
-      formData.append(key, String(value));
-    }
-
-    formData.append('logo', this.selectedLogoFile);
-    return formData;
+  private buildSavePayload(): Partial<HotelSettingsModel> {
+    return this.buildPayload();
   }
 
   private validateBeforeSave(): string | null {
@@ -1516,6 +1500,7 @@ export class HotelSettings implements OnInit {
       legal_name: '',
       slogan: '',
       description: '',
+      logo: '',
       stars: 3,
       facebook: '',
       instagram: '',

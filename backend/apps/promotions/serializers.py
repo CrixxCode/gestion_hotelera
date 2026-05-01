@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from apps.promotions.models import Promotion
-from accounts.tenancy import TenantSerializerMixin
+from accounts.tenancy import TenantSerializerMixin, is_effective_global_admin
 from apps.hotel_settings.models import HotelSettings
 from apps.packages.models import Package
 from apps.services.models import Service
@@ -64,7 +64,7 @@ class PromotionSerializer(TenantSerializerMixin, serializers.ModelSerializer):
         fields = super().get_fields()
         user = self.get_actor()
 
-        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+        if user and user.is_authenticated and not is_effective_global_admin(user) and user.hotel_settings_id:
             fields["service"].queryset = Service.objects.filter(
                 hotel_settings_id=user.hotel_settings_id
             )

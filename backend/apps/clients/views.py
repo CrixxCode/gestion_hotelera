@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from accounts.pagination import OptionalPageNumberPagination
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
 from accounts.tenancy import TenantScopeMixin
@@ -20,6 +21,28 @@ from .serializers import (
 )
 
 
+def _require_public_registration_token(request) -> None:
+    expected_token = str(
+        getattr(settings, "PUBLIC_CLIENT_REGISTRATION_TOKEN", "") or ""
+    ).strip()
+    if not expected_token:
+        raise ValidationError(
+            {
+                "detail": (
+                    "Public client registration is enabled but "
+                    "PUBLIC_CLIENT_REGISTRATION_TOKEN is missing."
+                )
+            }
+        )
+
+    provided_token = str(
+        request.headers.get("X-Public-Registration-Token", "")
+        or request.data.get("registration_token", "")
+    ).strip()
+    if provided_token != expected_token:
+        raise ValidationError({"detail": "Invalid public registration token."})
+
+
 class ClientViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
     queryset = Client.objects.select_related(
         "hotel_settings",
@@ -28,7 +51,7 @@ class ClientViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelV
         "status",
     ).all()
     serializer_class = ClientSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     tenant_filter = "hotel_settings"
 
@@ -88,6 +111,9 @@ class ClientViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelV
 
     @action(detail=False, methods=["post"], url_path="register")
     def register(self, request):
+        allow_public_register = getattr(settings, "ALLOW_PUBLIC_CLIENT_REGISTRATION", False)
+        if not request.user.is_authenticated and allow_public_register:
+            _require_public_registration_token(request)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         client = serializer.save()

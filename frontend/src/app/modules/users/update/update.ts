@@ -4,6 +4,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { UserI } from '../user-model';
 import { UserService } from '../../../services/user';
 import { MessageService } from 'primeng/api';
+import { environment } from '../../../../enviorements/environment';
 import {
   ACTION_ALERT_ERROR_SUMMARY,
   errorActionAlert
@@ -22,8 +23,7 @@ export class UserUpdate implements OnChanges {
   @Output() updated = new EventEmitter<void>();
 
   form!: FormGroup;
-  avatarPreview: string | ArrayBuffer | null = null;
-  avatarFile: File | null = null;
+  avatarPreview: string | null = null;
 
   constructor(
     private fb: FormBuilder,
@@ -35,7 +35,13 @@ export class UserUpdate implements OnChanges {
       last_name: ['', Validators.required],
       username: ['', Validators.required],
       email: ['', [Validators.required, Validators.email]],
+      job_title: [''],
+      avatar: [''],
       status: ['ACTIVE']
+    });
+
+    this.form.get('avatar')?.valueChanges.subscribe((value) => {
+      this.avatarPreview = this.resolveAvatar(value || null);
     });
   }
 
@@ -47,16 +53,6 @@ export class UserUpdate implements OnChanges {
       });
 
       this.avatarPreview = this.user.avatar ? this.resolveAvatar(this.user.avatar) : null;
-    }
-  }
-
-  onAvatarChange(event: any): void {
-    const file = event.target.files[0];
-    if (file) {
-      this.avatarFile = file;
-      const reader = new FileReader();
-      reader.onload = () => (this.avatarPreview = reader.result);
-      reader.readAsDataURL(file);
     }
   }
 
@@ -75,7 +71,7 @@ export class UserUpdate implements OnChanges {
       is_active: statusValue,
     };
 
-    this.userService.updateUser(this.user.id, updatedUser, this.avatarFile || undefined).subscribe({
+    this.userService.updateUser(this.user.id, updatedUser).subscribe({
       next: () => {
         this.updated.emit();
         this.close.emit();
@@ -99,6 +95,7 @@ export class UserUpdate implements OnChanges {
   resolveAvatar(src?: string | null): string | null {
     if (!src) return null;
     if (src.startsWith('http://') || src.startsWith('https://')) return src;
-    return `http://127.0.0.1:8000${src.startsWith('/') ? '' : '/'}${src}`;
+    const apiBase = (environment.API_URI || window.location.origin).replace(/\/$/, '');
+    return `${apiBase}${src.startsWith('/') ? '' : '/'}${src}`;
   }
 }

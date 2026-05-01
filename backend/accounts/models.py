@@ -1,18 +1,14 @@
 import uuid
 from django.contrib.auth.models import AbstractUser
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ValidationError
 from django.db import models
-from jsonschema import ValidationError
 
 
 class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    avatar = models.ImageField(
-        upload_to='avatars/',
-        blank=True,
-        null=True,
-        default='avatars/default-avatar.png',
-    )
+    job_title = models.CharField(max_length=120, blank=True, default="")
+    avatar = models.URLField(blank=True, default="")
 
     hotel_settings = models.ForeignKey(
         "hotel_settings.HotelSettings",

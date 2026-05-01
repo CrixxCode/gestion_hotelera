@@ -1,4 +1,6 @@
 import logging
+from pathlib import Path
+from email.mime.image import MIMEImage
 
 from django.contrib.auth import get_user_model, password_validation
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
@@ -10,6 +12,7 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from apps.hotel_settings.models import HotelSettings
+from accounts.tenancy import is_effective_global_admin
 
 from rest_framework import serializers
 
@@ -47,7 +50,7 @@ class RoleSerializer(serializers.ModelSerializer):
         model = Role
         fields = ["id", "name", "slug", "description", "resources"]
 
-    def get_resources(self, obj):
+    def get_resources(self, obj) -> list[dict]:
         qs = (
             Resource.objects.filter(
                 is_active=True,
@@ -76,6 +79,7 @@ class UserMiniSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "email",
+            "job_title",
             "is_active",
             "avatar",
             "hotel_settings",
@@ -100,6 +104,7 @@ class UserSerializer(serializers.ModelSerializer):
             "last_name",
             "username",
             "email",
+            "job_title",
             "is_active",
             "is_staff",
             "hotel_settings",
@@ -107,11 +112,19 @@ class UserSerializer(serializers.ModelSerializer):
             "resource_keys",
             "menu",
         ]
+        read_only_fields = [
+            "id",
+            "hotel_settings",
+            "is_staff",
+            "roles",
+            "resource_keys",
+            "menu",
+        ]
 
-    def get_resource_keys(self, obj):
+    def get_resource_keys(self, obj) -> list[str]:
         return sorted(list(obj.resource_keys()))
 
-    def get_roles(self, obj):
+    def get_roles(self, obj) -> list[dict]:
         qs = (
             Role.objects.filter(
                 is_active=True,
@@ -123,7 +136,7 @@ class UserSerializer(serializers.ModelSerializer):
         )
         return RoleSerializer(qs, many=True).data
 
-    def get_menu(self, obj):
+    def get_menu(self, obj) -> list[dict]:
         """
         Devuelve el menú dinámico basado en los Resources del usuario.
         Estructura:
@@ -203,11 +216,53 @@ class UserSerializer(serializers.ModelSerializer):
 
         return [node(r) for r in top]
 
+
+class ProfileUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            "first_name",
+            "last_name",
+            "email",
+            "job_title",
+            "avatar",
+        ]
+
+    def validate_email(self, value):
+        email = str(value or "").strip().lower()
+        if not email:
+            raise serializers.ValidationError("El correo es obligatorio.")
+        qs = User.objects.filter(email__iexact=email)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("Ya existe un usuario con este correo.")
+        return email
+
+    def validate_first_name(self, value):
+        first_name = str(value or "").strip()
+        if not first_name:
+            raise serializers.ValidationError("El nombre es obligatorio.")
+        return first_name
+
+    def validate_last_name(self, value):
+        last_name = str(value or "").strip()
+        if not last_name:
+            raise serializers.ValidationError("El apellido es obligatorio.")
+        return last_name
+
+    def validate_job_title(self, value):
+        return str(value or "").strip()
+
+    def validate_avatar(self, value):
+        return str(value or "").strip()
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     first_name = serializers.CharField(required=True, max_length=50)
     last_name = serializers.CharField(required=True, max_length=50)
     email = serializers.EmailField(required=True)
+    job_title = serializers.CharField(required=False, allow_blank=True, max_length=120)
     is_active = serializers.BooleanField(default=True, required=False)
     status = serializers.CharField(required=False, write_only=True)
 
@@ -227,6 +282,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             "last_name",
             "username",
             "email",
+            "job_title",
             "password",
             "is_active",
             "status",
@@ -267,12 +323,13 @@ class RegisterSerializer(serializers.ModelSerializer):
         validated_data["username"] = validated_data["username"].strip()
         validated_data["first_name"] = validated_data.get("first_name", "").strip()
         validated_data["last_name"] = validated_data.get("last_name", "").strip()
+        validated_data["job_title"] = validated_data.get("job_title", "").strip()
         validated_data["is_active"] = is_active
 
         assigned_hotel = None
 
         if actor and actor.is_authenticated:
-            if actor.is_superuser:
+            if is_effective_global_admin(actor):
                 assigned_hotel = incoming_hotel
             else:
                 if actor.hotel_settings is None:
@@ -363,12 +420,39 @@ class PasswordResetRequestSerializer(serializers.Serializer):
                 reset_url = request.build_absolute_uri(f"{path}?uid={uid}&token={token}")
             else:
                 reset_url = f"http://localhost:8000{path}?uid={uid}&token={token}"
+        app_name = str(getattr(settings, "APP_DISPLAY_NAME", "Wayra") or "Wayra").strip()
+        support_email = str(getattr(settings, "SUPPORT_EMAIL", "soporte@hotel.local") or "soporte@hotel.local").strip()
+        primary_color = str(getattr(settings, "BRAND_PRIMARY_COLOR", "#0f1f41") or "#0f1f41").strip()
+        logo_url = str(getattr(settings, "BRAND_LOGO_URL", "") or "").strip()
+
+        if not logo_url:
+            hotel_logo = str(getattr(getattr(user, "hotel_settings", None), "logo", "") or "").strip()
+            if hotel_logo:
+                logo_url = hotel_logo
+
+        inline_logo_bytes = None
+        inline_logo_name = "logo-white.png"
+        inline_logo_cid = "platform-logo"
+        if not logo_url:
+            logo_candidates = [
+                Path(settings.BASE_DIR).parent / "frontend" / "public" / "logo-white.png",
+                Path(settings.BASE_DIR) / "static" / "logo-white.png",
+            ]
+            for candidate in logo_candidates:
+                if candidate.exists() and candidate.is_file():
+                    try:
+                        inline_logo_bytes = candidate.read_bytes()
+                        inline_logo_name = candidate.name
+                        logo_url = f"cid:{inline_logo_cid}"
+                    except OSError:
+                        inline_logo_bytes = None
+                    break
 
         brand = {
-            "app_name": getattr(settings, "APP_DISPLAY_NAME", "Gestión Hotelera"),
-            "support_email": getattr(settings, "SUPPORT_EMAIL", "soporte@hotel.local"),
-            "primary_color": getattr(settings, "BRAND_PRIMARY_COLOR", "#0ea5e9"),
-            "logo_url": getattr(settings, "BRAND_LOGO_URL", None),
+            "app_name": app_name,
+            "support_email": support_email,
+            "primary_color": primary_color,
+            "logo_url": logo_url or None,
         }
 
         subject = "Recuperación de contraseña"
@@ -387,6 +471,15 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@hotel.local")
         msg = EmailMultiAlternatives(subject, text_body, from_email, [email])
         msg.attach_alternative(html_body, "text/html")
+        if inline_logo_bytes:
+            logo_attachment = MIMEImage(inline_logo_bytes)
+            logo_attachment.add_header("Content-ID", f"<{inline_logo_cid}>")
+            logo_attachment.add_header(
+                "Content-Disposition",
+                "inline",
+                filename=inline_logo_name,
+            )
+            msg.attach(logo_attachment)
         try:
             msg.send(fail_silently=False)
         except Exception:

@@ -31,8 +31,8 @@
         </ng-template>
 
         <label class="file-field">
-          <span>Foto de perfil</span>
-          <input id="avatar" type="file" (change)="onAvatarChange($event)" />
+          <span>Avatar (URL)</span>
+          <input id="avatar" formControlName="avatar" type="url" placeholder="https://mi-dominio.com/avatar.jpg" />
         </label>
       </div>
     </section>
@@ -68,6 +68,11 @@
           <input id="email" formControlName="email" type="email" [class.input-error]="form.get('email')?.touched && form.get('email')?.invalid" />
           <small class="field-error" *ngIf="form.get('email')?.touched && form.get('email')?.hasError('required')">El correo es obligatorio.</small>
           <small class="field-error" *ngIf="form.get('email')?.touched && form.get('email')?.hasError('email')">Ingresa un correo valido.</small>
+        </label>
+
+        <label>
+          <span>Cargo</span>
+          <input id="job_title" formControlName="job_title" type="text" placeholder="Ej: Recepcionista" />
         </label>
 
         <label>

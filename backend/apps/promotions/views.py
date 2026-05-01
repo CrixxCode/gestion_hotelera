@@ -3,6 +3,7 @@ from django.db.models import F, Q
 
 from apps.promotions.models import Promotion
 from apps.promotions.serializers import PromotionSerializer
+from accounts.pagination import OptionalPageNumberPagination
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
 from accounts.tenancy import TenantScopeMixin
@@ -19,7 +20,7 @@ class PromotionViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.Mod
     )
     tenant_filter = "hotel_settings"
     serializer_class = PromotionSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["promotions.read"]
 

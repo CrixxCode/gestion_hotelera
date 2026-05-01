@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
+import { ConfirmationService } from 'primeng/api';
 
 import { ListPackages } from './list-packages';
 import { MasterDataService } from '../../../services/master-data.service';
@@ -41,7 +42,8 @@ describe('ListPackages', () => {
           useValue: {
             getCurrentSettings: () => of(null)
           }
-        }
+        },
+        ConfirmationService
       ]
     })
     .compileComponents();

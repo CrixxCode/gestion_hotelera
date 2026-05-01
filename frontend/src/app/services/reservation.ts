@@ -1,4 +1,4 @@
-﻿import { Injectable } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../enviorements/environment';
@@ -37,7 +37,7 @@ export type PaginatedResponseI<T> = {
   providedIn: 'root'
 })
 export class ReservationService {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly reservationsUrl = `${this.apiBase}/api/reservations/`;
   private readonly reservationPoliciesUrl = `${this.apiBase}/api/reservation-policies/`;
   private readonly reservationRoomsUrl = `${this.apiBase}/api/reservation-rooms/`;

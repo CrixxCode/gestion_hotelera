@@ -27,7 +27,7 @@ type DRFPaginated<T> = {
   providedIn: 'root'
 })
 export class BillingService {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly chargesUrl = `${this.apiBase}/api/charges/`;
   private readonly invoicesUrl = `${this.apiBase}/api/invoices/`;
   private readonly invoiceChargesUrl = `${this.apiBase}/api/invoice-charges/`;

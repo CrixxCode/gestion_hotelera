@@ -2,6 +2,7 @@ from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.pagination import OptionalPageNumberPagination
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
 from accounts.tenancy import TenantScopeMixin
@@ -21,7 +22,7 @@ from .serializers import (
 class RoomTypeViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
     queryset = RoomType.objects.select_related("hotel_settings").all()
     serializer_class = RoomTypeSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["room_type.read"]
     tenant_filter = "hotel_settings"
@@ -43,7 +44,7 @@ class RoomTypeViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.Mode
 class RateViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
     queryset = Rate.objects.select_related("hotel_settings", "room_type").all()
     serializer_class = RateSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["rates.read"]
     tenant_filter = "hotel_settings"
@@ -65,7 +66,7 @@ class RateViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelVie
 class AmenityViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
     queryset = Amenity.objects.select_related("hotel_settings").all()
     serializer_class = AmenitySerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["amenities.read"]
     tenant_filter = "hotel_settings"
@@ -102,7 +103,7 @@ class RoomViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelVie
         .all()
     )
     serializer_class = RoomSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["rooms.read"]
     tenant_filter = "floor__hotel_settings"
@@ -170,7 +171,7 @@ class MaintenanceOrderViewSet(
         "status",
     ).all()
     serializer_class = MaintenanceOrderSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["maintenance_orders.read"]
     tenant_filter = "room__floor__hotel_settings"
@@ -208,7 +209,7 @@ class CleaningTaskViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.
         "priority",
     ).all()
     serializer_class = CleaningTaskSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["cleaning_tasks.read"]
     tenant_filter = "room__floor__hotel_settings"

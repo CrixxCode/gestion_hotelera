@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.packages.models import Package, PackageService
 from apps.services.models import Service
-from accounts.tenancy import TenantSerializerMixin
+from accounts.tenancy import TenantSerializerMixin, is_effective_global_admin
 from apps.hotel_settings.models import HotelSettings
 from apps.rooms.models import RoomType
 
@@ -29,7 +29,7 @@ class PackageServiceSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         user = getattr(request, "user", None)
 
-        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+        if user and user.is_authenticated and not is_effective_global_admin(user) and user.hotel_settings_id:
             fields["package"].queryset = Package.objects.filter(
                 hotel_settings_id=user.hotel_settings_id
             )
@@ -64,7 +64,7 @@ class PackageServiceSerializer(serializers.ModelSerializer):
                 {"service": "The service must belong to the same hotel as the package."}
             )
 
-        if user and user.is_authenticated and not user.is_superuser:
+        if user and user.is_authenticated and not is_effective_global_admin(user):
             if user.hotel_settings_id is None:
                 raise serializers.ValidationError(
                     {"package": "El usuario autenticado no tiene un hotel asignado."}
@@ -129,7 +129,7 @@ class PackageSerializer(TenantSerializerMixin, serializers.ModelSerializer):
         fields = super().get_fields()
         user = self.get_actor()
 
-        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+        if user and user.is_authenticated and not is_effective_global_admin(user) and user.hotel_settings_id:
             fields["room_type"].queryset = RoomType.objects.filter(
                 hotel_settings_id=user.hotel_settings_id
             )

@@ -13,7 +13,7 @@ type DRFPaginated<T> = {
   providedIn: 'root'
 })
 export class PromotionsService {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly promotionsUrl = `${this.apiBase}/api/promotions/`;
 
   constructor(

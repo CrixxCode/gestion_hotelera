@@ -8,6 +8,7 @@ type ProfileTab = 'profile' | 'password' | 'work';
 type PersonalFormValue = {
   full_name: string;
   email: string;
+  avatar: string;
   phone: string;
   department: string;
   location: string;
@@ -41,6 +42,7 @@ export class MyProfilePage implements OnInit {
   joinedLabel = 'Sin fecha';
 
   profileSavedMessage = '';
+  profileErrorMessage = '';
   passwordSavedMessage = '';
   workSavedMessage = '';
   passwordErrorMessage = '';
@@ -56,6 +58,7 @@ export class MyProfilePage implements OnInit {
   personalForm = this.fb.nonNullable.group({
     full_name: ['', Validators.required],
     email: ['', [Validators.required, Validators.email]],
+    avatar: [''],
     phone: [''],
     department: [''],
     location: [''],
@@ -97,8 +100,28 @@ export class MyProfilePage implements OnInit {
     if (!this.isEditingProfile) return;
     this.personalForm.markAllAsTouched();
     if (this.personalForm.invalid) return;
-    this.profileSavedMessage = 'Interfaz lista. Pendiente conectar endpoint para guardar datos personales.';
-    this.finishProfileEditing();
+
+    const formValue = this.personalForm.getRawValue();
+    const { firstName, lastName } = this.splitFullName(formValue.full_name);
+    const payload = {
+      first_name: firstName,
+      last_name: lastName,
+      email: formValue.email.trim(),
+      avatar: formValue.avatar.trim(),
+    };
+
+    this.authService.updateMyProfile(payload).subscribe({
+      next: (updatedUser) => {
+        this.profileErrorMessage = '';
+        this.hydrateFromUser(updatedUser);
+        this.profileSavedMessage = 'Perfil actualizado correctamente.';
+        this.finishProfileEditing();
+      },
+      error: () => {
+        this.profileSavedMessage = '';
+        this.profileErrorMessage = 'No se pudo actualizar la informacion de perfil.';
+      },
+    });
   }
 
   startProfileEditing(): void {
@@ -230,6 +253,9 @@ export class MyProfilePage implements OnInit {
 
     const department = this.getString(user, 'department');
     const phone = this.getString(user, 'phone') || this.getString(user, 'phone_number');
+    const hotelName =
+      this.getString(user, 'hotel_name') ||
+      this.getString(user.hotel_settings, 'hotel_name');
     const joined =
       this.getString(user, 'date_joined') ||
       this.getString(user, 'created_at') ||
@@ -245,6 +271,7 @@ export class MyProfilePage implements OnInit {
     this.personalForm.reset({
       full_name: finalName,
       email: user.email || '',
+      avatar: user.avatar || '',
       phone,
       department,
       location,
@@ -252,7 +279,7 @@ export class MyProfilePage implements OnInit {
     this.finishProfileEditing();
 
     this.workForm.reset({
-      hotel_name: this.getString(user, 'hotel_name'),
+      hotel_name: hotelName,
       job_title: this.getString(user, 'job_title'),
       work_role: roleName,
     });
@@ -295,7 +322,9 @@ export class MyProfilePage implements OnInit {
   }
 
   private clearMessages(): void {
+    this.loadError = '';
     this.profileSavedMessage = '';
+    this.profileErrorMessage = '';
     this.passwordSavedMessage = '';
     this.workSavedMessage = '';
     this.passwordErrorMessage = '';
@@ -311,5 +340,18 @@ export class MyProfilePage implements OnInit {
     this.isEditingWork = false;
     this.workSnapshot = null;
     this.workForm.disable({ emitEvent: false });
+  }
+
+  private splitFullName(fullName: string): { firstName: string; lastName: string } {
+    const normalized = (fullName || '').trim().replace(/\s+/g, ' ');
+    if (!normalized) return { firstName: '', lastName: '' };
+
+    const parts = normalized.split(' ');
+    if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+
+    return {
+      firstName: parts[0],
+      lastName: parts.slice(1).join(' '),
+    };
   }
 }

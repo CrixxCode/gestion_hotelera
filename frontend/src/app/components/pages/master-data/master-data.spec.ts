@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
+import { ConfirmationService } from 'primeng/api';
 
 import { MasterDataComponent } from './master-data';
 import { MasterDataService } from '../../../services/master-data.service';
@@ -21,7 +22,8 @@ describe('MasterDataComponent', () => {
             updateMasterData: () => of({}),
             deleteMasterData: () => of({})
           }
-        }
+        },
+        ConfirmationService
       ]
     }).compileComponents();
 

@@ -113,6 +113,11 @@
             </small>
           </label>
 
+          <label class="full-row">
+            <span>Avatar (URL)</span>
+            <input type="url" formControlName="avatar" placeholder="https://mi-dominio.com/avatar.jpg" />
+          </label>
+
           <label>
             <span>Telefono</span>
             <input type="text" formControlName="phone" placeholder="+57 300 000 0000" />
@@ -132,6 +137,10 @@
         <p class="feedback success" *ngIf="profileSavedMessage">
           <i class="fa-solid fa-circle-check"></i>
           {{ profileSavedMessage }}
+        </p>
+        <p class="feedback error" *ngIf="profileErrorMessage">
+          <i class="fa-solid fa-circle-exclamation"></i>
+          {{ profileErrorMessage }}
         </p>
       </div>
 

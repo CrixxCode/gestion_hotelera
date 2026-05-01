@@ -28,9 +28,10 @@ from apps.billing.services import (
 from apps.inventory.models import InventoryMovement, Item
 from apps.inventory.services import get_or_create_inventory_movement_type
 from apps.reservations.models import Reservation
+from accounts.pagination import OptionalPageNumberPagination
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
-from accounts.tenancy import TenantScopeMixin
+from accounts.tenancy import TenantScopeMixin, is_effective_global_admin
 
 
 class ChargeViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
@@ -45,7 +46,7 @@ class ChargeViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelV
     )
     tenant_filter = "reservation__hotel_settings"
     serializer_class = ChargeSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["charges.read"]
 
@@ -114,7 +115,7 @@ class ChargeViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelV
         user = self.request.user
         if not user.is_authenticated:
             raise PermissionDenied("Debes autenticarte.")
-        if user.is_superuser:
+        if is_effective_global_admin(user):
             return
         if user.hotel_settings_id is None:
             raise PermissionDenied("El usuario autenticado no tiene un hotel asignado.")
@@ -125,7 +126,7 @@ class ChargeViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelV
         user = self.request.user
         if not user.is_authenticated:
             raise PermissionDenied("Debes autenticarte.")
-        if user.is_superuser:
+        if is_effective_global_admin(user):
             return
         if user.hotel_settings_id is None:
             raise PermissionDenied("El usuario autenticado no tiene un hotel asignado.")
@@ -193,7 +194,10 @@ class ChargeViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelV
 
         with transaction.atomic():
             reservation_queryset = Reservation.objects.select_for_update().filter(id=reservation_id)
-            if not request.user.is_superuser and request.user.hotel_settings_id is not None:
+            if (
+                not is_effective_global_admin(request.user)
+                and request.user.hotel_settings_id is not None
+            ):
                 reservation_queryset = reservation_queryset.filter(
                     hotel_settings_id=request.user.hotel_settings_id
                 )
@@ -237,7 +241,10 @@ class ChargeViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelV
                     id=item_id,
                     is_active=True,
                 )
-                if not request.user.is_superuser and request.user.hotel_settings_id is not None:
+                if (
+                    not is_effective_global_admin(request.user)
+                    and request.user.hotel_settings_id is not None
+                ):
                     item_queryset = item_queryset.filter(
                         hotel_settings_id=request.user.hotel_settings_id
                     )
@@ -481,7 +488,7 @@ class InvoiceChargeViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets
     )
     tenant_filter = "invoice__reservation__hotel_settings"
     serializer_class = InvoiceChargeSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["invoices.read"]
 
@@ -522,7 +529,7 @@ class PaymentViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.Model
     )
     tenant_filter = "invoice__reservation__hotel_settings"
     serializer_class = PaymentSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["payments.read"]
 
@@ -569,11 +576,24 @@ class PaymentViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.Model
 
         serializer.save()
 
+    @action(detail=True, methods=["post"], url_path="inactivate")
+    def inactivate(self, request, pk=None):
+        payment = self.get_object()
+        if payment.is_active and not self._is_admin_user(request.user):
+            raise PermissionDenied("Solo un administrador puede inactivar pagos.")
+
+        if payment.is_active:
+            payment.is_active = False
+            payment.save(update_fields=["is_active"])
+
+        serializer = self.get_serializer(payment)
+        return Response(serializer.data)
+
     @staticmethod
     def _is_admin_user(user) -> bool:
         if not user or not user.is_authenticated:
             return False
-        if getattr(user, "is_superuser", False):
+        if is_effective_global_admin(user):
             return True
         return user.roles.filter(
             slug__iexact="admin",
@@ -595,7 +615,7 @@ class PaymentRefundViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets
     )
     tenant_filter = "payment__invoice__reservation__hotel_settings"
     serializer_class = PaymentRefundSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["payments.read"]
 
@@ -670,7 +690,7 @@ class PaymentRefundViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets
     def _is_admin_user(user) -> bool:
         if not user or not user.is_authenticated:
             return False
-        if getattr(user, "is_superuser", False):
+        if is_effective_global_admin(user):
             return True
         return user.roles.filter(
             slug__iexact="admin",
@@ -749,7 +769,7 @@ class CreditNoteViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.Mo
     )
     tenant_filter = "invoice__reservation__hotel_settings"
     serializer_class = CreditNoteSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["credit-notes.read"]
 

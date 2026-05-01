@@ -3,16 +3,17 @@ from django.db.models import F
 
 from apps.inventory.models import Item, InventoryMovement, RoomInventory
 from apps.inventory.serializers import ItemSerializer, InventoryMovementSerializer, RoomInventorySerializer
+from accounts.pagination import OptionalPageNumberPagination
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
-from accounts.tenancy import TenantScopeMixin
+from accounts.tenancy import TenantScopeMixin, is_effective_global_admin
 
 
 def _filter_queryset_by_user_tenant(queryset, user, *, tenant_filter: str):
     if not user or not user.is_authenticated:
         return queryset.none()
 
-    if user.is_superuser:
+    if is_effective_global_admin(user):
         return queryset
 
     tenant_id = getattr(user, "hotel_settings_id", None)
@@ -32,7 +33,7 @@ class ItemViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelVie
     )
     tenant_filter = "hotel_settings"
     serializer_class = ItemSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["items.read"]
 
@@ -87,7 +88,7 @@ class InventoryMovementViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, view
     )
     tenant_filter = "item__hotel_settings"
     serializer_class = InventoryMovementSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["inventory-movements.read"]
 
@@ -133,7 +134,7 @@ class RoomInventoryViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets
     )
     tenant_filter = "room__floor__hotel_settings"
     serializer_class = RoomInventorySerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["room-inventory.read"]
 

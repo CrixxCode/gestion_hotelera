@@ -1,13 +1,16 @@
 from django.db import transaction
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status, viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
+from accounts.pagination import OptionalPageNumberPagination
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
-from accounts.tenancy import TenantScopeMixin
+from accounts.tenancy import TenantScopeMixin, is_effective_global_admin
 from apps.master_data.models import MasterData
 from apps.rooms.models import Room
 
@@ -18,7 +21,7 @@ from .serializers import HotelFloorSerializer, HotelSettingsSerializer, Reservat
 class HotelSettingsViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = HotelSettings.objects.all().order_by("-id")
     serializer_class = HotelSettingsSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
@@ -41,7 +44,7 @@ class HotelSettingsViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         if not user or not user.is_authenticated:
             return queryset.none()
 
-        if user.is_superuser:
+        if is_effective_global_admin(user):
             return queryset
 
         if user.hotel_settings_id is None:
@@ -58,7 +61,7 @@ class HotelSettingsViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         if (
             user
             and user.is_authenticated
-            and not user.is_superuser
+            and not is_effective_global_admin(user)
         ):
             user.hotel_settings = settings_obj
             user.save(update_fields=["hotel_settings"])
@@ -78,9 +81,6 @@ class HotelSettingsViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         return queryset.first()
 
     def _clear_settings_payload(self, settings_obj: HotelSettings):
-        if settings_obj.logo:
-            settings_obj.logo.delete(save=False)
-
         return {
             "legal_name": None,
             "slogan": None,
@@ -118,7 +118,7 @@ class HotelSettingsViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         if (
             user
             and user.is_authenticated
-            and not user.is_superuser
+            and not is_effective_global_admin(user)
             and self.get_queryset().exists()
         ):
             return Response(
@@ -160,7 +160,12 @@ class HotelSettingsViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         )
         requested_hotel_id = str(requested_hotel_id).strip()
 
-        if user and user.is_authenticated and user.is_superuser and not requested_hotel_id:
+        if (
+            user
+            and user.is_authenticated
+            and is_effective_global_admin(user)
+            and not requested_hotel_id
+        ):
             return Response(
                 {
                     "detail": (
@@ -203,7 +208,7 @@ class HotelSettingsViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 class HotelFloorViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.ModelViewSet):
     queryset = HotelFloor.objects.select_related("hotel_settings").all().order_by("floor_number")
     serializer_class = HotelFloorSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     tenant_filter = "hotel_settings"
 
@@ -362,6 +367,16 @@ class HotelFloorViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, viewsets.Mo
         return super().create(request, *args, **kwargs)
 
     @action(detail=False, methods=["get"], url_path="by-settings/(?P<settings_id>[^/.]+)")
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="settings_id",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+                required=True,
+            )
+        ]
+    )
     def by_settings(self, request, settings_id=None):
         """
         Devuelve los pisos de una configuracion especifica.
@@ -379,7 +394,7 @@ class ReservationPolicyViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, view
         ).order_by("-id")
     )
     serializer_class = ReservationPolicySerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["reservation-policies.read"]
     tenant_filter = "hotel_settings"

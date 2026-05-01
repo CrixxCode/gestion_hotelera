@@ -1,14 +1,17 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError as DjangoValidationError
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, status, viewsets
+from rest_framework import filters, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.pagination import OptionalPageNumberPagination
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
-from accounts.tenancy import TenantScopeMixin
+from accounts.tenancy import TenantScopeMixin, is_effective_global_admin
 from apps.finance.models import (
     Expense,
     FinancialControlConfig,
@@ -34,6 +37,10 @@ from apps.finance.services import (
 )
 
 
+class FinancialControlSchemaSerializer(serializers.Serializer):
+    payload = serializers.JSONField(required=False)
+
+
 class ExpenseViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         Expense.objects.select_related(
@@ -44,7 +51,7 @@ class ExpenseViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.Model
     )
     tenant_filter = "hotel_settings"
     serializer_class = ExpenseSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["expenses.read"]
 
@@ -88,7 +95,7 @@ class FinancialControlConfigViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin,
     queryset = FinancialControlConfig.objects.select_related("hotel_settings")
     tenant_filter = "hotel_settings"
     serializer_class = FinancialControlConfigSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["financial_control.read"]
 
@@ -121,7 +128,7 @@ class OperationalAlertViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, views
     queryset = OperationalAlert.objects.select_related("hotel_settings")
     tenant_filter = "hotel_settings"
     serializer_class = OperationalAlertSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["financial_control.read"]
 
@@ -166,7 +173,7 @@ class OperationalAlertViewSet(LogicalDeleteViewSetMixin, TenantScopeMixin, views
             if raw_hotel_settings is None:
                 raw_hotel_settings = request.query_params.get("hotel_settings")
 
-            if user.is_superuser:
+            if is_effective_global_admin(user):
                 if raw_hotel_settings in (None, ""):
                     payload = sync_operational_alerts_for_all_hotels()
                     return Response(payload, status=status.HTTP_200_OK)
@@ -210,7 +217,7 @@ class FinancialStatementSnapshotViewSet(TenantScopeMixin, LogicalDeleteViewSetMi
     queryset = FinancialStatementSnapshot.objects.select_related("hotel_settings")
     tenant_filter = "hotel_settings"
     serializer_class = FinancialStatementSnapshotSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["financial_control.read"]
 
@@ -240,6 +247,7 @@ class FinancialStatementSnapshotViewSet(TenantScopeMixin, LogicalDeleteViewSetMi
 
 
 class FinancialControlViewSet(viewsets.ViewSet):
+    serializer_class = FinancialControlSchemaSerializer
     permission_classes = [HasResourcePermission]
     required_scopes = ["financial_control.read"]
 
@@ -252,6 +260,7 @@ class FinancialControlViewSet(viewsets.ViewSet):
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
 
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def list(self, request):
         return Response(
             {
@@ -264,6 +273,7 @@ class FinancialControlViewSet(viewsets.ViewSet):
         )
 
     @action(detail=False, methods=["get"], url_path="dashboard")
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def dashboard(self, request):
         try:
             hotel_settings_id = self._resolve_hotel_settings_id()
@@ -281,6 +291,7 @@ class FinancialControlViewSet(viewsets.ViewSet):
             return self._validation_error_response(exc)
 
     @action(detail=False, methods=["get"], url_path="what-if")
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def what_if(self, request):
         try:
             hotel_settings_id = self._resolve_hotel_settings_id()
@@ -326,6 +337,7 @@ class FinancialControlViewSet(viewsets.ViewSet):
             return self._validation_error_response(exc)
 
     @action(detail=False, methods=["get"], url_path="statements")
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def statements(self, request):
         try:
             hotel_settings_id = self._resolve_hotel_settings_id()
@@ -348,7 +360,7 @@ class FinancialControlViewSet(viewsets.ViewSet):
         if not user or not user.is_authenticated:
             raise DjangoValidationError({"detail": "Authentication required."})
 
-        if user.is_superuser:
+        if is_effective_global_admin(user):
             raw_value = (self.request.query_params.get("hotel_settings") or "").strip()
             if not raw_value:
                 raise DjangoValidationError(

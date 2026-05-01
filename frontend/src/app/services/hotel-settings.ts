@@ -8,7 +8,7 @@ import { HotelSettings } from '../components/pages/hotel-settings/hotel-setting-
 @Injectable({ providedIn: 'root' })
 export class HotelSettingsService {
 
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly settingsUrl = `${this.apiBase}/api/hotel-settings/`;
 
   constructor(
@@ -38,7 +38,7 @@ export class HotelSettingsService {
   /**
    * Crear configuración inicial del hotel
    */
-  createSettings(payload: Partial<HotelSettings> | FormData): Observable<HotelSettings> {
+  createSettings(payload: Partial<HotelSettings>): Observable<HotelSettings> {
     return this.http.post<HotelSettings>(
       this.settingsUrl,
       payload,
@@ -49,7 +49,7 @@ export class HotelSettingsService {
   /**
    * Actualizar configuración existente
    */
-  updateSettings(id: number, payload: Partial<HotelSettings> | FormData): Observable<HotelSettings> {
+  updateSettings(id: number, payload: Partial<HotelSettings>): Observable<HotelSettings> {
     return this.http.patch<HotelSettings>(
       `${this.settingsUrl}${id}/`,
       payload,

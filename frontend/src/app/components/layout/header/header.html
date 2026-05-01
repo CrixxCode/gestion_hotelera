@@ -35,7 +35,7 @@
           <div class="px-4 py-3 border-b border-gray-100 flex items-start justify-between gap-3">
             <div>
               <p class="text-sm font-semibold text-gray-800">Notificaciones</p>
-              <p class="text-xs text-gray-500">{{ unreadCount }} sin leer · {{ readCount }} leidas</p>
+              <p class="text-xs text-gray-500">{{ unreadCount }} sin leer - {{ readCount }} leidas</p>
             </div>
 
             <div class="inline-flex items-center gap-2">
@@ -54,14 +54,6 @@
                 [disabled]="unreadCount === 0"
               >
                 Marcar leidas
-              </button>
-              <button
-                class="text-xs text-[#1F2937] hover:underline disabled:text-gray-400"
-                type="button"
-                (click)="markNotificationsAsUnread()"
-                [disabled]="actionableNotificationCount === 0 || actionableNotificationCount === unreadCount"
-              >
-                Marcar no leidas
               </button>
             </div>
           </div>
@@ -196,3 +188,4 @@
   </div>
 </header>
 <app-logout-screen *ngIf="showLogout"></app-logout-screen>
+

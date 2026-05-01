@@ -138,19 +138,19 @@ class ClientSerializer(serializers.ModelSerializer):
             "stay_level",
         )
 
-    def get_full_name(self, obj):
+    def get_full_name(self, obj) -> str:
         return obj.full_name
 
-    def get_stay_level(self, obj):
+    def get_stay_level(self, obj) -> str:
         return obj.resolve_client_type_code_by_stay_nights()
 
-    def get_document_type(self, obj):
+    def get_document_type(self, obj) -> str:
         return obj.document_type_code
 
-    def get_client_type(self, obj):
+    def get_client_type(self, obj) -> str:
         return obj.client_type_code
 
-    def get_status(self, obj):
+    def get_status(self, obj) -> str:
         return obj.status_code
 
 

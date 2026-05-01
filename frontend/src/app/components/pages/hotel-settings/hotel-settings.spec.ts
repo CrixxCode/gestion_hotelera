@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
+import { ConfirmationService } from 'primeng/api';
 
 import { HotelSettings } from './hotel-settings';
 
@@ -15,7 +16,8 @@ describe('HotelSettings', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
-        provideRouter([])
+        provideRouter([]),
+        ConfirmationService
       ]
     })
     .compileComponents();

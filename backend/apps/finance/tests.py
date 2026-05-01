@@ -103,6 +103,7 @@ class FinancialControlApiTests(APITestCase):
             room_count=1,
         )
         self.room_type = RoomType.objects.create(
+            hotel_settings=self.hotel,
             code="STD",
             name="Estandar",
         )
@@ -114,6 +115,7 @@ class FinancialControlApiTests(APITestCase):
         )
 
         self.customer = Client.objects.create(
+            hotel_settings=self.hotel,
             document_type=self.document_type,
             document_number="123456789",
             first_name="Ana",
@@ -126,7 +128,8 @@ class FinancialControlApiTests(APITestCase):
         )
 
         today = timezone.localdate()
-        self.period_start = today.replace(day=1)
+        # Use a stable rolling window to avoid month-boundary flakiness (day=1 edge case).
+        self.period_start = today - timedelta(days=6)
         self.period_end = today
         self.invoice_counter = 1
 
@@ -136,6 +139,7 @@ class FinancialControlApiTests(APITestCase):
             check_out = check_in + timedelta(days=1)
 
         self.reservation = Reservation.objects.create(
+            hotel_settings=self.hotel,
             client=self.customer,
             status=self.reservation_status,
             origin=self.reservation_origin,
@@ -273,6 +277,7 @@ class FinancialControlApiTests(APITestCase):
             status=self.room_status,
         )
         reservation = Reservation.objects.create(
+            hotel_settings=self.hotel,
             client=self.customer,
             status=self.reservation_status,
             origin=self.reservation_origin,
@@ -790,7 +795,11 @@ class OperationalAlertsAutomationTests(TestCase):
             prefix="1",
             room_count=3,
         )
-        self.room_type = RoomType.objects.create(code="STD", name="Estandar")
+        self.room_type = RoomType.objects.create(
+            hotel_settings=self.hotel,
+            code="STD",
+            name="Estandar",
+        )
         self.room_1 = Room.objects.create(
             number="101",
             room_type=self.room_type,
@@ -811,6 +820,7 @@ class OperationalAlertsAutomationTests(TestCase):
         )
 
         self.client_obj = Client.objects.create(
+            hotel_settings=self.hotel,
             document_type=self.document_type,
             document_number="123456789",
             first_name="Ana",
@@ -824,6 +834,7 @@ class OperationalAlertsAutomationTests(TestCase):
 
         today = timezone.localdate()
         self.reservation = Reservation.objects.create(
+            hotel_settings=self.hotel,
             client=self.client_obj,
             status=self.reservation_status,
             origin=self.reservation_origin,

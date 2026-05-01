@@ -3,6 +3,7 @@ from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.pagination import OptionalPageNumberPagination
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
 from .models import MasterData
@@ -12,7 +13,7 @@ from .serializers import MasterDataSerializer
 class MasterDataViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = MasterData.objects.all().order_by("group", "sort_order", "name")
     serializer_class = MasterDataSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["master_data.read"]
 

@@ -12,7 +12,7 @@ type ReadStateResponse = {
   providedIn: 'root',
 })
 export class NotificationStateService {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly readStateUrl = `${this.apiBase}/api/auth/notifications/read-state/`;
   private readonly markReadUrl = `${this.apiBase}/api/auth/notifications/mark-read/`;
   private readonly markUnreadUrl = `${this.apiBase}/api/auth/notifications/mark-unread/`;

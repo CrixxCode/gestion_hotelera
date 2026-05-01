@@ -66,6 +66,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.72rem;
+  min-width: 0;
   color: var(--ghl-ink);
   text-decoration: none;
   font-weight: 800;
@@ -73,10 +74,13 @@
 }
 
 .ghl-brand img {
-  width: 42px;
+  width: auto;
   height: 42px;
-  border-radius: 10px;
-  object-fit: cover;
+  max-width: min(190px, 30vw);
+  border-radius: 0;
+  object-fit: contain;
+  object-position: left center;
+  flex-shrink: 0;
 }
 
 .ghl-brand strong {
@@ -862,8 +866,9 @@
   }
 
   .ghl-brand img {
-    width: 34px;
+    width: auto;
     height: 34px;
+    max-width: min(46vw, 156px);
   }
 
   .ghl-btn {

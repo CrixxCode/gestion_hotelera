@@ -4,6 +4,8 @@ import { Observable } from 'rxjs';
 import { environment } from '../../enviorements/environment';
 import {
   ExecutiveReportResponse,
+  IncomeConsolidatedQueryParams,
+  IncomeConsolidatedReportResponse,
   OccupancyReportResponse,
   ReportQueryParams,
   RevenueReportResponse,
@@ -14,7 +16,7 @@ import {
   providedIn: 'root',
 })
 export class ReportsService {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly reportsUrl = `${this.apiBase}/api/reports/`;
 
   constructor(private http: HttpClient) {}
@@ -42,6 +44,15 @@ export class ReportsService {
 
   getServicesReport(params?: ReportQueryParams): Observable<ServicesReportResponse> {
     return this.http.get<ServicesReportResponse>(`${this.reportsUrl}services/`, {
+      withCredentials: true,
+      params: this.buildParams(params),
+    });
+  }
+
+  getIncomeConsolidatedReport(
+    params?: IncomeConsolidatedQueryParams
+  ): Observable<IncomeConsolidatedReportResponse> {
+    return this.http.get<IncomeConsolidatedReportResponse>(`${this.reportsUrl}income-consolidated/`, {
       withCredentials: true,
       params: this.buildParams(params),
     });

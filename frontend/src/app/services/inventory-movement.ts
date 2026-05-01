@@ -16,7 +16,7 @@ type DRFPaginated<T> = {
   providedIn: 'root'
 })
 export class InventoryMovementsService {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly movementsUrl = `${this.apiBase}/api/inventory-movements/`;
 
   constructor(

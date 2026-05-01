@@ -19,14 +19,29 @@ export interface MeResponse {
   first_name: string;
   last_name: string;
   avatar?: string | null;
+  hotel_settings?: {
+    id?: string | number;
+    hotel_name?: string;
+    city?: string;
+    country?: string;
+    timezone?: string;
+    currency?: string;
+  } | null;
   roles?: any[];
   resource_keys?: string[];
   menu?: MenuItem[];
 }
 
+export interface ProfileUpdatePayload {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  avatar?: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
 
   private csrfUrl = `${this.apiBase}/api/auth/csrf/`;
   private loginUrl = `${this.apiBase}/api/auth/login/`;
@@ -35,6 +50,7 @@ export class AuthService {
   private passwordChangeUrl = `${this.apiBase}/api/auth/password/change/`;
   private passwordResetRequestUrl = `${this.apiBase}/api/auth/password/reset/`;
   private passwordResetConfirmUrl = `${this.apiBase}/api/auth/password/reset/confirm/`;
+  private profileUpdateUrl = `${this.apiBase}/api/auth/me/update/`;
 
   constructor(private http: HttpClient) {}
 
@@ -92,6 +108,18 @@ export class AuthService {
       this.passwordChangeUrl,
       { old_password, new_password },
       this.buildCsrfRequestOptions()
+    );
+  }
+
+  updateMyProfile(payload: ProfileUpdatePayload): Observable<MeResponse> {
+    return this.getCsrfToken().pipe(
+      switchMap(() =>
+        this.http.put<MeResponse>(
+          this.profileUpdateUrl,
+          payload,
+          this.buildCsrfRequestOptions()
+        )
+      )
     );
   }
 

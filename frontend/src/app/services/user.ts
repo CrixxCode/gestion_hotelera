@@ -14,7 +14,7 @@ interface PaginatedResponse<T> {
 
 @Injectable({ providedIn: 'root' })
 export class UserService {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly usersUrl = `${this.apiBase}/api/users/`;
 
   constructor(
@@ -80,7 +80,7 @@ export class UserService {
   }
 
   /** Crea un nuevo usuario */
-  createUser(user: UserI, avatarFile?: File): Observable<UserI> {
+  createUser(user: UserI): Observable<UserI> {
     const formData = new FormData();
 
     // Campos básicos
@@ -88,12 +88,9 @@ export class UserService {
     formData.append('last_name', user.last_name);
     formData.append('username', user.username);
     formData.append('email', user.email);
+    formData.append('job_title', user.job_title || '');
     formData.append('password', user.password || '');
-
-    // Avatar (solo si se selecciona)
-    if (avatarFile) {
-      formData.append('avatar', avatarFile);
-    }
+    formData.append('avatar', user.avatar || '');
 
     // Estado (usar is_active)
     formData.append('is_active', user.is_active ? 'true' : 'false');
@@ -111,17 +108,15 @@ export class UserService {
   }
 
   /** Actualiza un usuario existente */
-  updateUser(id: number, user: UserI, avatarFile?: File): Observable<UserI> {
+  updateUser(id: number, user: UserI): Observable<UserI> {
     const formData = new FormData();
     formData.append('first_name', user.first_name);
     formData.append('last_name', user.last_name);
     formData.append('username', user.username);
     formData.append('email', user.email);
+    formData.append('job_title', user.job_title || '');
+    formData.append('avatar', user.avatar || '');
     formData.append('is_active', user.is_active ? 'true' : 'false');
-
-    if (avatarFile) {
-      formData.append('avatar', avatarFile);
-    }
 
     return this.http.patch<UserI>(
       `${this.usersUrl}${id}/`,

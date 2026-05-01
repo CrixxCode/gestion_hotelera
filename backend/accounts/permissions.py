@@ -3,6 +3,7 @@ import logging
 from rest_framework.permissions import BasePermission
 
 from accounts.models import Resource
+from accounts.tenancy import is_effective_global_admin
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ class HasResourcePermission(BasePermission):
         if not user or not user.is_authenticated:
             return False
 
-        if getattr(user, "is_superuser", False):
+        if is_effective_global_admin(user):
             return True
 
         required = getattr(view, "required_scopes", None)

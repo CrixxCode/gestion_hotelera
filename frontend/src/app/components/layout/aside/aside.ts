@@ -14,8 +14,8 @@ import { HotelSettings } from '../../pages/hotel-settings/hotel-setting-model';
   styleUrls: ['./aside.css']
 })
 export class Aside implements OnInit, OnDestroy {
-  readonly defaultBrandLogo = 'logo.png';
-  readonly defaultBrandName = 'HotelManager Pro';
+  readonly defaultBrandLogo = 'logo-white.png';
+  readonly defaultBrandName = 'Wayra';
 
   brandLogo = this.defaultBrandLogo;
   brandName = this.defaultBrandName;

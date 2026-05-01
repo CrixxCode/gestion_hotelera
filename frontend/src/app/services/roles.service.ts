@@ -44,7 +44,7 @@ type DRFPaginated<T> = {
 
 @Injectable({ providedIn: 'root' })
 export class RolesService {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly rolesUrl = `${this.apiBase}/api/roles/`;
   private readonly resourcesUrl = `${this.apiBase}/api/resources/`;
 

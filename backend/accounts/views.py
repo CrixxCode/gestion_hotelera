@@ -8,24 +8,52 @@ logger = logging.getLogger(__name__)
 from django.utils.decorators import method_decorator
 from django.utils import timezone
 
-from rest_framework import viewsets, status, filters
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
+from rest_framework import serializers as drf_serializers, viewsets, status, filters
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.throttling import ScopedRateThrottle
+from accounts.pagination import OptionalPageNumberPagination
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
+from accounts.tenancy import is_effective_global_admin
 
 from .models import Role, Resource, UserRole, RoleResource, NotificationReadState
 from .serializers import (
     RegisterSerializer, UserSerializer, RoleSerializer, ResourceSerializer,
     UserMiniSerializer, PasswordChangeSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer,
-    NotificationKeysSerializer
+    NotificationKeysSerializer, ProfileUpdateSerializer
 )
 from django.db import models
 
 User = get_user_model()
+
+
+def _require_public_registration_token(request, *, setting_name: str) -> None:
+    expected_token = str(getattr(settings, setting_name, "") or "").strip()
+    if not expected_token:
+        raise PermissionDenied("Public registration is not securely configured.")
+
+    provided_token = str(
+        request.headers.get("X-Public-Registration-Token", "")
+        or request.data.get("registration_token", "")
+    ).strip()
+    if provided_token != expected_token:
+        raise PermissionDenied("Invalid public registration token.")
+
+
+class EmptySerializer(drf_serializers.Serializer):
+    pass
+
+
+class SessionLoginRequestSerializer(drf_serializers.Serializer):
+    username = drf_serializers.CharField()
+    password = drf_serializers.CharField()
+    remember_me = drf_serializers.BooleanField(required=False, default=False)
 
 
 # -----------------------------
@@ -35,6 +63,7 @@ User = get_user_model()
 class HealthCheckView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def get(self, request):
         return Response({"status": "ok"}, status=status.HTTP_200_OK)
 
@@ -47,6 +76,7 @@ class CsrfInitView(APIView):
     """
     permission_classes = [AllowAny]
 
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def get(self, request):
         return Response({"detail": "CSRF cookie set"}, status=status.HTTP_200_OK)
 
@@ -66,6 +96,10 @@ class SessionLoginView(APIView):
     throttle_scope = "auth_login"
     throttle_classes = [ScopedRateThrottle]
 
+    @extend_schema(
+        request=SessionLoginRequestSerializer,
+        responses={200: OpenApiTypes.OBJECT},
+    )
     def post(self, request):
         username = (request.data.get("username") or "").strip()
         password = request.data.get("password") or ""
@@ -99,7 +133,9 @@ class SessionLogoutView(APIView):
     Requiere X-CSRFToken porque modifica estado.
     """
     permission_classes = [IsAuthenticated]
+    serializer_class = EmptySerializer
 
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def post(self, request):
         logout(request)
         return Response({"detail": "Sesión cerrada"}, status=status.HTTP_200_OK)
@@ -110,7 +146,9 @@ class MeSessionView(APIView):
     GET -> devuelve el usuario autenticado por sesión.
     """
     permission_classes = [IsAuthenticated]
+    serializer_class = UserSerializer
 
+    @extend_schema(responses=UserSerializer)
     def get(self, request):
         return Response(
             UserSerializer(request.user, context={"request": request}).data,
@@ -125,6 +163,10 @@ class PasswordChangeView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=PasswordChangeSerializer,
+        responses={200: OpenApiTypes.OBJECT},
+    )
     def post(self, request):
         ser = PasswordChangeSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
@@ -146,6 +188,10 @@ class PasswordResetRequestView(APIView):
     throttle_scope = "password_reset"
     throttle_classes = [ScopedRateThrottle]
 
+    @extend_schema(
+        request=PasswordResetRequestSerializer,
+        responses={200: OpenApiTypes.OBJECT},
+    )
     def post(self, request):
         ser = PasswordResetRequestSerializer(
             data=request.data,
@@ -171,6 +217,10 @@ class PasswordResetConfirmView(APIView):
     """
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=PasswordResetConfirmSerializer,
+        responses={200: OpenApiTypes.OBJECT},
+    )
     def post(self, request):
         ser = PasswordResetConfirmSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
@@ -184,7 +234,7 @@ class PasswordResetConfirmView(APIView):
 
 class UserViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     serializer_class = UserSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["users.read"]
     serializer_action_classes = {
@@ -204,7 +254,7 @@ class UserViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         if not user.is_authenticated:
             return User.objects.none()
 
-        if user.is_superuser:
+        if is_effective_global_admin(user):
             return qs
 
         if user.hotel_settings_id is None:
@@ -222,7 +272,7 @@ class UserViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 
     def get_permissions(self):
         allow_public_register = getattr(settings, "ALLOW_PUBLIC_USER_REGISTRATION", False)
-        if self.action in ("create", "register") and allow_public_register:
+        if self.action == "register" and allow_public_register:
             return [AllowAny()]
         self.required_scopes = self.get_required_scopes()
         return super().get_permissions()
@@ -236,6 +286,12 @@ class UserViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="register")
     def register(self, request):
+        allow_public_register = getattr(settings, "ALLOW_PUBLIC_USER_REGISTRATION", False)
+        if not request.user.is_authenticated and allow_public_register:
+            _require_public_registration_token(
+                request,
+                setting_name="PUBLIC_USER_REGISTRATION_TOKEN",
+            )
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
@@ -246,7 +302,7 @@ class UserViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 class RoleViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = Role.objects.all().order_by("name")
     serializer_class = RoleSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["roles.read"]
 
@@ -269,7 +325,7 @@ class RoleViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         if not user or not user.is_authenticated:
             return queryset.none()
 
-        if user.is_superuser:
+        if is_effective_global_admin(user):
             return queryset
 
         if user.hotel_settings_id is None:
@@ -372,6 +428,15 @@ class RoleViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 
         UserRole.objects.filter(role=role, user__in=users, is_active=True).update(is_active=False)
 
+        from apps.notifications.services import notify_user_role_updated
+
+        for user in users:
+            notify_user_role_updated(
+                user=user,
+                role_name=role.name,
+                action_label="removido",
+            )
+
         return Response(
             {"removed": [str(u.id) for u in users]},
             status=status.HTTP_200_OK
@@ -470,7 +535,7 @@ class ResourceViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     serializer_class = ResourceSerializer
     permission_classes = [HasResourcePermission]
     required_scopes = ["resources.read"]
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
 
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
@@ -494,22 +559,34 @@ class ResourceViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 
 class ProfileUpdateView(APIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = ProfileUpdateSerializer
 
+    @extend_schema(responses=UserSerializer)
     def get(self, request):
         """Devuelve el perfil actual"""
-        return Response(UserSerializer(request.user).data)
+        return Response(UserSerializer(request.user, context={"request": request}).data)
 
+    @extend_schema(request=ProfileUpdateSerializer, responses=UserSerializer)
     def put(self, request):
         """Actualiza el perfil"""
-        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        serializer = ProfileUpdateSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(serializer.data)
+        return Response(UserSerializer(request.user, context={"request": request}).data)
+
+    def patch(self, request):
+        return self.put(request)
 
 
 class NotificationReadStateView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def get(self, request):
         keys = list(
             NotificationReadState.objects.filter(user=request.user)
@@ -522,6 +599,7 @@ class NotificationReadStateView(APIView):
 class NotificationMarkReadView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(request=NotificationKeysSerializer, responses={200: OpenApiTypes.OBJECT})
     def post(self, request):
         serializer = NotificationKeysSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -558,6 +636,7 @@ class NotificationMarkReadView(APIView):
 class NotificationMarkUnreadView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(request=NotificationKeysSerializer, responses={200: OpenApiTypes.OBJECT})
     def post(self, request):
         serializer = NotificationKeysSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -572,4 +651,5 @@ class NotificationMarkUnreadView(APIView):
 
         return Response({"removed": removed}, status=status.HTTP_200_OK)
     
+
 

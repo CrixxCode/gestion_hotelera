@@ -20,7 +20,7 @@ import {
   providedIn: 'root'
 })
 export class RoomService {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly roomsUrl = `${this.apiBase}/api/rooms/`;
   private readonly roomTypesUrl = `${this.apiBase}/api/room-types/`;
   private readonly amenitiesUrl = `${this.apiBase}/api/amenities/`;

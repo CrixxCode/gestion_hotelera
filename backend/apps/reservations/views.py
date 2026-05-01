@@ -10,8 +10,10 @@ from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
+from accounts.pagination import OptionalPageNumberPagination
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
+from accounts.tenancy import is_effective_global_admin
 from apps.billing.models import Payment
 from apps.inventory.services import apply_checkout_consumption_inventory
 from apps.reservations.models import (
@@ -33,6 +35,7 @@ from apps.reservations.serializers import (
 )
 from apps.reservations.services import (
     ROOM_STATUS_AVAILABLE,
+    ROOM_STATUS_RESERVED,
     RESERVATION_STATUS_CANCELLED_CODES,
     RESERVATION_STATUS_CANCELLED,
     RESERVATION_STATUS_CONFIRMED_CODES,
@@ -133,7 +136,7 @@ class ReservationViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         if not user.is_authenticated:
             return Reservation.objects.none()
 
-        if not user.is_superuser:
+        if not is_effective_global_admin(user):
             if user.hotel_settings_id is None:
                 return Reservation.objects.none()
 
@@ -348,7 +351,7 @@ class ReservationViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
                 room_status_code = self._normalize_code(
                     getattr(getattr(room, "status", None), "code", None)
                 )
-                if room_status_code != ROOM_STATUS_AVAILABLE:
+                if room_status_code not in {ROOM_STATUS_AVAILABLE, ROOM_STATUS_RESERVED}:
                     room_number = getattr(room, "number", room.id)
                     room_status_name = (
                         getattr(getattr(room, "status", None), "name", None)
@@ -488,7 +491,7 @@ class ReservationViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 class ReservationRoomViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = ReservationRoom.objects.all()
     serializer_class = ReservationRoomSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["reservation_rooms.read"]
 
@@ -524,7 +527,7 @@ class ReservationRoomViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         if not user.is_authenticated:
             return ReservationRoom.objects.none()
 
-        if user.is_superuser:
+        if is_effective_global_admin(user):
             return qs
 
         if user.hotel_settings_id is None:
@@ -544,7 +547,7 @@ class ReservationRoomViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 class ReservationGuestViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = ReservationGuest.objects.all()
     serializer_class = ReservationGuestSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["reservation_guests.read"]
 
@@ -580,7 +583,7 @@ class ReservationGuestViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         if not user.is_authenticated:
             return ReservationGuest.objects.none()
 
-        if user.is_superuser:
+        if is_effective_global_admin(user):
             return qs
 
         if user.hotel_settings_id is None:
@@ -601,7 +604,7 @@ class ReservationGuestViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
 class ReservationDepositViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = Payment.objects.all()
     serializer_class = ReservationDepositSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["reservation_deposits.read"]
 
@@ -637,7 +640,7 @@ class ReservationDepositViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet
         if not user.is_authenticated:
             return Payment.objects.none()
 
-        if user.is_superuser:
+        if is_effective_global_admin(user):
             return qs
 
         if user.hotel_settings_id is None:
@@ -657,7 +660,7 @@ class ReservationDepositViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet
 class ReservationInventoryCheckViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = ReservationInventoryCheck.objects.all()
     serializer_class = ReservationInventoryCheckSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["reservation_inventory_checks.read"]
 
@@ -686,7 +689,7 @@ class ReservationInventoryCheckViewSet(LogicalDeleteViewSetMixin, viewsets.Model
         if not user.is_authenticated:
             return ReservationInventoryCheck.objects.none()
 
-        if user.is_superuser:
+        if is_effective_global_admin(user):
             return qs
 
         if user.hotel_settings_id is None:
@@ -709,7 +712,7 @@ class ReservationInventoryCheckViewSet(LogicalDeleteViewSetMixin, viewsets.Model
 class ReservationInventoryCheckLineViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     queryset = ReservationInventoryCheckLine.objects.all()
     serializer_class = ReservationInventoryCheckLineSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["reservation_inventory_check_lines.read"]
 
@@ -742,7 +745,7 @@ class ReservationInventoryCheckLineViewSet(LogicalDeleteViewSetMixin, viewsets.M
         if not user.is_authenticated:
             return ReservationInventoryCheckLine.objects.none()
 
-        if user.is_superuser:
+        if is_effective_global_admin(user):
             return qs
 
         if user.hotel_settings_id is None:

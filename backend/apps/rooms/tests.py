@@ -73,7 +73,12 @@ class RoomOperationInventoryAutomationTestCase(TestCase):
             prefix="1",
             room_count=1,
         )
-        self.room_type = RoomType.objects.create(code="STD", name="Standard", capacity=2)
+        self.room_type = RoomType.objects.create(
+            hotel_settings=self.hotel,
+            code="STD",
+            name="Standard",
+            capacity=2,
+        )
         self.room = Room.objects.create(
             number="101",
             room_type=self.room_type,

@@ -1,73 +1,82 @@
-<div class="relative flex justify-center items-center min-h-screen overflow-y-auto">
-  <!-- Fondo dinámico -->
-  <swiper-container class="absolute inset-0 z-0" effect="fade" autoplay-delay="4000"
-    autoplay-disable-on-interaction="false" loop="true" speed="1500">
+<div class="login-shell">
+  <swiper-container
+    class="login-bg"
+    effect="fade"
+    autoplay-delay="4000"
+    autoplay-disable-on-interaction="false"
+    loop="true"
+    speed="1500">
     <swiper-slide *ngFor="let bg of backgrounds">
-      <img [src]="bg" class="w-full h-full object-cover brightness-75" />
+      <img [src]="bg" alt="Fondo hotel" />
     </swiper-slide>
   </swiper-container>
 
-  <!-- Panel principal -->
-  <div class="relative z-10 flex flex-col justify-center items-center 
-           w-11/12 max-w-md md:w-2/5 
-           px-6 sm:px-10 py-12 
-           bg-white/50 md:bg-white/90 shadow-lg rounded-2xl transition-all duration-300 my-8">
-    <div class="w-full">
-      <!-- Logo y título -->
-      <div class="flex flex-col items-center mb-8">
-        <img src="logo.png" alt="Hotel Logo" class="h-14 mb-2" />
-        <h1 class="text-2xl font-bold text-gray-800">HotelManager Pro</h1>
-      </div>
+  <div class="login-overlay" aria-hidden="true"></div>
 
-      <h2 class="text-3xl font-semibold text-center text-gray-800 mb-8">
-        Iniciar sesión
-      </h2>
-
-      <!-- MENSAJE DE ERROR O ADVERTENCIA -->
-      <div *ngIf="errorMessage" class="mb-6">
-        <div class="p-3 rounded-lg text-center font-medium" [ngClass]="{
-            'bg-red-100 text-red-700 border border-red-300': errorType === 'error',
-            'bg-yellow-100 text-yellow-700 border border-yellow-300': errorType === 'warn'
-          }">
-          {{ errorMessage }}
+  <section class="login-card" aria-label="Inicio de sesion">
+    <header class="login-head">
+      <span class="login-chip">Acceso seguro</span>
+      <div class="login-brand">
+        <img src="logo-black.png" alt="Logo Wayra" />
+        <div>
+          <h1>Wayra</h1>
+          <p>Gestion hotelera en una sola plataforma</p>
         </div>
       </div>
+      <h2>Iniciar sesion</h2>
+    </header>
 
-      <!-- Formulario de login -->
-      <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="space-y-6">
-        <!-- Usuario -->
-        <div>
-          <label for="username" class="block text-sm font-medium text-gray-800 mb-1">Usuario</label>
-          <input pInputText id="username" formControlName="username" placeholder="Ingresa tu usuario"
-            class="w-full p-2 border rounded-md backdrop-blur-sm" />
-        </div>
-
-        <!-- Contraseña -->
-        <div>
-          <label for="password" class="block text-sm font-medium text-gray-800 mb-1">Contraseña</label>
-          <p-password id="password" formControlName="password" [feedback]="false" [toggleMask]="true"
-            class="w-full block"
-            inputStyleClass="w-full p-2 border rounded-md !text-gray-800 !bg-white/90 backdrop-blur-sm"
-            placeholder="**********">
-          </p-password>
-        </div>
-
-        <!-- Recuérdame + Olvidé contraseña -->
-        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
-          <div class="flex items-center">
-            <p-checkbox binary="true" inputId="rememberMe" formControlName="rememberMe"></p-checkbox>
-            <label for="rememberMe" class="ml-2 text-gray-800 cursor-pointer text-sm">Recuérdame</label>
-          </div>
-          <a routerLink="/forgot-password" class="text-blue-600 hover:text-blue-700 text-sm font-medium">¿Olvidaste tu
-            contraseña?</a>
-        </div>
-
-        <!-- Botón -->
-        <button pButton type="submit" label="Ingresar"
-          class="w-full !bg-[#111827] hover:!bg-gray-700 py-3 font-semibold rounded-lg shadow-md transition-all duration-200"></button>
-      </form>
+    <div *ngIf="errorMessage" class="login-alert" [ngClass]="{
+      'is-error': errorType === 'error',
+      'is-warn': errorType === 'warn'
+    }">
+      {{ errorMessage }}
     </div>
-  </div>
-  <app-loading-screen [visible]="showLoading" [message]="'Bienvenido ' + loginForm.value.username"
-    color="#2563eb"></app-loading-screen>
+
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="login-form">
+      <div class="login-field">
+        <label for="username">Usuario</label>
+        <input
+          pInputText
+          id="username"
+          formControlName="username"
+          placeholder="Ingresa tu usuario"
+          class="login-input" />
+      </div>
+
+      <div class="login-field">
+        <label for="password">Contrasena</label>
+        <p-password
+          id="password"
+          formControlName="password"
+          [feedback]="false"
+          [toggleMask]="true"
+          styleClass="login-password"
+          inputStyleClass="login-password-input"
+          placeholder="**********">
+        </p-password>
+      </div>
+
+      <div class="login-meta">
+        <div class="remember">
+          <p-checkbox binary="true" inputId="rememberMe" formControlName="rememberMe"></p-checkbox>
+          <label for="rememberMe">Recordarme</label>
+        </div>
+        <a routerLink="/forgot-password">Olvide mi contrasena</a>
+      </div>
+
+      <button
+        pButton
+        type="submit"
+        label="Ingresar"
+        styleClass="login-submit">
+      </button>
+    </form>
+  </section>
+
+  <app-loading-screen
+    [visible]="showLoading"
+    [message]="'Bienvenido ' + loginForm.value.username"
+    color="#0f1f41">
+  </app-loading-screen>
 </div>

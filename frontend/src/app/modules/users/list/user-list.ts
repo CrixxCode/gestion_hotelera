@@ -3,6 +3,7 @@ import { CommonModule, NgClass } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { UserService } from '../../../services/user';
 import { UserI } from '../user-model';
+import { environment } from '../../../../enviorements/environment';
 import {
   ACTION_ALERT_ERROR_SUMMARY,
   ACTION_ALERT_SUCCESS_SUMMARY,
@@ -376,7 +377,8 @@ export class UserList implements OnInit {
   resolveAvatar(src?: string | null): string | null {
     if (!src) return null;
     if (src.startsWith('http://') || src.startsWith('https://')) return src;
-    return `http://127.0.0.1:8000${src.startsWith('/') ? '' : '/'}${src}`;
+    const apiBase = (environment.API_URI || window.location.origin).replace(/\/$/, '');
+    return `${apiBase}${src.startsWith('/') ? '' : '/'}${src}`;
   }
 
   private updateStats(): void {

@@ -2,12 +2,16 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { catchError, forkJoin, of } from 'rxjs';
-import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
-import { BillingService } from '../../../services/billing';
-import { MasterDataService } from '../../../services/master-data.service';
-import { ReservationService } from '../../../services/reservation';
-import { InvoiceI, PaymentI } from '../../billing/billing-model';
-import { ReservationI } from '../../reservations/reservation-model';
+import {
+  IncomeConsolidatedDailyRow,
+  IncomeConsolidatedMethodRow,
+  IncomeConsolidatedQueryParams,
+  IncomeConsolidatedReportResponse,
+  IncomeConsolidatedSummary,
+} from '../../reports/report-model';
+import { ReportsService } from '../../../services/reports';
+import { AuthService, MeResponse } from '../../../services/auth/auth';
+import { HotelSettingsService } from '../../../services/hotel-settings';
 
 type IncomeActivityFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 type IncomePeriodFilter = 'ALL' | 'TODAY' | 'LAST_7_DAYS' | 'THIS_MONTH' | 'THIS_YEAR';
@@ -36,48 +40,22 @@ type MethodIncomeRow = {
   sharePercent: number;
 };
 
-type DailyAccumulator = {
-  dateKey: string;
-  dateLabel: string;
-  transactions: number;
-  activeTransactions: number;
-  inactiveTransactions: number;
-  totalAmount: number;
-  methodTotals: Map<string, number>;
-  guestTotals: Map<string, number>;
-};
-
-type MethodAccumulator = {
-  methodKey: string;
-  methodLabel: string;
-  transactions: number;
-  activeTransactions: number;
-  inactiveTransactions: number;
-  totalAmount: number;
-};
-
 @Component({
   selector: 'app-list-income-consolidated',
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './list-income-consolidated.html',
   styleUrls: ['./list-income-consolidated.css'],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ListIncomeConsolidated implements OnInit {
   loading = false;
   errorMessage = '';
   infoMessage = '';
 
-  payments: PaymentI[] = [];
-  filteredPayments: PaymentI[] = [];
   dailyRows: DailyIncomeRow[] = [];
   methodRows: MethodIncomeRow[] = [];
-
-  invoicesMap = new Map<number, InvoiceI>();
-  reservationsMap = new Map<number, ReservationI>();
-  paymentMethods: MasterDataI[] = [];
-  paymentMethodLabelByCode = new Map<string, string>();
+  methodCatalog = new Map<string, string>();
 
   search = '';
   periodFilter: IncomePeriodFilter = 'THIS_MONTH';
@@ -85,6 +63,7 @@ export class ListIncomeConsolidated implements OnInit {
   methodFilter = 'ALL';
   viewMode: IncomeViewMode = 'daily';
   renderReady = false;
+  hotelSettingsId: number | null = null;
 
   totalTransactions = 0;
   activeTransactionsCount = 0;
@@ -96,7 +75,7 @@ export class ListIncomeConsolidated implements OnInit {
   readonly activityOptions: Array<{ value: IncomeActivityFilter; label: string }> = [
     { value: 'ACTIVE', label: 'Activos' },
     { value: 'INACTIVE', label: 'Inactivos' },
-    { value: 'ALL', label: 'Todos' }
+    { value: 'ALL', label: 'Todos' },
   ];
 
   readonly periodOptions: Array<{ value: IncomePeriodFilter; label: string }> = [
@@ -104,136 +83,41 @@ export class ListIncomeConsolidated implements OnInit {
     { value: 'LAST_7_DAYS', label: 'Ultimos 7 dias' },
     { value: 'THIS_MONTH', label: 'Mes actual' },
     { value: 'THIS_YEAR', label: 'Ano actual' },
-    { value: 'ALL', label: 'Todo el historico' }
+    { value: 'ALL', label: 'Todo el historico' },
   ];
 
   constructor(
-    private billingService: BillingService,
-    private reservationService: ReservationService,
-    private masterDataService: MasterDataService,
+    private reportsService: ReportsService,
+    private authService: AuthService,
+    private hotelSettingsService: HotelSettingsService,
     private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
-    this.loadIncomeData();
+    this.resolveHotelSettingsAndLoad();
   }
 
   get methodOptions(): Array<{ value: string; label: string }> {
     const base = [{ value: 'ALL', label: 'Todos los metodos' }];
-    const options = this.paymentMethods
-      .map((method) => ({
-        value: this.normalizeCode(method.code || method.name || String(method.id)),
-        label: method.name || method.code || `Metodo #${method.id}`
-      }))
-      .filter((option) => !!option.value);
+    const options = Array.from(this.methodCatalog.entries()).map(([value, label]) => ({ value, label }));
+    options.sort((a, b) => a.label.localeCompare(b.label, 'es'));
+    return [...base, ...options];
+  }
 
-    const unique = new Map<string, string>();
-    for (const option of options) {
-      if (!unique.has(option.value)) {
-        unique.set(option.value, option.label);
-      }
-    }
-
-    return [
-      ...base,
-      ...Array.from(unique.entries()).map(([value, label]) => ({
-        value,
-        label
-      }))
-    ];
+  get hasResults(): boolean {
+    return this.dailyRows.length > 0 || this.methodRows.length > 0;
   }
 
   loadIncomeData(): void {
-    this.loading = true;
-    this.renderReady = false;
-    this.errorMessage = '';
-    this.infoMessage = '';
-
-    forkJoin({
-      payments: this.billingService
-        .listPayments({ ordering: '-payment_date,-id', include_inactive: true })
-        .pipe(catchError(() => of([] as PaymentI[]))),
-      invoices: this.billingService
-        .listInvoices({ ordering: '-id', include_inactive: true })
-        .pipe(catchError(() => of([] as InvoiceI[]))),
-      reservationsPage: this.reservationService
-        .listReservationsPage({ include_finished: true, ordering: '-id', page: 1, page_size: 300 })
-        .pipe(
-          catchError(() =>
-            of({
-              count: 0,
-              next: null,
-              previous: null,
-              results: [] as ReservationI[]
-            })
-          )
-        ),
-      paymentMethods: this.masterDataService
-        .listMasterData({ group: 'PAYMENT_METHOD', is_active: 'true', ordering: 'sort_order,name' })
-        .pipe(catchError(() => of([] as MasterDataI[])))
-    }).subscribe({
-      next: ({ payments, invoices, reservationsPage, paymentMethods }) => {
-        this.payments = [...payments].sort((a, b) => b.id - a.id);
-        this.invoicesMap = new Map(invoices.map((invoice) => [invoice.id, invoice]));
-        this.reservationsMap = new Map((reservationsPage.results || []).map((reservation) => [reservation.id, reservation]));
-        this.paymentMethods = paymentMethods;
-        this.buildPaymentMethodLabelMap();
-        this.recomputeSummaryCards();
-
-        this.applyFilters();
-        this.revealContentReady();
-
-        if (!this.payments.length) {
-          this.infoMessage = 'No hay ingresos registrados todavia.';
-        }
-      },
-      error: () => {
-        this.loading = false;
-        this.renderReady = false;
-        this.errorMessage = 'No fue posible cargar el consolidado de ingresos.';
-      }
-    });
+    this.fetchIncomeConsolidated();
   }
 
   refreshIncomeData(): void {
-    this.loadIncomeData();
+    this.fetchIncomeConsolidated();
   }
 
   applyFilters(): void {
-    const query = String(this.search || '').trim().toLowerCase();
-
-    this.filteredPayments = this.payments.filter((payment) => {
-      const activityMatch =
-        this.activityFilter === 'ALL' ||
-        (this.activityFilter === 'ACTIVE' && payment.is_active) ||
-        (this.activityFilter === 'INACTIVE' && !payment.is_active);
-
-      const methodCode = this.resolvePaymentMethodCode(payment);
-      const methodMatch = this.methodFilter === 'ALL' || methodCode === this.methodFilter;
-
-      const paymentDate = this.getPaymentDate(payment);
-      const periodMatch = this.matchesPeriod(paymentDate);
-
-      const invoice = this.invoicesMap.get(payment.invoice) || null;
-      const reservation = invoice ? this.reservationsMap.get(invoice.reservation) || null : null;
-
-      const searchPool = [
-        this.getInvoiceNumber(payment),
-        this.getGuestLabel(payment),
-        reservation?.client_document_number || '',
-        this.getMethodLabel(payment),
-        payment.reference || '',
-        payment.notes || ''
-      ]
-        .join(' ')
-        .toLowerCase();
-
-      const searchMatch = !query || searchPool.includes(query);
-      return activityMatch && methodMatch && periodMatch && searchMatch;
-    });
-
-    this.dailyRows = this.buildDailyRows(this.filteredPayments);
-    this.methodRows = this.buildMethodRows(this.filteredPayments);
+    this.fetchIncomeConsolidated();
   }
 
   setViewMode(mode: IncomeViewMode): void {
@@ -263,7 +147,7 @@ export class ListIncomeConsolidated implements OnInit {
       { bg: 'var(--gh-status-orange-bg)', accent: 'var(--gh-status-orange-text)' },
       { bg: 'var(--gh-status-violet-bg)', accent: 'var(--gh-status-violet-text)' },
       { bg: 'var(--gh-status-danger-bg)', accent: 'var(--gh-status-danger-text)' },
-      { bg: 'var(--gh-status-neutral-bg)', accent: 'var(--gh-status-neutral-text)' }
+      { bg: 'var(--gh-status-neutral-bg)', accent: 'var(--gh-status-neutral-text)' },
     ];
     return palette[index % palette.length];
   }
@@ -277,228 +161,170 @@ export class ListIncomeConsolidated implements OnInit {
     return new Intl.NumberFormat('es-CO').format(value || 0);
   }
 
-  private buildDailyRows(payments: PaymentI[]): DailyIncomeRow[] {
-    const rowsMap = new Map<string, DailyAccumulator>();
-
-    for (const payment of payments) {
-      const paymentDate = this.getPaymentDate(payment);
-      const dateKey = paymentDate ? this.formatDateKey(paymentDate) : 'SIN_FECHA';
-      const dateLabel = paymentDate ? this.formatDateLabel(paymentDate) : 'Sin fecha';
-      const amount = this.toNumber(payment.amount);
-      const methodLabel = this.getMethodLabel(payment);
-      const guestLabel = this.getGuestLabel(payment);
-
-      if (!rowsMap.has(dateKey)) {
-        rowsMap.set(dateKey, {
-          dateKey,
-          dateLabel,
-          transactions: 0,
-          activeTransactions: 0,
-          inactiveTransactions: 0,
-          totalAmount: 0,
-          methodTotals: new Map<string, number>(),
-          guestTotals: new Map<string, number>()
-        });
-      }
-
-      const bucket = rowsMap.get(dateKey);
-      if (!bucket) continue;
-
-      bucket.transactions += 1;
-      if (payment.is_active) {
-        bucket.activeTransactions += 1;
-      } else {
-        bucket.inactiveTransactions += 1;
-      }
-      bucket.totalAmount += amount;
-      bucket.methodTotals.set(methodLabel, (bucket.methodTotals.get(methodLabel) || 0) + amount);
-      bucket.guestTotals.set(guestLabel, (bucket.guestTotals.get(guestLabel) || 0) + amount);
+  private fetchIncomeConsolidated(): void {
+    if (!this.hotelSettingsId || this.hotelSettingsId <= 0) {
+      this.loading = false;
+      this.renderReady = false;
+      this.errorMessage =
+        'No se pudo determinar el hotel activo para consultar el consolidado de ingresos.';
+      this.cdr.markForCheck();
+      return;
     }
 
-    const rows = Array.from(rowsMap.values()).map((bucket) => {
-      const topMethod = this.getTopEntryLabel(bucket.methodTotals, 'Sin metodo');
-      const topGuest = this.getTopEntryLabel(bucket.guestTotals, 'Sin huesped');
-      const averageTicket = bucket.transactions ? bucket.totalAmount / bucket.transactions : 0;
+    this.loading = true;
+    this.renderReady = false;
+    this.errorMessage = '';
+    this.infoMessage = '';
 
-      return {
-        dateKey: bucket.dateKey,
-        dateLabel: bucket.dateLabel,
-        transactions: bucket.transactions,
-        activeTransactions: bucket.activeTransactions,
-        inactiveTransactions: bucket.inactiveTransactions,
-        totalAmount: bucket.totalAmount,
-        averageTicket,
-        topMethod,
-        topGuest
-      };
+    const params: IncomeConsolidatedQueryParams = {
+      hotel_settings: this.hotelSettingsId,
+      period: this.periodFilter,
+      activity: this.activityFilter,
+      method: this.methodFilter === 'ALL' ? '' : this.methodFilter,
+      search: String(this.search || '').trim(),
+    };
+
+    this.reportsService
+      .getIncomeConsolidatedReport(params)
+      .pipe(
+        catchError(() => {
+          this.loading = false;
+          this.renderReady = false;
+          this.errorMessage = 'No fue posible cargar el consolidado de ingresos.';
+          this.cdr.markForCheck();
+          return of(null);
+        })
+      )
+      .subscribe((response) => {
+        if (!response) return;
+
+        this.applyResponse(response);
+        this.revealContentReady();
+      });
+  }
+
+  private applyResponse(response: IncomeConsolidatedReportResponse): void {
+    this.dailyRows = this.mapDailyRows(response.daily_rows || []);
+    this.methodRows = this.mapMethodRows(response.method_rows || []);
+    this.updateMethodCatalog(response.method_rows || []);
+    this.recomputeSummaryCards(response.summary);
+
+    const hasRows = this.dailyRows.length > 0 || this.methodRows.length > 0;
+    if (!hasRows) {
+      this.infoMessage = 'No hay ingresos para los filtros seleccionados.';
+    }
+  }
+
+  private resolveHotelSettingsAndLoad(): void {
+    forkJoin({
+      settings: this.hotelSettingsService
+        .getCurrentSettings()
+        .pipe(catchError(() => of(null))),
+      me: this.authService.getUserInfo().pipe(catchError(() => of(null as MeResponse | null))),
+    }).subscribe(({ settings, me }) => {
+      const settingsId = Number((settings as { id?: unknown } | null)?.id || 0);
+      const meId = this.resolveHotelIdFromMe(me);
+      const resolvedId = settingsId > 0 ? settingsId : meId;
+
+      this.hotelSettingsId = resolvedId > 0 ? resolvedId : null;
+      if (!this.hotelSettingsId) {
+        this.loading = false;
+        this.renderReady = false;
+        this.errorMessage =
+          'No se encontro un hotel activo. Verifica la configuracion del hotel o tu sesion.';
+        this.cdr.markForCheck();
+        return;
+      }
+      this.loadIncomeData();
     });
-
-    rows.sort((a, b) => {
-      if (a.dateKey === 'SIN_FECHA') return 1;
-      if (b.dateKey === 'SIN_FECHA') return -1;
-      return a.dateKey < b.dateKey ? 1 : -1;
-    });
-
-    return rows;
   }
 
-  private buildMethodRows(payments: PaymentI[]): MethodIncomeRow[] {
-    const rowsMap = new Map<string, MethodAccumulator>();
+  private resolveHotelIdFromMe(me: MeResponse | null): number {
+    const unknownMe = me as unknown as {
+      hotel_settings?: { id?: unknown } | number | null;
+      hotel_settings_id?: unknown;
+    } | null;
 
-    for (const payment of payments) {
-      const methodKey = this.resolvePaymentMethodCode(payment);
-      const methodLabel = this.getMethodLabel(payment);
-      const amount = this.toNumber(payment.amount);
+    const nestedId =
+      unknownMe && typeof unknownMe.hotel_settings === 'object'
+        ? Number(unknownMe.hotel_settings?.id || 0)
+        : 0;
+    if (nestedId > 0) return nestedId;
 
-      if (!rowsMap.has(methodKey)) {
-        rowsMap.set(methodKey, {
-          methodKey,
-          methodLabel,
-          transactions: 0,
-          activeTransactions: 0,
-          inactiveTransactions: 0,
-          totalAmount: 0
-        });
+    const directHotelSettings =
+      unknownMe && typeof unknownMe.hotel_settings === 'number'
+        ? Number(unknownMe.hotel_settings)
+        : 0;
+    if (directHotelSettings > 0) return directHotelSettings;
+
+    const topLevelId = Number(unknownMe?.hotel_settings_id || 0);
+    if (topLevelId > 0) return topLevelId;
+
+    return 0;
+  }
+
+  private mapDailyRows(rows: IncomeConsolidatedDailyRow[]): DailyIncomeRow[] {
+    return rows.map((row) => ({
+      dateKey: row.date_key,
+      dateLabel: this.formatBackendDateLabel(row.date_key, row.date_label),
+      transactions: this.toNumber(row.transactions),
+      activeTransactions: this.toNumber(row.active_transactions),
+      inactiveTransactions: this.toNumber(row.inactive_transactions),
+      totalAmount: this.toNumber(row.total_amount),
+      averageTicket: this.toNumber(row.average_ticket),
+      topMethod: row.top_method || 'Sin metodo',
+      topGuest: row.top_guest || 'Huesped sin nombre',
+    }));
+  }
+
+  private mapMethodRows(rows: IncomeConsolidatedMethodRow[]): MethodIncomeRow[] {
+    return rows.map((row) => ({
+      methodKey: row.method_key || 'SINMETODO',
+      methodLabel: row.method_label || 'Sin metodo',
+      transactions: this.toNumber(row.transactions),
+      activeTransactions: this.toNumber(row.active_transactions),
+      inactiveTransactions: this.toNumber(row.inactive_transactions),
+      totalAmount: this.toNumber(row.total_amount),
+      averageTicket: this.toNumber(row.average_ticket),
+      sharePercent: this.toNumber(row.share_percent),
+    }));
+  }
+
+  private updateMethodCatalog(rows: IncomeConsolidatedMethodRow[]): void {
+    const nextCatalog = new Map(this.methodCatalog);
+
+    for (const row of rows) {
+      const key = String(row.method_key || '').trim();
+      const label = String(row.method_label || '').trim();
+      if (!key || !label) continue;
+      if (!nextCatalog.has(key)) {
+        nextCatalog.set(key, label);
       }
-
-      const bucket = rowsMap.get(methodKey);
-      if (!bucket) continue;
-
-      bucket.transactions += 1;
-      if (payment.is_active) {
-        bucket.activeTransactions += 1;
-      } else {
-        bucket.inactiveTransactions += 1;
-      }
-      bucket.totalAmount += amount;
     }
 
-    const grandTotal = Array.from(rowsMap.values()).reduce((sum, row) => sum + row.totalAmount, 0);
-
-    const rows = Array.from(rowsMap.values()).map((bucket) => {
-      const averageTicket = bucket.transactions ? bucket.totalAmount / bucket.transactions : 0;
-      const sharePercent = grandTotal > 0 ? (bucket.totalAmount / grandTotal) * 100 : 0;
-
-      return {
-        methodKey: bucket.methodKey,
-        methodLabel: bucket.methodLabel,
-        transactions: bucket.transactions,
-        activeTransactions: bucket.activeTransactions,
-        inactiveTransactions: bucket.inactiveTransactions,
-        totalAmount: bucket.totalAmount,
-        averageTicket,
-        sharePercent
-      };
-    });
-
-    rows.sort((a, b) => b.totalAmount - a.totalAmount);
-    return rows;
+    this.methodCatalog = nextCatalog;
   }
 
-  private matchesPeriod(paymentDate: Date | null): boolean {
-    if (this.periodFilter === 'ALL') return true;
-    if (!paymentDate) return false;
-
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const paymentDay = new Date(paymentDate.getFullYear(), paymentDate.getMonth(), paymentDate.getDate());
-
-    if (this.periodFilter === 'TODAY') {
-      return paymentDay.getTime() === todayStart.getTime();
-    }
-
-    if (this.periodFilter === 'LAST_7_DAYS') {
-      const sevenDaysAgo = new Date(todayStart);
-      sevenDaysAgo.setDate(todayStart.getDate() - 6);
-      return paymentDay.getTime() >= sevenDaysAgo.getTime() && paymentDay.getTime() <= todayStart.getTime();
-    }
-
-    if (this.periodFilter === 'THIS_MONTH') {
-      return paymentDate.getFullYear() === now.getFullYear() && paymentDate.getMonth() === now.getMonth();
-    }
-
-    if (this.periodFilter === 'THIS_YEAR') {
-      return paymentDate.getFullYear() === now.getFullYear();
-    }
-
-    return true;
+  private recomputeSummaryCards(summary: IncomeConsolidatedSummary): void {
+    this.totalTransactions = this.toNumber(summary?.total_transactions);
+    this.activeTransactionsCount = this.toNumber(summary?.active_transactions);
+    this.totalCollectedLabel = this.formatCurrency(this.toNumber(summary?.total_collected));
+    this.todayCollectedLabel = this.formatCurrency(this.toNumber(summary?.today_collected));
+    this.monthCollectedLabel = this.formatCurrency(this.toNumber(summary?.month_collected));
+    this.averageTicketLabel = this.formatCurrency(this.toNumber(summary?.average_ticket));
   }
 
-  private getInvoiceNumber(payment: PaymentI): string {
-    if (payment.invoice_number?.trim()) return payment.invoice_number.trim();
+  private formatBackendDateLabel(dateKey: string, fallbackLabel: string): string {
+    if (!dateKey || dateKey === 'SIN_FECHA') return fallbackLabel || 'Sin fecha';
 
-    const invoice = this.invoicesMap.get(payment.invoice) || null;
-    if (invoice?.invoice_number?.trim()) return invoice.invoice_number.trim();
+    const parsed = new Date(`${dateKey}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return fallbackLabel || dateKey;
 
-    return `FAC-${payment.invoice}`;
-  }
-
-  private getGuestLabel(payment: PaymentI): string {
-    const invoice = this.invoicesMap.get(payment.invoice) || null;
-    const reservation = invoice ? this.reservationsMap.get(invoice.reservation) || null : null;
-    if (reservation?.client_full_name?.trim()) return reservation.client_full_name.trim();
-    if (invoice?.reservation) return `Reserva #${invoice.reservation}`;
-    return 'Huesped sin nombre';
-  }
-
-  private getMethodLabel(payment: PaymentI): string {
-    if (payment.payment_method_name?.trim()) return payment.payment_method_name.trim();
-
-    const methodCode = this.resolvePaymentMethodCode(payment);
-    if (methodCode && methodCode !== 'SINMETODO') {
-      const methodLabel = this.paymentMethodLabelByCode.get(methodCode);
-      if (methodLabel?.trim()) return methodLabel.trim();
-    }
-
-    if (payment.payment_method_code?.trim()) return payment.payment_method_code.trim();
-    return 'Sin metodo';
-  }
-
-  private resolvePaymentMethodCode(payment: PaymentI): string {
-    const methodCode = this.normalizeCode(payment.payment_method_code);
-    if (methodCode) return methodCode;
-
-    const methodName = this.normalizeCode(payment.payment_method_name);
-    if (methodName) return methodName;
-
-    return 'SINMETODO';
-  }
-
-  private getPaymentDate(payment: PaymentI): Date | null {
-    const rawValue = payment.payment_date || payment.created_at || null;
-    if (!rawValue) return null;
-    const parsed = new Date(rawValue);
-    if (Number.isNaN(parsed.getTime())) return null;
-    return parsed;
-  }
-
-  private formatDateKey(date: Date): string {
-    const year = date.getFullYear();
-    const month = `${date.getMonth() + 1}`.padStart(2, '0');
-    const day = `${date.getDate()}`.padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-
-  private formatDateLabel(date: Date): string {
-    return date.toLocaleDateString('es-CO', {
+    return parsed.toLocaleDateString('es-CO', {
       day: '2-digit',
       month: 'short',
-      year: 'numeric'
+      year: 'numeric',
     });
-  }
-
-  private getTopEntryLabel(totals: Map<string, number>, fallback: string): string {
-    let bestLabel = fallback;
-    let bestTotal = -1;
-
-    totals.forEach((value, key) => {
-      if (value > bestTotal) {
-        bestTotal = value;
-        bestLabel = key;
-      }
-    });
-
-    return bestLabel;
   }
 
   private exportDailyCsv(): void {
@@ -512,7 +338,7 @@ export class ListIncomeConsolidated implements OnInit {
       'total_ingresos',
       'ticket_promedio',
       'metodo_principal',
-      'huesped_principal'
+      'huesped_principal',
     ];
 
     const rows = this.dailyRows.map((row) =>
@@ -524,7 +350,7 @@ export class ListIncomeConsolidated implements OnInit {
         row.totalAmount.toFixed(2),
         row.averageTicket.toFixed(2),
         row.topMethod,
-        row.topGuest
+        row.topGuest,
       ]
         .map((cell) => this.escapeCsvCell(cell))
         .join(',')
@@ -537,15 +363,7 @@ export class ListIncomeConsolidated implements OnInit {
   private exportMethodsCsv(): void {
     if (!this.methodRows.length) return;
 
-    const headers = [
-      'metodo',
-      'transacciones',
-      'activas',
-      'inactivas',
-      'total_ingresos',
-      'ticket_promedio',
-      'participacion'
-    ];
+    const headers = ['metodo', 'transacciones', 'activas', 'inactivas', 'total_ingresos', 'ticket_promedio', 'participacion'];
 
     const rows = this.methodRows.map((row) =>
       [
@@ -555,7 +373,7 @@ export class ListIncomeConsolidated implements OnInit {
         row.inactiveTransactions,
         row.totalAmount.toFixed(2),
         row.averageTicket.toFixed(2),
-        this.formatShare(row.sharePercent)
+        this.formatShare(row.sharePercent),
       ]
         .map((cell) => this.escapeCsvCell(cell))
         .join(',')
@@ -580,53 +398,6 @@ export class ListIncomeConsolidated implements OnInit {
     return Number.isNaN(parsed) ? 0 : parsed;
   }
 
-  private recomputeSummaryCards(): void {
-    this.totalTransactions = this.payments.length;
-    const now = new Date();
-    const todayKey = this.formatDateKey(now);
-    const nowYear = now.getFullYear();
-    const nowMonth = now.getMonth();
-
-    let activeCount = 0;
-    let activeTotal = 0;
-    let todayTotal = 0;
-    let monthTotal = 0;
-
-    for (const payment of this.payments) {
-      if (!payment.is_active) continue;
-      const amount = this.toNumber(payment.amount);
-      activeCount += 1;
-      activeTotal += amount;
-
-      const paymentDate = this.getPaymentDate(payment);
-      if (!paymentDate) continue;
-
-      if (this.formatDateKey(paymentDate) === todayKey) {
-        todayTotal += amount;
-      }
-
-      if (paymentDate.getFullYear() === nowYear && paymentDate.getMonth() === nowMonth) {
-        monthTotal += amount;
-      }
-    }
-
-    this.activeTransactionsCount = activeCount;
-    this.totalCollectedLabel = this.formatCurrency(activeTotal);
-    this.todayCollectedLabel = this.formatCurrency(todayTotal);
-    this.monthCollectedLabel = this.formatCurrency(monthTotal);
-    this.averageTicketLabel = this.formatCurrency(activeCount ? activeTotal / activeCount : 0);
-  }
-
-  private buildPaymentMethodLabelMap(): void {
-    const map = new Map<string, string>();
-    for (const method of this.paymentMethods) {
-      const code = this.normalizeCode(method.code || method.name || String(method.id));
-      if (!code || map.has(code)) continue;
-      map.set(code, method.name || method.code || `Metodo #${method.id}`);
-    }
-    this.paymentMethodLabelByCode = map;
-  }
-
   private revealContentReady(): void {
     const schedule = (cb: () => void): void => {
       if (typeof requestAnimationFrame === 'function') {
@@ -649,17 +420,8 @@ export class ListIncomeConsolidated implements OnInit {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
       currency: 'COP',
-      maximumFractionDigits: 0
+      maximumFractionDigits: 0,
     }).format(value || 0);
-  }
-
-  private normalizeCode(value: unknown): string {
-    return String(value || '')
-      .trim()
-      .toUpperCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^A-Z0-9]/g, '');
   }
 
   private formatFileDate(date: Date): string {

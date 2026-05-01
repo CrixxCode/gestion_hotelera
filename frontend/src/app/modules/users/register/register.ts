@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output, ViewChild, ElementRef } from '@angular/core';
+import { Component, EventEmitter, Output } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { UserService } from '../../../services/user';
 import { MessageService } from 'primeng/api';
@@ -20,11 +20,9 @@ import {
 })
 export class UserRegister {
   @Output() close = new EventEmitter<void>();
-  @ViewChild('fileInput') fileInput!: ElementRef<HTMLInputElement>; // referencia directa al input
 
   form!: FormGroup;
-  avatarFile?: File;
-  avatarPreview: string | ArrayBuffer | null = null;
+  avatarPreview: string | null = null;
   loading = false;
 
   constructor(
@@ -39,23 +37,18 @@ export class UserRegister {
       last_name: ['', Validators.required],
       username: ['', Validators.required],
       email: ['', [Validators.required, Validators.email]],
+      job_title: [''],
+      avatar: [''],
       password: ['', Validators.required],
-      is_active: [true] // ✅ Usuario activo por defecto
+      is_active: [true]
+    });
+
+    this.form.get('avatar')?.valueChanges.subscribe((value) => {
+      const normalized = `${value || ''}`.trim();
+      this.avatarPreview = normalized || null;
     });
   }
 
-  /**  Carga archivo y previsualiza */
-  onFileChange(event: any) {
-    const file = event.target.files[0];
-    if (file) {
-      this.avatarFile = file;
-      const reader = new FileReader();
-      reader.onload = () => (this.avatarPreview = reader.result);
-      reader.readAsDataURL(file);
-    }
-  }
-
-  /**  Enviar formulario */
   onSubmit() {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -63,7 +56,7 @@ export class UserRegister {
     }
 
     this.loading = true;
-    this.userService.createUser(this.form.value, this.avatarFile).subscribe({
+    this.userService.createUser(this.form.value).subscribe({
       next: (user) => {
         this.messageService.add({
           severity: 'success',
@@ -72,8 +65,7 @@ export class UserRegister {
           life: 3000
         });
         this.loading = false;
-        this.resetForm(); //  limpiar todo
-        // Pequeño delay para que se procese todo antes de emitir close
+        this.resetForm();
         setTimeout(() => {
           this.close.emit();
         }, 500);
@@ -91,24 +83,17 @@ export class UserRegister {
     });
   }
 
-  /**  Cancela registro */
   onCancel(): void {
     this.resetForm();
     this.close.emit();
   }
 
-  /**  Limpia formulario, preview e input file */
   private resetForm(): void {
     this.form.reset({
-      is_active: true // Valor por defecto
+      is_active: true,
+      avatar: ''
     });
-    this.avatarFile = undefined;
     this.avatarPreview = null;
-
-    //  Limpia visualmente el campo de archivo
-    if (this.fileInput) {
-      this.fileInput.nativeElement.value = '';
-    }
   }
 
   private getCreateErrorMessage(err: any): string {
@@ -142,6 +127,8 @@ export class UserRegister {
       password: 'Contrasena',
       first_name: 'Nombre',
       last_name: 'Apellido',
+      job_title: 'Cargo',
+      avatar: 'Avatar URL',
       non_field_errors: 'Validacion'
     };
 

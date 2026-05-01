@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 from calendar import monthrange
 from collections import defaultdict
 from datetime import date, datetime, timedelta
@@ -15,7 +17,7 @@ from django.core.exceptions import (
     ObjectDoesNotExist,
     ValidationError,
 )
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from apps.billing.models import Charge, CreditNote, Invoice
@@ -63,6 +65,9 @@ MONTH_LABELS_ES = {
     11: "Nov",
     12: "Dic",
 }
+
+INCOME_PERIOD_CHOICES = {"ALL", "TODAY", "LAST_7_DAYS", "THIS_MONTH", "THIS_YEAR"}
+INCOME_ACTIVITY_CHOICES = {"ALL", "ACTIVE", "INACTIVE"}
 
 
 # =========================================================
@@ -660,6 +665,318 @@ def build_services_report(
         "income_by_category": income_by_category,
         "transactions_by_category": transactions_by_category,
         "category_detail": category_detail,
+    }
+
+
+def resolve_income_consolidated_period(
+    *,
+    period_raw: str | None = None,
+    year_raw: str | None = None,
+    start_date_raw: str | None = None,
+    end_date_raw: str | None = None,
+) -> tuple[date | None, date | None, str]:
+    period_key = _normalize_code(period_raw or "THIS_MONTH")
+    if period_key not in INCOME_PERIOD_CHOICES:
+        raise ValidationError(
+            {
+                "period": (
+                    "period must be one of: ALL, TODAY, LAST_7_DAYS, THIS_MONTH, THIS_YEAR."
+                )
+            }
+        )
+
+    if year_raw is not None and str(year_raw).strip():
+        start_date, end_date, _ = resolve_report_period(year_raw=year_raw)
+        return start_date, end_date, period_key
+
+    if start_date_raw and end_date_raw:
+        start_date, end_date, _ = resolve_report_period(
+            start_date_raw=start_date_raw,
+            end_date_raw=end_date_raw,
+        )
+        return start_date, end_date, period_key
+
+    if start_date_raw or end_date_raw:
+        raise ValidationError(
+            {"date_range": "start_date and end_date must be sent together."}
+        )
+
+    today = timezone.localdate()
+    if period_key == "ALL":
+        return None, None, period_key
+    if period_key == "TODAY":
+        return today, today, period_key
+    if period_key == "LAST_7_DAYS":
+        return today - timedelta(days=6), today, period_key
+    if period_key == "THIS_YEAR":
+        return date(today.year, 1, 1), date(today.year, 12, 31), period_key
+
+    month_start = date(today.year, today.month, 1)
+    month_end = date(today.year, today.month, monthrange(today.year, today.month)[1])
+    return month_start, month_end, period_key
+
+
+def build_income_consolidated_report(
+    *,
+    hotel_settings_id: int,
+    start_date: date | None,
+    end_date: date | None,
+    period: str = "THIS_MONTH",
+    activity: str = "ALL",
+    method: str = "",
+    search: str = "",
+) -> dict[str, Any]:
+    if not isinstance(hotel_settings_id, int):
+        raise ValidationError({"hotel_settings": "hotel_settings must be an integer."})
+    if hotel_settings_id <= 0:
+        raise ValidationError({"hotel_settings": "hotel_settings must be greater than zero."})
+
+    if (start_date is None) ^ (end_date is None):
+        raise ValidationError(
+            {"date_range": "start_date and end_date must be sent together."}
+        )
+    if start_date is not None and end_date is not None and start_date > end_date:
+        raise ValidationError(
+            {"date_range": "start_date must be less than or equal to end_date."}
+        )
+
+    activity_key = _normalize_code(activity or "ALL")
+    if activity_key not in INCOME_ACTIVITY_CHOICES:
+        raise ValidationError(
+            {"activity": "activity must be one of: ALL, ACTIVE, INACTIVE."}
+        )
+
+    period_key = _normalize_code(period or "THIS_MONTH")
+    method_key_filter = _normalize_code_alnum(method)
+    search_filter = str(search or "").strip().lower()
+
+    payment_model = _resolve_payment_model()
+    queryset = payment_model.objects.select_related(
+        "payment_method",
+        "invoice",
+        "invoice__reservation",
+        "invoice__reservation__client",
+    ).filter(invoice__reservation__hotel_settings_id=hotel_settings_id)
+
+    if start_date is not None and end_date is not None:
+        queryset = queryset.filter(payment_date__date__gte=start_date, payment_date__date__lte=end_date)
+
+    if activity_key == "ACTIVE":
+        queryset = queryset.filter(is_active=True)
+    elif activity_key == "INACTIVE":
+        queryset = queryset.filter(is_active=False)
+
+    if search_filter:
+        queryset = queryset.filter(
+            Q(invoice__invoice_number__icontains=search_filter)
+            | Q(payment_method__name__icontains=search_filter)
+            | Q(payment_method__code__icontains=search_filter)
+            | Q(reference__icontains=search_filter)
+            | Q(notes__icontains=search_filter)
+            | Q(invoice__reservation__client__document_number__icontains=search_filter)
+            | Q(invoice__reservation__client__first_name__icontains=search_filter)
+            | Q(invoice__reservation__client__last_name__icontains=search_filter)
+        )
+
+    payments = list(queryset.order_by("-payment_date", "-id"))
+    normalized_rows: list[dict[str, Any]] = []
+
+    for payment in payments:
+        payment_date = _coerce_to_date(
+            _first_existing_attr_value(payment, ["payment_date", "created_at"])
+        )
+        date_key = payment_date.isoformat() if payment_date else "SIN_FECHA"
+        date_label = payment_date.isoformat() if payment_date else "Sin fecha"
+
+        method_label = (
+            _first_existing_attr_value(
+                payment,
+                ["payment_method.name", "payment_method.code"],
+            )
+            or "Sin metodo"
+        )
+        method_code = _first_existing_attr_value(
+            payment,
+            ["payment_method.code", "payment_method.name"],
+        )
+        method_key = _normalize_code_alnum(method_code or method_label)
+
+        guest_name = (
+            _first_existing_attr_value(
+                payment,
+                [
+                    "invoice.reservation.client.full_name",
+                    "invoice.reservation.client.first_name",
+                ],
+            )
+            or "Huesped sin nombre"
+        )
+        invoice_number = (
+            _first_existing_attr_value(payment, ["invoice.invoice_number"])
+            or f"FAC-{_safe_int(_first_existing_attr_value(payment, ['invoice_id']))}"
+        )
+        client_document = _first_existing_attr_value(
+            payment,
+            ["invoice.reservation.client.document_number"],
+        ) or ""
+        search_pool = " ".join(
+            [
+                str(invoice_number),
+                str(guest_name),
+                str(client_document),
+                str(method_label),
+                str(getattr(payment, "reference", "") or ""),
+                str(getattr(payment, "notes", "") or ""),
+            ]
+        ).lower()
+
+        if method_key_filter and method_key_filter != "ALL" and method_key != method_key_filter:
+            continue
+        if search_filter and search_filter not in search_pool:
+            continue
+
+        normalized_rows.append(
+            {
+                "date_key": date_key,
+                "date_label": date_label,
+                "amount": _to_decimal(getattr(payment, "amount", MONEY_ZERO)),
+                "is_active": bool(getattr(payment, "is_active", False)),
+                "method_key": method_key or "SINMETODO",
+                "method_label": str(method_label),
+                "guest_label": str(guest_name),
+            }
+        )
+
+    today = timezone.localdate()
+    today_key = today.isoformat()
+
+    total_transactions = len(normalized_rows)
+    active_transactions = 0
+    total_collected = MONEY_ZERO
+    today_collected = MONEY_ZERO
+    month_collected = MONEY_ZERO
+
+    daily_buckets: dict[str, dict[str, Any]] = {}
+    method_buckets: dict[str, dict[str, Any]] = {}
+
+    for row in normalized_rows:
+        amount = _to_decimal(row["amount"])
+        if row["is_active"]:
+            active_transactions += 1
+            total_collected += amount
+
+            if row["date_key"] == today_key:
+                today_collected += amount
+
+            row_date = _parse_iso_date_silent(row["date_key"])
+            if row_date and row_date.year == today.year and row_date.month == today.month:
+                month_collected += amount
+
+        if row["date_key"] not in daily_buckets:
+            daily_buckets[row["date_key"]] = {
+                "date_key": row["date_key"],
+                "date_label": row["date_label"],
+                "transactions": 0,
+                "active_transactions": 0,
+                "inactive_transactions": 0,
+                "total_amount": MONEY_ZERO,
+                "method_totals": defaultdict(lambda: MONEY_ZERO),
+                "guest_totals": defaultdict(lambda: MONEY_ZERO),
+            }
+        daily = daily_buckets[row["date_key"]]
+        daily["transactions"] += 1
+        daily["total_amount"] += amount
+        if row["is_active"]:
+            daily["active_transactions"] += 1
+        else:
+            daily["inactive_transactions"] += 1
+        daily["method_totals"][row["method_label"]] += amount
+        daily["guest_totals"][row["guest_label"]] += amount
+
+        if row["method_key"] not in method_buckets:
+            method_buckets[row["method_key"]] = {
+                "method_key": row["method_key"],
+                "method_label": row["method_label"],
+                "transactions": 0,
+                "active_transactions": 0,
+                "inactive_transactions": 0,
+                "total_amount": MONEY_ZERO,
+            }
+        method_bucket = method_buckets[row["method_key"]]
+        method_bucket["transactions"] += 1
+        method_bucket["total_amount"] += amount
+        if row["is_active"]:
+            method_bucket["active_transactions"] += 1
+        else:
+            method_bucket["inactive_transactions"] += 1
+
+    daily_rows = []
+    for data in daily_buckets.values():
+        transactions_decimal = _to_decimal(data["transactions"])
+        daily_rows.append(
+            {
+                "date_key": data["date_key"],
+                "date_label": data["date_label"],
+                "transactions": int(data["transactions"]),
+                "active_transactions": int(data["active_transactions"]),
+                "inactive_transactions": int(data["inactive_transactions"]),
+                "total_amount": _to_float(_to_decimal(data["total_amount"])),
+                "average_ticket": _to_float(
+                    _safe_divide(_to_decimal(data["total_amount"]), transactions_decimal)
+                ),
+                "top_method": _resolve_top_bucket_label(data["method_totals"], "Sin metodo"),
+                "top_guest": _resolve_top_bucket_label(data["guest_totals"], "Huesped sin nombre"),
+            }
+        )
+    daily_rows.sort(key=lambda item: item["date_key"], reverse=True)
+    daily_rows.sort(key=lambda item: item["date_key"] == "SIN_FECHA")
+
+    grand_total = sum(
+        (_to_decimal(item["total_amount"]) for item in method_buckets.values()),
+        MONEY_ZERO,
+    )
+    method_rows = []
+    for data in method_buckets.values():
+        transactions_decimal = _to_decimal(data["transactions"])
+        amount_decimal = _to_decimal(data["total_amount"])
+        method_rows.append(
+            {
+                "method_key": data["method_key"],
+                "method_label": data["method_label"],
+                "transactions": int(data["transactions"]),
+                "active_transactions": int(data["active_transactions"]),
+                "inactive_transactions": int(data["inactive_transactions"]),
+                "total_amount": _to_float(amount_decimal),
+                "average_ticket": _to_float(_safe_divide(amount_decimal, transactions_decimal)),
+                "share_percent": _to_float(_percentage(amount_decimal, grand_total)),
+            }
+        )
+    method_rows.sort(key=lambda item: item["total_amount"], reverse=True)
+
+    return {
+        "filters": {
+            "hotel_settings": hotel_settings_id,
+            "period": period_key,
+            "activity": activity_key,
+            "method": method_key_filter or "ALL",
+            "search": search_filter,
+            "year": start_date.year if start_date and end_date and start_date.year == end_date.year else None,
+            "start_date": start_date.isoformat() if start_date else None,
+            "end_date": end_date.isoformat() if end_date else None,
+            "generated_at": timezone.now().isoformat(),
+        },
+        "summary": {
+            "total_transactions": total_transactions,
+            "active_transactions": active_transactions,
+            "total_collected": _to_float(total_collected),
+            "today_collected": _to_float(today_collected),
+            "month_collected": _to_float(month_collected),
+            "average_ticket": _to_float(
+                _safe_divide(total_collected, _to_decimal(active_transactions))
+            ),
+        },
+        "daily_rows": daily_rows,
+        "method_rows": method_rows,
     }
 
 
@@ -1631,6 +1948,41 @@ def _calculate_percentage_change(*, current: Decimal, previous: Decimal) -> Deci
 
 def _normalize_code(value: Any) -> str:
     return str(value or "").strip().upper()
+
+
+def _normalize_code_alnum(value: Any) -> str:
+    normalized = str(value or "").strip().upper()
+    if not normalized:
+        return ""
+    folded = unicodedata.normalize("NFD", normalized)
+    without_marks = "".join(ch for ch in folded if unicodedata.category(ch) != "Mn")
+    return re.sub(r"[^A-Z0-9]", "", without_marks)
+
+
+def _parse_iso_date_silent(value: str) -> date | None:
+    raw = str(value or "").strip()
+    if not raw or raw == "SIN_FECHA":
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+def _resolve_top_bucket_label(values: dict[str, Decimal], fallback: str) -> str:
+    if not values:
+        return fallback
+
+    best_label = fallback
+    best_total = MONEY_ZERO
+    has_value = False
+    for label, total in values.items():
+        amount = _to_decimal(total)
+        if not has_value or amount > best_total:
+            best_label = str(label or fallback)
+            best_total = amount
+            has_value = True
+    return best_label
 
 
 def _to_decimal(value: Any) -> Decimal:

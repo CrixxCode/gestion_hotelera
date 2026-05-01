@@ -3,6 +3,7 @@ from django.db.models import F, Q
 
 from apps.packages.models import Package, PackageService
 from apps.packages.serializers import PackageSerializer, PackageServiceSerializer
+from accounts.pagination import OptionalPageNumberPagination
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
 from accounts.tenancy import TenantScopeMixin
@@ -21,7 +22,7 @@ class PackageViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.Model
     )
     tenant_filter = "hotel_settings"
     serializer_class = PackageSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["packages.read"]
 
@@ -69,7 +70,7 @@ class PackageServiceViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewset
     )
     tenant_filter = "package__hotel_settings"
     serializer_class = PackageServiceSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["packages.read"]
 

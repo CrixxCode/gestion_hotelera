@@ -4,7 +4,7 @@ from rest_framework import serializers
 
 from apps.inventory.models import Item, InventoryMovement, RoomInventory
 from apps.master_data.models import MasterData
-from accounts.tenancy import TenantSerializerMixin
+from accounts.tenancy import TenantSerializerMixin, is_effective_global_admin
 from apps.hotel_settings.models import HotelSettings
 from apps.rooms.models import Room
 
@@ -172,7 +172,7 @@ class InventoryMovementSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         user = getattr(request, "user", None)
 
-        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+        if user and user.is_authenticated and not is_effective_global_admin(user) and user.hotel_settings_id:
             fields["item"].queryset = Item.objects.filter(
                 hotel_settings_id=user.hotel_settings_id
             )
@@ -197,7 +197,7 @@ class InventoryMovementSerializer(serializers.ModelSerializer):
         if item is None:
             raise serializers.ValidationError({"item": "El item es obligatorio."})
 
-        if user and user.is_authenticated and not user.is_superuser:
+        if user and user.is_authenticated and not is_effective_global_admin(user):
             if user.hotel_settings_id is None:
                 raise serializers.ValidationError(
                     {"item": "El usuario autenticado no tiene un hotel asignado."}
@@ -251,7 +251,7 @@ class RoomInventorySerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         user = getattr(request, "user", None)
 
-        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+        if user and user.is_authenticated and not is_effective_global_admin(user) and user.hotel_settings_id:
             fields["room"].queryset = Room.objects.filter(
                 floor__hotel_settings_id=user.hotel_settings_id
             )
@@ -299,7 +299,7 @@ class RoomInventorySerializer(serializers.ModelSerializer):
                     {"item": "The item must belong to the same hotel as the room."}
                 )
 
-        if user and user.is_authenticated and not user.is_superuser:
+        if user and user.is_authenticated and not is_effective_global_admin(user):
             if user.hotel_settings_id is None:
                 raise serializers.ValidationError(
                     {"room": "El usuario autenticado no tiene un hotel asignado."}

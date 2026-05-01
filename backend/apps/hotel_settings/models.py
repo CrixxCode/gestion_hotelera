@@ -20,7 +20,7 @@ class HotelSettings(models.Model):
     description = models.TextField(blank=True, null=True)
 
     # Logo del hotel
-    logo = models.ImageField(upload_to="hotel/logo/", blank=True, null=True)
+    logo = models.URLField(blank=True, null=True)
 
     # Categoría del hotel (1 a 5 estrellas)
     stars = models.PositiveSmallIntegerField(default=3)

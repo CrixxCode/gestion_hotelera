@@ -12,7 +12,7 @@ type DRFPaginated<T> = {
 
 @Injectable({ providedIn: 'root' })
 export class MasterDataService {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly masterDataUrl = `${this.apiBase}/api/master-data/`;
 
   constructor(

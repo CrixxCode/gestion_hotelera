@@ -47,7 +47,7 @@ export type FinancialControlConfigPayload = {
   providedIn: 'root'
 })
 export class FinancialControlService {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly dashboardUrl = `${this.apiBase}/api/financial-control/dashboard/`;
   private readonly whatIfUrl = `${this.apiBase}/api/financial-control/what-if/`;
   private readonly statementsUrl = `${this.apiBase}/api/financial-control/statements/`;

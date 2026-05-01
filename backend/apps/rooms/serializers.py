@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from accounts.tenancy import TenantSerializerMixin
+from accounts.tenancy import TenantSerializerMixin, is_effective_global_admin
 from apps.hotel_settings.models import HotelFloor, HotelSettings
 from apps.master_data.models import MasterData
 from apps.master_data.serializers import MasterDataCodeField
@@ -205,7 +205,7 @@ class RateSerializer(TenantSerializerMixin, serializers.ModelSerializer):
         request = self.context.get("request")
         user = getattr(request, "user", None)
 
-        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+        if user and user.is_authenticated and not is_effective_global_admin(user) and user.hotel_settings_id:
             fields["room_type"].queryset = RoomType.objects.filter(
                 hotel_settings_id=user.hotel_settings_id
             )
@@ -321,7 +321,7 @@ class RoomSerializer(TenantSerializerMixin, serializers.ModelSerializer):
         request = self.context.get("request")
         user = getattr(request, "user", None)
 
-        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+        if user and user.is_authenticated and not is_effective_global_admin(user) and user.hotel_settings_id:
             fields["floor"].queryset = HotelFloor.objects.filter(
                 hotel_settings_id=user.hotel_settings_id
             )
@@ -466,7 +466,7 @@ class MaintenanceOrderSerializer(TenantSerializerMixin, serializers.ModelSeriali
         request = self.context.get("request")
         user = getattr(request, "user", None)
 
-        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+        if user and user.is_authenticated and not is_effective_global_admin(user) and user.hotel_settings_id:
             fields["room"].queryset = Room.objects.filter(
                 floor__hotel_settings_id=user.hotel_settings_id
             )
@@ -580,7 +580,7 @@ class CleaningTaskSerializer(TenantSerializerMixin, serializers.ModelSerializer)
         request = self.context.get("request")
         user = getattr(request, "user", None)
 
-        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+        if user and user.is_authenticated and not is_effective_global_admin(user) and user.hotel_settings_id:
             fields["room"].queryset = Room.objects.filter(
                 floor__hotel_settings_id=user.hotel_settings_id
             )

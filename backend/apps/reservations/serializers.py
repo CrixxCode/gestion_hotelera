@@ -30,7 +30,7 @@ from apps.reservations.services import (
     validate_reservation_deposit_rules,
 )
 from apps.hotel_settings.models import ReservationPolicy, HotelSettings
-from accounts.tenancy import TenantSerializerMixin
+from accounts.tenancy import TenantSerializerMixin, is_effective_global_admin
 from apps.clients.models import Client
 from apps.inventory.models import Item
 from apps.rooms.models import Room
@@ -114,7 +114,7 @@ class ReservationRoomSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         user = getattr(request, "user", None)
 
-        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+        if user and user.is_authenticated and not is_effective_global_admin(user) and user.hotel_settings_id:
             fields["reservation"].queryset = Reservation.objects.filter(
                 hotel_settings_id=user.hotel_settings_id
             )
@@ -167,7 +167,7 @@ class ReservationRoomSerializer(serializers.ModelSerializer):
                 "room": "La habitacion no pertenece al mismo hotel de la reserva."
             })
 
-        if user and user.is_authenticated and not user.is_superuser:
+        if user and user.is_authenticated and not is_effective_global_admin(user):
             if user.hotel_settings_id is None:
                 raise serializers.ValidationError({
                     "reservation": "El usuario autenticado no tiene un hotel asignado."
@@ -352,7 +352,7 @@ class ReservationGuestSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         user = getattr(request, "user", None)
 
-        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+        if user and user.is_authenticated and not is_effective_global_admin(user) and user.hotel_settings_id:
             fields["reservation"].queryset = Reservation.objects.filter(
                 hotel_settings_id=user.hotel_settings_id
             )
@@ -390,7 +390,7 @@ class ReservationGuestSerializer(serializers.ModelSerializer):
                 "reservation": "La reserva es obligatoria."
             })
 
-        if user and user.is_authenticated and not user.is_superuser:
+        if user and user.is_authenticated and not is_effective_global_admin(user):
             if user.hotel_settings_id is None:
                 raise serializers.ValidationError({
                     "reservation": "El usuario autenticado no tiene un hotel asignado."
@@ -476,7 +476,7 @@ class ReservationDepositSerializer(serializers.Serializer):
         request = self.context.get("request")
         user = getattr(request, "user", None)
 
-        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+        if user and user.is_authenticated and not is_effective_global_admin(user) and user.hotel_settings_id:
             fields["reservation"].queryset = Reservation.objects.filter(
                 hotel_settings_id=user.hotel_settings_id
             )
@@ -503,7 +503,7 @@ class ReservationDepositSerializer(serializers.Serializer):
                 "reservation": "Reservation is required."
             })
 
-        if user and user.is_authenticated and not user.is_superuser:
+        if user and user.is_authenticated and not is_effective_global_admin(user):
             if user.hotel_settings_id is None:
                 raise serializers.ValidationError({
                     "reservation": "El usuario autenticado no tiene un hotel asignado."
@@ -1108,7 +1108,7 @@ class ReservationWriteSerializer(TenantSerializerMixin, serializers.ModelSeriali
         request = self.context.get("request")
         user = getattr(request, "user", None)
 
-        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+        if user and user.is_authenticated and not is_effective_global_admin(user) and user.hotel_settings_id:
             fields["client"].queryset = Client.objects.filter(
                 hotel_settings_id=user.hotel_settings_id
             )
@@ -1362,7 +1362,7 @@ class ReservationInventoryCheckSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         user = getattr(request, "user", None)
 
-        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+        if user and user.is_authenticated and not is_effective_global_admin(user) and user.hotel_settings_id:
             fields["reservation"].queryset = Reservation.objects.filter(
                 hotel_settings_id=user.hotel_settings_id
             )
@@ -1379,7 +1379,7 @@ class ReservationInventoryCheckSerializer(serializers.ModelSerializer):
                 "reservation": "La reserva es obligatoria."
             })
 
-        if user and user.is_authenticated and not user.is_superuser:
+        if user and user.is_authenticated and not is_effective_global_admin(user):
             if user.hotel_settings_id is None:
                 raise serializers.ValidationError({
                     "reservation": "El usuario autenticado no tiene un hotel asignado."
@@ -1421,7 +1421,7 @@ class ReservationInventoryCheckLineSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         user = getattr(request, "user", None)
 
-        if user and user.is_authenticated and not user.is_superuser and user.hotel_settings_id:
+        if user and user.is_authenticated and not is_effective_global_admin(user) and user.hotel_settings_id:
             fields["inventory_check"].queryset = ReservationInventoryCheck.objects.filter(
                 reservation__hotel_settings_id=user.hotel_settings_id
             )
@@ -1479,7 +1479,7 @@ class ReservationInventoryCheckLineSerializer(serializers.ModelSerializer):
                     "reservation_room": "La habitacion de reserva no coincide con la habitacion seleccionada."
                 })
 
-        if user and user.is_authenticated and not user.is_superuser:
+        if user and user.is_authenticated and not is_effective_global_admin(user):
             if user.hotel_settings_id is None:
                 raise serializers.ValidationError({
                     "inventory_check": "El usuario autenticado no tiene un hotel asignado."

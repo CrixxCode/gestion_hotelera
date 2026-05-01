@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
+import { ConfirmationService } from 'primeng/api';
 
 import { BillingService } from '../../../../services/billing';
 import { CreditNoteList } from './credit-note-list';
@@ -18,7 +19,8 @@ describe('CreditNoteList', () => {
             listCreditNotes: () => of([]),
             updateCreditNote: () => of({})
           }
-        }
+        },
+        ConfirmationService
       ]
     })
     .compileComponents();

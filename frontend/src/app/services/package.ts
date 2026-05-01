@@ -18,7 +18,7 @@ type DRFPaginated<T> = {
   providedIn: 'root'
 })
 export class PackagesService {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly packagesUrl = `${this.apiBase}/api/packages/`;
   private readonly packageServicesUrl = `${this.apiBase}/api/package-services/`;
 

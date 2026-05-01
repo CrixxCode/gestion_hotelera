@@ -7,6 +7,13 @@ export interface ReportQueryParams {
   end_date?: string;
 }
 
+export interface IncomeConsolidatedQueryParams extends ReportQueryParams {
+  period?: 'ALL' | 'TODAY' | 'LAST_7_DAYS' | 'THIS_MONTH' | 'THIS_YEAR';
+  activity?: 'ALL' | 'ACTIVE' | 'INACTIVE';
+  method?: string;
+  search?: string;
+}
+
 export interface ReportFilters {
   hotel_settings: number;
   year: number | null;
@@ -210,4 +217,55 @@ export interface ReportDetailData {
   tone: 'blue' | 'green' | 'gold' | 'purple' | 'red';
   metrics: ReportDetailMetric[];
   note?: string;
+}
+
+export interface IncomeConsolidatedFilters {
+  hotel_settings: number;
+  period: string;
+  activity: string;
+  method: string;
+  search: string;
+  year: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  generated_at: string;
+}
+
+export interface IncomeConsolidatedSummary {
+  total_transactions: number;
+  active_transactions: number;
+  total_collected: number;
+  today_collected: number;
+  month_collected: number;
+  average_ticket: number;
+}
+
+export interface IncomeConsolidatedDailyRow {
+  date_key: string;
+  date_label: string;
+  transactions: number;
+  active_transactions: number;
+  inactive_transactions: number;
+  total_amount: number;
+  average_ticket: number;
+  top_method: string;
+  top_guest: string;
+}
+
+export interface IncomeConsolidatedMethodRow {
+  method_key: string;
+  method_label: string;
+  transactions: number;
+  active_transactions: number;
+  inactive_transactions: number;
+  total_amount: number;
+  average_ticket: number;
+  share_percent: number;
+}
+
+export interface IncomeConsolidatedReportResponse {
+  filters: IncomeConsolidatedFilters;
+  summary: IncomeConsolidatedSummary;
+  daily_rows: IncomeConsolidatedDailyRow[];
+  method_rows: IncomeConsolidatedMethodRow[];
 }

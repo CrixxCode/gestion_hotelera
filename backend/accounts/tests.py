@@ -8,13 +8,25 @@ User = get_user_model()
 
 class FilterOrderingTests(APITestCase):
     def setUp(self):
+        self.hotel = HotelSettings.objects.create(hotel_name="Hotel Filter")
+
         # Crear rol/recursos y usuarios
         self.r_read = Resource.objects.create(key="users.read", name="Leer usuarios")
         role = Role.objects.create(name="Manager", slug="manager")
         role.resources.add(self.r_read)
 
-        self.u1 = User.objects.create_user(username="ana", email="ana@example.com", password="pass12345")
-        self.u2 = User.objects.create_user(username="beto", email="beto@example.com", password="pass12345")
+        self.u1 = User.objects.create_user(
+            username="ana",
+            email="ana@example.com",
+            password="pass12345",
+            hotel_settings=self.hotel,
+        )
+        self.u2 = User.objects.create_user(
+            username="beto",
+            email="beto@example.com",
+            password="pass12345",
+            hotel_settings=self.hotel,
+        )
         self.u1.roles.add(role); self.u2.roles.add(role)
 
         # Autenticar vía sesión (bypaséando login view para test)

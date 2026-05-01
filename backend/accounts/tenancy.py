@@ -1,6 +1,15 @@
 from django.core.exceptions import ImproperlyConfigured
 
 
+def is_effective_global_admin(user) -> bool:
+    return bool(
+        user
+        and user.is_authenticated
+        and user.is_superuser
+        and getattr(user, "hotel_settings_id", None) is None
+    )
+
+
 class TenantScopeMixin:
     tenant_filter = "hotel_settings"
     allow_superuser_global = True
@@ -17,12 +26,8 @@ class TenantScopeMixin:
         return getattr(user, "hotel_settings_id", None)
 
     def is_global_admin(self):
-        user = getattr(self.request, "user", None)
-        return bool(
-            user
-            and user.is_authenticated
-            and self.allow_superuser_global
-            and user.is_superuser
+        return self.allow_superuser_global and is_effective_global_admin(
+            getattr(self.request, "user", None)
         )
 
     def get_base_queryset(self):
@@ -61,7 +66,7 @@ class TenantSerializerMixin:
 
     def is_global_admin(self):
         actor = self.get_actor()
-        return bool(actor and actor.is_authenticated and actor.is_superuser)
+        return is_effective_global_admin(actor)
 
     def get_actor_tenant(self):
         actor = self.get_actor()

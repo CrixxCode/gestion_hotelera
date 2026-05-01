@@ -4,6 +4,13 @@
       <h1>Consolidado de Ingresos</h1>
       <p>Analiza la recaudacion por periodos, metodos de pago y comportamiento de cobros.</p>
     </div>
+
+    <div class="header-actions">
+      <button type="button" class="btn btn-dark" (click)="exportCsv()">
+        <i class="fa-solid fa-file-export"></i>
+        Exportar CSV
+      </button>
+    </div>
   </header>
 
   <section class="stats-grid">
@@ -28,7 +35,7 @@
     <article class="stat-card">
       <div class="stat-head">
         <span>Total recaudado</span>
-        <span class="stat-icon gold"><i class="fa-solid fa-wallet"></i></span>
+        <span class="stat-icon red"><i class="fa-solid fa-wallet"></i></span>
       </div>
       <div class="stat-value stat-money">{{ totalCollectedLabel }}</div>
       <div class="stat-note">mes actual: {{ monthCollectedLabel }}</div>
@@ -37,14 +44,14 @@
     <article class="stat-card">
       <div class="stat-head">
         <span>Ingreso hoy</span>
-        <span class="stat-icon purple"><i class="fa-solid fa-calendar-day"></i></span>
+        <span class="stat-icon gray"><i class="fa-solid fa-calendar-day"></i></span>
       </div>
       <div class="stat-value stat-money">{{ todayCollectedLabel }}</div>
       <div class="stat-note">ticket promedio: {{ averageTicketLabel }}</div>
     </article>
   </section>
 
-  <section class="gh-filters-card">
+  <section class="gh-filters-card income-controls">
     <div class="gh-filters-grid income-filters-grid">
       <label class="search-field search-wrap gh-search-wrap">
         <span>Buscar</span>
@@ -104,20 +111,15 @@
           <i class="fa-solid fa-rotate-right"></i>
           Actualizar
         </button>
-
-        <button type="button" class="gh-btn gh-btn-light" (click)="exportCsv()">
-          <i class="fa-solid fa-file-export"></i>
-          Exportar
-        </button>
       </div>
     </div>
   </section>
 
-  <section class="state-message" *ngIf="loading || errorMessage || infoMessage || filteredPayments.length === 0">
+  <section class="state-message" *ngIf="loading || errorMessage || infoMessage || !hasResults">
     <p *ngIf="loading">Cargando consolidado de ingresos...</p>
     <p class="error" *ngIf="!loading && errorMessage">{{ errorMessage }}</p>
     <p class="info" *ngIf="!loading && !errorMessage && infoMessage">{{ infoMessage }}</p>
-    <p *ngIf="!loading && !errorMessage && !infoMessage && filteredPayments.length === 0">
+    <p *ngIf="!loading && !errorMessage && !infoMessage && !hasResults">
       No hay ingresos para los filtros seleccionados.
     </p>
   </section>
@@ -164,36 +166,37 @@
       class="method-card"
       *ngFor="let row of methodRows; trackBy: trackByMethodRow; let index = index"
       [ngStyle]="{ 'background-color': getMethodCardTone(index).bg }">
-      <header>
-        <h3 [ngStyle]="{ color: getMethodCardTone(index).accent }">{{ row.methodLabel }}</h3>
+      <header class="method-head">
+        <div>
+          <span class="method-code">MET-{{ index + 1 }}</span>
+          <small>{{ row.methodLabel }}</small>
+        </div>
+
         <span class="share-chip" [ngStyle]="{ color: getMethodCardTone(index).accent }">
           {{ formatShare(row.sharePercent) }}
         </span>
       </header>
 
-      <div class="amount-block">
-        <small>Total ingresos</small>
-        <strong>{{ row.totalAmount | currency: 'COP':'symbol':'1.0-0':'es-CO' }}</strong>
+      <div class="method-body">
+        <div class="concept-block">
+          <h3>{{ row.methodLabel }}</h3>
+          <p>Total ingresos del metodo en el periodo seleccionado.</p>
+        </div>
+
+        <div class="meta-row">
+          <span>Transacciones: {{ formatTransactions(row.transactions) }}</span>
+          <span>Activas: {{ formatTransactions(row.activeTransactions) }}</span>
+          <span>Inactivas: {{ formatTransactions(row.inactiveTransactions) }}</span>
+          <span>Ticket promedio: {{ row.averageTicket | currency: 'COP':'symbol':'1.0-0':'es-CO' }}</span>
+        </div>
       </div>
 
-      <div class="meta-grid">
+      <footer class="method-foot">
         <div>
-          <small>Transacciones</small>
-          <p>{{ formatTransactions(row.transactions) }}</p>
+          <small>Total ingresos</small>
+          <strong>{{ row.totalAmount | currency: 'COP':'symbol':'1.0-0':'es-CO' }}</strong>
         </div>
-        <div>
-          <small>Ticket promedio</small>
-          <p>{{ row.averageTicket | currency: 'COP':'symbol':'1.0-0':'es-CO' }}</p>
-        </div>
-        <div>
-          <small>Activas</small>
-          <p>{{ formatTransactions(row.activeTransactions) }}</p>
-        </div>
-        <div>
-          <small>Inactivas</small>
-          <p>{{ formatTransactions(row.inactiveTransactions) }}</p>
-        </div>
-      </div>
+      </footer>
     </article>
   </section>
 </div>

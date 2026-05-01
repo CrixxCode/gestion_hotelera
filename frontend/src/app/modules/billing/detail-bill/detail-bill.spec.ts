@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
+import { ConfirmationService } from 'primeng/api';
 
 import { MasterDataService } from '../../../services/master-data.service';
 import { PackagesService } from '../../../services/package';
@@ -52,7 +53,8 @@ describe('DetailBill', () => {
           useValue: {
             listPackages: () => of([])
           }
-        }
+        },
+        ConfirmationService
       ]
     })
     .compileComponents();

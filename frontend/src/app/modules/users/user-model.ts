@@ -12,6 +12,7 @@ export interface UserI {
   first_name: string;
   last_name: string;
   email: string;
+  job_title?: string;
   avatar?: string; // URL o base64
   role?: RoleI | null;
   roles?: RoleI[];

@@ -1,22 +1,15 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, HostListener, OnInit, Output } from '@angular/core';
 import { Router } from '@angular/router';
-import { catchError, forkJoin, of } from 'rxjs';
-import { ItemI } from '../../../modules/items/item-model';
-import { MaintenanceOrderI } from '../../../modules/maintenance-orders/maintenance-order-model';
-import { ReservationI } from '../../../modules/reservations/reservation-model';
+import { catchError, of } from 'rxjs';
 import { AuthService } from '../../../services/auth/auth';
-import { ItemsService } from '../../../services/item';
-import { MaintenanceOrdersService } from '../../../services/maintenance-order';
-import { NotificationStateService } from '../../../services/notification-state';
-import { ReservationService } from '../../../services/reservation';
+import { NotificationI, NotificationService } from '../../../services/notification';
 import { LogoutScreen } from '../../pages/logout-screen/logout-screen';
 
 type NotificationTone = 'warning' | 'info' | 'success';
-type NavigationQuery = Record<string, string | number | boolean>;
 
 interface HeaderNotification {
-  id: string;
+  id: number | 'none';
   title: string;
   detail: string;
   age: string;
@@ -24,7 +17,6 @@ interface HeaderNotification {
   tone: NotificationTone;
   route: string;
   unread: boolean;
-  queryParams?: NavigationQuery;
 }
 
 @Component({
@@ -47,27 +39,25 @@ export class Header implements OnInit {
   userName = '';
   userRole = '';
   userAvatar = 'avatar/default-avatar.png';
+  unreadCountSnapshot = 0;
 
   private readonly defaultAvatar = 'avatar/default-avatar.png';
   private readonly logoutAnimationDuration = 1000;
-  private readonly maxNotificationAgeDays = 7;
-  private readonly reservationAutoCancelMarker = 'AUTOCANCEL_OVERDUE:';
   private readonly themePrimaryStorageKey = 'gh_theme_primary';
   private readonly themeSecondaryStorageKey = 'gh_theme_secondary';
   private readonly defaultThemePrimaryColor = '#0f1f41';
   private readonly defaultThemeSecondaryColor = '#112853';
-  private readNotificationIds = new Set<string>();
 
   constructor(
     private authService: AuthService,
     private router: Router,
-    private itemsService: ItemsService,
-    private maintenanceOrdersService: MaintenanceOrdersService,
-    private reservationService: ReservationService,
-    private notificationStateService: NotificationStateService
+    private notificationsService: NotificationService
   ) {}
 
   get unreadCount(): number {
+    if (!this.notifications.length) {
+      return this.unreadCountSnapshot;
+    }
     return this.notifications.reduce((sum, notification) => sum + (notification.unread ? 1 : 0), 0);
   }
 
@@ -85,6 +75,7 @@ export class Header implements OnInit {
     document.documentElement.classList.remove('dark');
     this.applyStoredThemeCustomization();
     this.loadUserInfo();
+    this.loadUnreadCount();
   }
 
   loadUserInfo(): void {
@@ -92,16 +83,15 @@ export class Header implements OnInit {
       next: (res: any) => {
         this.userName = res.username || 'Usuario';
         this.userRole = this.resolveUserRole(res);
-        this.loadReadNotificationIds();
         const resolvedAvatar = this.authService.buildMediaUrl(res.avatar);
         this.userAvatar = resolvedAvatar || this.defaultAvatar;
+        this.loadUnreadCount();
       },
       error: () => {
         this.userName = 'Invitado';
         this.userRole = 'Sin rol';
         this.userAvatar = this.defaultAvatar;
-        this.readNotificationIds = new Set<string>();
-        this.notifications = this.applyReadState(this.notifications);
+        this.unreadCountSnapshot = 0;
       },
     });
   }
@@ -117,9 +107,7 @@ export class Header implements OnInit {
     this.notificationsOpen = !this.notificationsOpen;
     if (this.notificationsOpen) {
       this.menuOpen = false;
-      if (!this.notifications.length && !this.notificationsLoading) {
-        this.loadNotifications();
-      }
+      this.loadNotifications();
     }
   }
 
@@ -128,46 +116,35 @@ export class Header implements OnInit {
   }
 
   markNotificationsAsRead(): void {
-    const keys = this.notifications
-      .filter((notification) => notification.id !== 'none')
-      .map((notification) => notification.id);
-    if (!keys.length) return;
+    const hasUnread = this.notifications.some(
+      (notification) => notification.id !== 'none' && notification.unread
+    );
+    if (!hasUnread) return;
 
-    keys.forEach((key) => this.readNotificationIds.add(key));
-    this.notifications = this.applyReadState(this.notifications);
+    this.notifications = this.notifications.map((notification) =>
+      notification.id === 'none' ? notification : { ...notification, unread: false }
+    );
+    this.unreadCountSnapshot = 0;
 
-    this.notificationStateService
-      .markRead(keys)
-      .pipe(catchError(() => of(void 0)))
-      .subscribe();
-  }
-
-  markNotificationsAsUnread(): void {
-    const keys = this.notifications
-      .filter((notification) => notification.id !== 'none')
-      .map((notification) => notification.id);
-    if (!keys.length) return;
-
-    keys.forEach((key) => this.readNotificationIds.delete(key));
-    this.notifications = this.applyReadState(this.notifications);
-
-    this.notificationStateService
-      .markUnread(keys)
-      .pipe(catchError(() => of(void 0)))
+    this.notificationsService
+      .markAllAsRead()
+      .pipe(catchError(() => of({ updated: 0 })))
       .subscribe();
   }
 
   openNotification(notification: HeaderNotification): void {
     if (notification.id !== 'none' && notification.unread) {
-      this.readNotificationIds.add(notification.id);
-      this.notificationStateService
-        .markRead([notification.id])
-        .pipe(catchError(() => of(void 0)))
+      this.notifications = this.notifications.map((current) =>
+        current.id === notification.id ? { ...current, unread: false } : current
+      );
+      this.unreadCountSnapshot = Math.max(0, this.unreadCountSnapshot - 1);
+      this.notificationsService
+        .markAsRead(Number(notification.id))
+        .pipe(catchError(() => of(null)))
         .subscribe();
     }
-    this.notifications = this.applyReadState(this.notifications);
     this.notificationsOpen = false;
-    void this.router.navigate([notification.route], notification.queryParams ? { queryParams: notification.queryParams } : undefined);
+    void this.router.navigate([notification.route]);
   }
 
   openAllNotifications(): void {
@@ -259,179 +236,108 @@ export class Header implements OnInit {
     this.notificationsLoading = true;
     this.notificationsError = '';
 
-    forkJoin({
-      items: this.itemsService.listItems({ ordering: 'stock' }).pipe(catchError(() => of([] as ItemI[]))),
-      maintenance: this.maintenanceOrdersService
-        .listMaintenanceOrders({ ordering: '-reported_at' })
-        .pipe(catchError(() => of([] as MaintenanceOrderI[]))),
-      reservations: this.reservationService
-        .listReservations({ ordering: 'expected_check_in', include_finished: false, page_size: 200 })
-        .pipe(catchError(() => of([] as ReservationI[]))),
-    }).subscribe({
-      next: ({ items, maintenance, reservations }) => {
-        this.notifications = this.applyReadState(this.buildNotifications(items, maintenance, reservations));
-        this.notificationsLoading = false;
-      },
-      error: () => {
-        this.notificationsLoading = false;
-        this.notificationsError = 'No fue posible cargar las notificaciones.';
+    this.notificationsService
+      .listNotifications({ ordering: '-created_at' })
+      .pipe(catchError(() => of([] as NotificationI[])))
+      .subscribe({
+        next: (rows) => {
+          this.notifications = this.mapNotifications(rows);
+          this.unreadCountSnapshot = this.notifications.reduce(
+            (sum, notification) => sum + (notification.unread ? 1 : 0),
+            0
+          );
+          this.notificationsLoading = false;
+        },
+        error: () => {
+          this.notificationsLoading = false;
+          this.notificationsError = 'No fue posible cargar las notificaciones.';
       },
     });
   }
 
-  private buildNotifications(
-    items: ItemI[],
-    maintenanceOrders: MaintenanceOrderI[],
-    reservations: ReservationI[]
-  ): HeaderNotification[] {
-    const notifications: HeaderNotification[] = [];
-
-    items
-      .filter((item) => item.minimum_stock > 0 && item.stock <= item.minimum_stock)
-      .slice(0, 3)
-      .forEach((item) => {
-        const occurredAt = this.parseDateTime(item.updated_at || item.created_at || null);
-        if (this.isOlderThanMaxDays(occurredAt, this.maxNotificationAgeDays)) return;
-
-        notifications.push({
-          id: `item-${item.id}`,
-          title: 'Stock bajo',
-          detail: `${item.name} - ${item.stock} unidades`,
-          age: this.relativeFromNow(occurredAt),
-          icon: 'fa-solid fa-triangle-exclamation',
-          tone: 'warning',
-          route: '/items',
-          unread: true,
-          queryParams: { search: item.name },
-        });
+  private loadUnreadCount(): void {
+    this.notificationsService
+      .getUnreadCount()
+      .pipe(catchError(() => of(0)))
+      .subscribe((count) => {
+        this.unreadCountSnapshot = Math.max(0, Number(count || 0));
       });
+  }
 
-    maintenanceOrders
-      .filter((order) => !String(order.status_label || order.status || '').toUpperCase().includes('COMPLET'))
-      .slice(0, 3)
-      .forEach((order) => {
-        const occurredAt = this.parseDateTime(order.reported_at || null);
-        if (this.isOlderThanMaxDays(occurredAt, this.maxNotificationAgeDays)) return;
+  private mapNotifications(rows: NotificationI[]): HeaderNotification[] {
+    const mapped = rows.slice(0, 20).map((row) => this.toHeaderNotification(row));
+    if (mapped.length > 0) return mapped;
 
-        notifications.push({
-          id: `mnt-${order.id}`,
-          title: 'Mantenimiento pendiente',
-          detail: `${order.title} - Hab. ${order.room_number || order.room || '-'}`,
-          age: this.relativeFromNow(occurredAt),
-          icon: 'fa-solid fa-screwdriver-wrench',
-          tone: 'info',
-          route: '/ordenes-mantenimiento',
-          unread: true,
-          queryParams: { search: order.title },
-        });
-      });
+    return [
+      {
+        id: 'none',
+        title: 'Sin alertas activas',
+        detail: 'No hay notificaciones pendientes por ahora.',
+        age: 'Ahora',
+        icon: 'fa-solid fa-circle-check',
+        tone: 'success',
+        route: '/dashboard',
+        unread: false,
+      },
+    ];
+  }
 
-    const today = this.getToday();
-    reservations
-      .filter((reservation) => {
-        const checkIn = this.parseDateOnly(reservation.expected_check_in);
-        if (!checkIn || this.isCanceledReservation(reservation) || reservation.real_check_in) return false;
-        const diff = this.dayDifference(today, checkIn);
-        return diff >= 0 && diff <= 1;
-      })
-      .slice(0, 3)
-      .forEach((reservation) => {
-        const checkIn = this.parseDateOnly(reservation.expected_check_in);
-        const diff = checkIn ? this.dayDifference(today, checkIn) : 0;
-        notifications.push({
-          id: `res-${reservation.id}`,
-          title: 'Check-in proximo',
-          detail: reservation.client_full_name || `Cliente #${reservation.client}`,
-          age: diff === 0 ? 'Llega hoy' : 'Llega manana',
-          icon: 'fa-regular fa-calendar-check',
-          tone: 'info',
-          route: '/reservas',
-          unread: true,
-          queryParams: { search: String(reservation.id) },
-        });
-      });
+  private toHeaderNotification(row: NotificationI): HeaderNotification {
+    const type = String(row.notification_type || '').toUpperCase();
+    const priority = String(row.priority || '').toUpperCase();
+    const icon = this.resolveNotificationIcon(type);
+    const tone = this.resolveNotificationTone(priority);
+    const route = this.resolveNotificationRoute(row.action_url);
+    return {
+      id: row.id,
+      title: row.title || 'Notificacion',
+      detail: row.message || '',
+      age: this.relativeFromNow(row.created_at),
+      icon,
+      tone,
+      route,
+      unread: !row.is_read,
+    };
+  }
 
-    reservations
-      .filter((reservation) => this.isCanceledReservation(reservation))
-      .map((reservation) => ({
-        reservation,
-        cancelledAt: this.extractReservationAutoCancelDate(reservation),
-      }))
-      .filter((entry) => !!entry.cancelledAt && !this.isOlderThanMaxDays(entry.cancelledAt, this.maxNotificationAgeDays))
-      .sort((a, b) => (b.cancelledAt?.getTime() || 0) - (a.cancelledAt?.getTime() || 0))
-      .slice(0, 3)
-      .forEach(({ reservation, cancelledAt }) => {
-        notifications.push({
-          id: `res-autocancel-${reservation.id}`,
-          title: 'Reserva auto-cancelada',
-          detail: `${reservation.client_full_name || `Cliente #${reservation.client}`} - sin check-in`,
-          age: this.relativeFromNow(cancelledAt),
-          icon: 'fa-solid fa-ban',
-          tone: 'warning',
-          route: '/reservas',
-          unread: true,
-          queryParams: { search: String(reservation.id) },
-        });
-      });
+  private resolveNotificationTone(priority: string): NotificationTone {
+    if (priority === 'CRITICAL' || priority === 'HIGH') return 'warning';
+    if (priority === 'LOW') return 'success';
+    return 'info';
+  }
 
-    if (!notifications.length) {
-      return [
-        {
-          id: 'none',
-          title: 'Sin alertas activas',
-          detail: 'No hay notificaciones pendientes por ahora.',
-          age: 'Ahora',
-          icon: 'fa-solid fa-circle-check',
-          tone: 'success',
-          route: '/dashboard',
-          unread: false,
-        },
-      ];
+  private resolveNotificationIcon(notificationType: string): string {
+    switch (notificationType) {
+      case 'RESERVATION':
+        return 'fa-regular fa-calendar-check';
+      case 'ROOM':
+        return 'fa-solid fa-bed';
+      case 'CLEANING':
+        return 'fa-solid fa-broom';
+      case 'MAINTENANCE':
+        return 'fa-solid fa-screwdriver-wrench';
+      case 'PAYMENT':
+        return 'fa-regular fa-credit-card';
+      case 'INVOICE':
+        return 'fa-solid fa-file-invoice-dollar';
+      case 'INVENTORY':
+        return 'fa-solid fa-boxes-stacked';
+      case 'USER':
+        return 'fa-regular fa-user';
+      case 'FINANCE':
+        return 'fa-solid fa-wallet';
+      case 'REPORT':
+        return 'fa-solid fa-chart-line';
+      default:
+        return 'fa-regular fa-bell';
     }
-
-    return notifications.slice(0, 8);
   }
 
-  private isCanceledReservation(reservation: ReservationI): boolean {
-    return String(reservation.status_code || reservation.status_name || '').toUpperCase().includes('CANCEL');
-  }
-
-  private extractReservationAutoCancelDate(reservation: ReservationI): Date | null {
-    const notes = String(reservation.notes || '');
-    if (!notes) return null;
-
-    const pattern = new RegExp(`${this.reservationAutoCancelMarker}([^\\]\\s]+)`, 'i');
-    const match = pattern.exec(notes);
-    if (!match || !match[1]) return null;
-
-    const parsed = new Date(match[1]);
-    if (Number.isNaN(parsed.getTime())) return null;
-    return parsed;
-  }
-
-  private getToday(): Date {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  }
-
-  private parseDateOnly(value?: string | null): Date | null {
-    if (!value) return null;
-    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
-    if (!match) return null;
-    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  }
-
-  private dayDifference(from: Date, to: Date): number {
-    const start = new Date(from.getFullYear(), from.getMonth(), from.getDate()).getTime();
-    const end = new Date(to.getFullYear(), to.getMonth(), to.getDate()).getTime();
-    return Math.round((end - start) / 86400000);
-  }
-
-  private parseDateTime(value?: string | null): Date | null {
-    if (!value) return null;
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return null;
-    return date;
+  private resolveNotificationRoute(actionUrl?: string | null): string {
+    const normalized = String(actionUrl || '').trim();
+    if (!normalized) return '/actividad';
+    if (normalized.startsWith('/')) return normalized;
+    return '/actividad';
   }
 
   private relativeFromNow(value?: Date | string | null): string {
@@ -443,33 +349,6 @@ export class Header implements OnInit {
     const hours = Math.round(minutes / 60);
     if (hours < 24) return `Hace ${hours} h`;
     return `Hace ${Math.round(hours / 24)} d`;
-  }
-
-  private isOlderThanMaxDays(date: Date | null, maxDays: number): boolean {
-    if (!date) return false;
-    const today = this.getToday();
-    const notificationDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const diffDays = this.dayDifference(notificationDay, today);
-    return diffDays > maxDays;
-  }
-
-  private applyReadState(notifications: HeaderNotification[]): HeaderNotification[] {
-    return notifications.map((notification) => {
-      if (notification.id === 'none') {
-        return { ...notification, unread: false };
-      }
-      return { ...notification, unread: !this.readNotificationIds.has(notification.id) };
-    });
-  }
-
-  private loadReadNotificationIds(): void {
-    this.notificationStateService
-      .listReadKeys()
-      .pipe(catchError(() => of([] as string[])))
-      .subscribe((keys) => {
-        this.readNotificationIds = new Set<string>(keys);
-        this.notifications = this.applyReadState(this.notifications);
-      });
   }
 
   private resolveUserRole(user: any): string {

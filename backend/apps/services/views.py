@@ -2,6 +2,7 @@ from rest_framework import filters, viewsets
 
 from apps.services.models import Service
 from apps.services.serializers import ServiceSerializer
+from accounts.pagination import OptionalPageNumberPagination
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
 from accounts.tenancy import TenantScopeMixin
@@ -16,7 +17,7 @@ class ServiceViewSet(TenantScopeMixin, LogicalDeleteViewSetMixin, viewsets.Model
     )
     tenant_filter = "hotel_settings"
     serializer_class = ServiceSerializer
-    pagination_class = None
+    pagination_class = OptionalPageNumberPagination
     permission_classes = [HasResourcePermission]
     required_scopes = ["services.read"]
 

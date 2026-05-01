@@ -13,7 +13,7 @@ type DRFPaginated<T> = {
   providedIn: 'root'
 })
 export class MaintenanceOrdersService {
-  private readonly apiBase = (environment.API_URI || 'http://localhost:8000').replace(/\/$/, '');
+  private readonly apiBase = environment.API_URI.replace(/\/$/, '');
   private readonly maintenanceOrdersUrl = `${this.apiBase}/api/maintenance-orders/`;
 
   constructor(
