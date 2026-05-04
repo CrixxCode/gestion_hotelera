@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthService, MeResponse } from '../../../services/auth/auth';
 
 type ProfileTab = 'profile' | 'password' | 'work';
@@ -46,6 +46,8 @@ export class MyProfilePage implements OnInit {
   passwordSavedMessage = '';
   workSavedMessage = '';
   passwordErrorMessage = '';
+  forcePasswordChangeRequired = false;
+  forcePasswordChangeMessage = '';
   passwordLoading = false;
   showCurrentPassword = false;
   showNewPassword = false;
@@ -76,16 +78,25 @@ export class MyProfilePage implements OnInit {
     work_role: ['', Validators.required],
   });
 
-  constructor(private authService: AuthService) {
+  constructor(
+    private authService: AuthService,
+    private route: ActivatedRoute
+  ) {
     this.personalForm.disable({ emitEvent: false });
     this.workForm.disable({ emitEvent: false });
   }
 
   ngOnInit(): void {
+    this.initializePasswordChangeStateFromRoute();
     this.loadCurrentUser();
   }
 
   selectTab(tab: ProfileTab): void {
+    if (this.forcePasswordChangeRequired && tab !== 'password') {
+      this.activeTab = 'password';
+      return;
+    }
+
     if (this.activeTab === 'profile' && this.isEditingProfile && tab !== 'profile') {
       this.cancelProfileEditing();
     }
@@ -160,6 +171,8 @@ export class MyProfilePage implements OnInit {
           next: () => {
             this.passwordLoading = false;
             this.passwordSavedMessage = 'Contrasena actualizada correctamente.';
+            this.forcePasswordChangeRequired = false;
+            this.forcePasswordChangeMessage = '';
             this.showCurrentPassword = false;
             this.showNewPassword = false;
             this.showConfirmPassword = false;
@@ -238,6 +251,15 @@ export class MyProfilePage implements OnInit {
   }
 
   private hydrateFromUser(user: MeResponse): void {
+    if (user.must_change_password) {
+      this.forcePasswordChangeRequired = true;
+      this.activeTab = 'password';
+      if (!this.forcePasswordChangeMessage) {
+        this.forcePasswordChangeMessage =
+          'Debes cambiar tu contrasena antes de poder usar los demas modulos.';
+      }
+    }
+
     const firstName = user.first_name?.trim() || '';
     const lastName = user.last_name?.trim() || '';
     const composedName = `${firstName} ${lastName}`.trim();
@@ -328,6 +350,25 @@ export class MyProfilePage implements OnInit {
     this.passwordSavedMessage = '';
     this.workSavedMessage = '';
     this.passwordErrorMessage = '';
+  }
+
+  private initializePasswordChangeStateFromRoute(): void {
+    const forcePasswordChangeRaw =
+      this.route.snapshot.queryParamMap.get('forcePasswordChange') || '';
+    const requestedTab = this.route.snapshot.queryParamMap.get('tab') || '';
+
+    if (requestedTab === 'profile' || requestedTab === 'password' || requestedTab === 'work') {
+      this.activeTab = requestedTab;
+    }
+
+    this.forcePasswordChangeRequired =
+      forcePasswordChangeRaw === '1' || forcePasswordChangeRaw.toLowerCase() === 'true';
+
+    if (this.forcePasswordChangeRequired) {
+      this.activeTab = 'password';
+      this.forcePasswordChangeMessage =
+        'Debes cambiar tu contrasena antes de poder usar los demas modulos.';
+    }
   }
 
   private finishProfileEditing(): void {

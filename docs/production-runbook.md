@@ -35,10 +35,10 @@ PUBLIC_CLIENT_REGISTRATION_TOKEN=<token-largo-opcional-si-se-habilita>
 
 ## 2. Checklist predeploy
 
-Comando único:
+Comando unico (si PowerShell bloquea scripts):
 
 ```powershell
-.\scripts\predeploy-check.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\predeploy-check.ps1
 ```
 
 1. Ejecutar backend tests: `python manage.py test`
@@ -79,7 +79,7 @@ pg_restore -h <host> -U <user> -d <db> --clean --if-exists backup_YYYYMMDD_HHMM.
 
 ## 5. Monitoreo mínimo
 
-1. Healthcheck: `GET /api/health/`
+1. Healthcheck: `GET /health/`
 2. Errores 5xx por minuto.
 3. Latencia p95 endpoints críticos (auth, reservas, facturación).
 4. Job failures (si existen cron/commands).
@@ -128,3 +128,4 @@ Si se habilita temporalmente:
 1. Mantener ambos flags en `True` solo el tiempo necesario.
 2. Exigir token de cabecera `X-Public-Registration-Token`.
 3. Registrar auditoría de altas y deshabilitar al finalizar la campaña.
+

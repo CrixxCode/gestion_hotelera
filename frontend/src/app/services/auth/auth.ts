@@ -19,6 +19,7 @@ export interface MeResponse {
   first_name: string;
   last_name: string;
   avatar?: string | null;
+  must_change_password?: boolean;
   hotel_settings?: {
     id?: string | number;
     hotel_name?: string;

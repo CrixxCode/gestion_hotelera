@@ -1,8 +1,18 @@
-import { inject } from '@angular/core';
+﻿import { inject } from '@angular/core';
 import { CanActivateFn, CanActivateChildFn, Router } from '@angular/router';
 import { catchError, map, of } from 'rxjs';
 import { MessageService } from 'primeng/api';
-import { AuthService } from '../services/auth/auth';
+import { AuthService, MeResponse } from '../services/auth/auth';
+
+const normalizeRoutePath = (targetUrl: string): string => {
+  const [pathOnly] = String(targetUrl || '/').split('?');
+  const normalized = (pathOnly || '/').trim().replace(/\/+$/, '');
+  return normalized || '/';
+};
+
+const isPasswordChangeRoute = (targetUrl: string): boolean => {
+  return normalizeRoutePath(targetUrl) === '/mi-perfil';
+};
 
 const buildLoginRedirect = (router: Router, targetUrl: string) => {
   const returnUrl =
@@ -10,6 +20,21 @@ const buildLoginRedirect = (router: Router, targetUrl: string) => {
       ? { returnUrl: targetUrl }
       : undefined;
   return router.createUrlTree(['/login'], { queryParams: returnUrl });
+};
+
+const buildForcedPasswordRedirect = (router: Router, targetUrl: string) => {
+  const returnUrl =
+    targetUrl && targetUrl !== '/mi-perfil' && targetUrl !== '/'
+      ? targetUrl
+      : undefined;
+
+  return router.createUrlTree(['/mi-perfil'], {
+    queryParams: {
+      forcePasswordChange: 1,
+      tab: 'password',
+      ...(returnUrl ? { returnUrl } : {}),
+    },
+  });
 };
 
 const showAuthRequiredToast = (messageService: MessageService) => {
@@ -22,18 +47,34 @@ const showAuthRequiredToast = (messageService: MessageService) => {
   });
 };
 
+const showPasswordChangeRequiredToast = (messageService: MessageService) => {
+  messageService.add({
+    key: 'auth',
+    severity: 'warn',
+    summary: 'Cambio de contrasena requerido',
+    detail: 'Debes actualizar tu contrasena para continuar.',
+    life: 3500,
+  });
+};
+
 const validateSession = (targetUrl: string) => {
   const authService = inject(AuthService);
   const router = inject(Router);
   const messageService = inject(MessageService);
 
-  return authService.checkSession().pipe(
-    map((isAuthenticated) => {
-      if (isAuthenticated) {
-        return true;
+  return authService.getUserInfo().pipe(
+    map((user: MeResponse) => {
+      if (!user?.username) {
+        showAuthRequiredToast(messageService);
+        return buildLoginRedirect(router, targetUrl);
       }
-      showAuthRequiredToast(messageService);
-      return buildLoginRedirect(router, targetUrl);
+
+      if (user.must_change_password && !isPasswordChangeRoute(targetUrl)) {
+        showPasswordChangeRequiredToast(messageService);
+        return buildForcedPasswordRedirect(router, targetUrl);
+      }
+
+      return true;
     }),
     catchError(() => {
       showAuthRequiredToast(messageService);

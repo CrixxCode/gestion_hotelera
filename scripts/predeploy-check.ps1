@@ -1,8 +1,26 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Invoke-CheckedNativeCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Executable,
+        [Parameter()]
+        [string[]]$Arguments = @()
+    )
+
+    $output = & $Executable @Arguments
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -ne 0) {
+        $formattedArgs = $Arguments -join " "
+        throw "Command failed with exit code ${exitCode}: $Executable $formattedArgs"
+    }
+
+    return $output
+}
+
 Write-Host "Checking git tree..."
-$status = git status --porcelain
+$status = Invoke-CheckedNativeCommand -Executable "git" -Arguments @("status", "--porcelain")
 if ($status) {
     Write-Error "Git tree is dirty. Commit or stash changes before deploy."
     exit 1
@@ -11,8 +29,8 @@ if ($status) {
 Write-Host "Running backend tests..."
 Push-Location backend
 try {
-    ..\env\Scripts\python.exe manage.py test
-    ..\env\Scripts\python.exe manage.py spectacular --file schema.yml --validate
+    Invoke-CheckedNativeCommand -Executable "..\env\Scripts\python.exe" -Arguments @("manage.py", "test")
+    Invoke-CheckedNativeCommand -Executable "..\env\Scripts\python.exe" -Arguments @("manage.py", "spectacular", "--file", "schema.yml", "--validate")
 }
 finally {
     Pop-Location
@@ -21,9 +39,9 @@ finally {
 Write-Host "Running frontend lint/test/build..."
 Push-Location frontend
 try {
-    npm.cmd run lint
-    npm.cmd run test:ci
-    npm.cmd run build:ci
+    Invoke-CheckedNativeCommand -Executable "npm.cmd" -Arguments @("run", "lint")
+    Invoke-CheckedNativeCommand -Executable "npm.cmd" -Arguments @("run", "test:ci")
+    Invoke-CheckedNativeCommand -Executable "npm.cmd" -Arguments @("run", "build:ci")
 }
 finally {
     Pop-Location

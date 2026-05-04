@@ -1,6 +1,12 @@
 # accounts/views.py
 
-from django.contrib.auth import authenticate, login, logout, get_user_model
+from django.contrib.auth import (
+    authenticate,
+    get_user_model,
+    login,
+    logout,
+    update_session_auth_hash,
+)
 from django.conf import settings
 from django.views.decorators.csrf import ensure_csrf_cookie
 import logging
@@ -123,6 +129,7 @@ class SessionLoginView(APIView):
         return Response({
             "detail": "Sesión iniciada",
             "remember_me": remember,
+            "must_change_password": bool(user.must_change_password),
             "user": UserSerializer(user).data
         }, status=status.HTTP_200_OK)
 
@@ -170,7 +177,8 @@ class PasswordChangeView(APIView):
     def post(self, request):
         ser = PasswordChangeSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
-        ser.save()
+        updated_user = ser.save()
+        update_session_auth_hash(request, updated_user)
         return Response({"detail": "Contraseña cambiada"}, status=status.HTTP_200_OK)
 
 

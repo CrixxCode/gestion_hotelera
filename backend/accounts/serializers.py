@@ -4,6 +4,7 @@ from email.mime.image import MIMEImage
 
 from django.contrib.auth import get_user_model, password_validation
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.utils.encoding import force_str, smart_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -107,6 +108,7 @@ class UserSerializer(serializers.ModelSerializer):
             "job_title",
             "is_active",
             "is_staff",
+            "must_change_password",
             "hotel_settings",
             "roles",
             "resource_keys",
@@ -116,6 +118,7 @@ class UserSerializer(serializers.ModelSerializer):
             "id",
             "hotel_settings",
             "is_staff",
+            "must_change_password",
             "roles",
             "resource_keys",
             "menu",
@@ -264,6 +267,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)
     job_title = serializers.CharField(required=False, allow_blank=True, max_length=120)
     is_active = serializers.BooleanField(default=True, required=False)
+    force_password_change = serializers.BooleanField(default=True, required=False, write_only=True)
     status = serializers.CharField(required=False, write_only=True)
 
     hotel_settings = serializers.PrimaryKeyRelatedField(
@@ -285,6 +289,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             "job_title",
             "password",
             "is_active",
+            "force_password_change",
             "status",
             "hotel_settings",
         ]
@@ -313,6 +318,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         password = validated_data.pop("password")
         status = validated_data.pop("status", "ACTIVE")
+        force_password_change = bool(validated_data.pop("force_password_change", True))
         incoming_hotel = validated_data.pop("hotel_settings", None)
 
         is_active = validated_data.pop("is_active", True)
@@ -363,6 +369,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         user = User(**validated_data)
         user.hotel_settings = assigned_hotel
+        user.must_change_password = bool(actor and actor.is_authenticated and force_password_change)
         user.set_password(password)
 
         if not user.is_superuser and user.hotel_settings is None:
@@ -389,7 +396,9 @@ class PasswordChangeSerializer(serializers.Serializer):
     def save(self, **kwargs):
         user = self.context["request"].user
         user.set_password(self.validated_data["new_password"])
-        user.save()
+        user.must_change_password = False
+        user.password_changed_at = timezone.now()
+        user.save(update_fields=["password", "must_change_password", "password_changed_at"])
         return user
 
 
@@ -518,7 +527,9 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     def save(self, **kwargs):
         user = self.validated_data["user"]
         user.set_password(self.validated_data["new_password"])
-        user.save()
+        user.must_change_password = False
+        user.password_changed_at = timezone.now()
+        user.save(update_fields=["password", "must_change_password", "password_changed_at"])
         return user
 
 

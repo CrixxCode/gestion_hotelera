@@ -1,4 +1,4 @@
-import { Component, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+﻿import { Component, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { InputTextModule } from 'primeng/inputtext';
@@ -25,7 +25,7 @@ register();
     CheckboxModule,
     ButtonModule,
     RouterLink,
-    LoadingScreen
+    LoadingScreen,
   ],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
@@ -71,10 +71,6 @@ export class LoginComponent {
     });
   }
 
-  /**
-   * Envía los datos del formulario al backend y gestiona la respuesta.
-   * Incluye validaciones, manejo de errores y animación de carga con transición suave.
-   */
   onSubmit() {
     if (this.loginForm.invalid) {
       this.errorMessage = 'Por favor completa todos los campos.';
@@ -85,47 +81,51 @@ export class LoginComponent {
 
     const { username, password } = this.loginForm.value;
 
-    this.authService.getCsrfToken().subscribe({
-      next: () => {
-        this.authService.login(username, password).subscribe({
-          next: (res) => {
-            console.log('Inicio de sesión correcto:', res);
+    this.authService.login(username, password).subscribe({
+      next: (res) => {
+        this.errorMessage = null;
+        this.showLoading = true;
 
-            this.errorMessage = null;
-            this.showLoading = true;
+        const mustChangePassword = Boolean(
+          res?.must_change_password ?? res?.user?.must_change_password
+        );
 
-            // Se mantiene la pantalla de carga visible durante la transición
-            setTimeout(() => {
-              this.showLoading = false;
-              this.router.navigate(['/dashboard']);
-            }, 2000);
-          },
-          error: (err) => {
-            console.error('Error en inicio de sesión:', err);
-            const msg = err.error?.detail || '';
+        setTimeout(() => {
+          this.showLoading = false;
 
-            if (msg.includes('Faltan credenciales')) {
-              this.errorMessage = 'Por favor ingresa tu usuario y contraseña.';
-              this.errorType = 'warn';
-            } else if (msg.includes('Credenciales inválidas')) {
-              this.errorMessage = 'Usuario o contraseña incorrectos.';
-              this.errorType = 'error';
-            } else if (msg.includes('Usuario inactivo')) {
-              this.errorMessage = 'Tu cuenta está inactiva. Contacta al administrador.';
-              this.errorType = 'warn';
-            } else {
-              this.errorMessage = 'No se pudo iniciar sesión. Intenta nuevamente.';
-              this.errorType = 'error';
-            }
+          if (mustChangePassword) {
+            this.router.navigate(['/mi-perfil'], {
+              queryParams: {
+                forcePasswordChange: 1,
+                tab: 'password',
+              },
+            });
+            return;
+          }
 
-            setTimeout(() => (this.errorMessage = null), 4000);
-          },
-        });
+          this.router.navigate(['/dashboard']);
+        }, 2000);
       },
       error: (err) => {
-        console.error('Error al obtener el token CSRF:', err);
-        this.errorMessage = 'No se pudo conectar con el servidor.';
-        this.errorType = 'error';
+        const msg = err.error?.detail || '';
+
+        if (msg.includes('Faltan credenciales')) {
+          this.errorMessage = 'Por favor ingresa tu usuario y contrasena.';
+          this.errorType = 'warn';
+        } else if (msg.includes('Credenciales')) {
+          this.errorMessage = 'Usuario o contrasena incorrectos.';
+          this.errorType = 'error';
+        } else if (msg.includes('Usuario inactivo')) {
+          this.errorMessage = 'Tu cuenta esta inactiva. Contacta al administrador.';
+          this.errorType = 'warn';
+        } else if (msg.includes('Debes cambiar tu contrasena antes de continuar') || msg.includes('Debes cambiar tu contraseña antes de continuar')) {
+          this.errorMessage = 'Debes cambiar tu contrasena antes de continuar.';
+          this.errorType = 'warn';
+        } else {
+          this.errorMessage = 'No se pudo iniciar sesion. Intenta nuevamente.';
+          this.errorType = 'error';
+        }
+
         setTimeout(() => (this.errorMessage = null), 4000);
       },
     });

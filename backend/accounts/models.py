@@ -9,6 +9,8 @@ class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     job_title = models.CharField(max_length=120, blank=True, default="")
     avatar = models.URLField(blank=True, default="")
+    must_change_password = models.BooleanField(default=False)
+    password_changed_at = models.DateTimeField(null=True, blank=True)
 
     hotel_settings = models.ForeignKey(
         "hotel_settings.HotelSettings",

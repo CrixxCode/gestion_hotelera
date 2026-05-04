@@ -1,6 +1,6 @@
 <div class="my-profile-page">
   <div class="my-profile-shell">
-    <a routerLink="/dashboard" class="back-link">
+    <a routerLink="/dashboard" class="back-link" *ngIf="!forcePasswordChangeRequired">
       <i class="fa-solid fa-arrow-left"></i>
       Volver al panel
     </a>
@@ -42,8 +42,18 @@
     </section>
 
     <section class="tabs-card">
+      <div class="feedback warn force-password-alert" *ngIf="forcePasswordChangeMessage">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        {{ forcePasswordChangeMessage }}
+      </div>
+
       <div class="tabs-head">
-        <button type="button" [class.active]="activeTab === 'profile'" (click)="selectTab('profile')">
+        <button
+          type="button"
+          [class.active]="activeTab === 'profile'"
+          [disabled]="forcePasswordChangeRequired"
+          (click)="selectTab('profile')"
+        >
           <i class="fa-regular fa-user"></i>
           Informacion del Perfil
         </button>
@@ -51,7 +61,12 @@
           <i class="fa-solid fa-lock"></i>
           Cambiar Contrasena
         </button>
-        <button type="button" [class.active]="activeTab === 'work'" (click)="selectTab('work')">
+        <button
+          type="button"
+          [class.active]="activeTab === 'work'"
+          [disabled]="forcePasswordChangeRequired"
+          (click)="selectTab('work')"
+        >
           <i class="fa-solid fa-briefcase"></i>
           Informacion Laboral
         </button>

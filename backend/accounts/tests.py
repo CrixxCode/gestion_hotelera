@@ -199,3 +199,88 @@ class ScopeAliasPermissionTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, 403)
+
+
+class ForcedPasswordChangeTests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.hotel = HotelSettings.objects.create(hotel_name="Hotel Password")
+
+        users_read = Resource.objects.create(
+            key="users.read",
+            name="Users Read",
+            link_backend="/api/users/",
+        )
+        users_write = Resource.objects.create(
+            key="users.write",
+            name="Users Write",
+            link_backend="/api/users/",
+        )
+
+        role = Role.objects.create(name="Security Role", slug="security-role")
+        role.resources.add(users_read, users_write)
+
+        self.user = User.objects.create_user(
+            username="forced_user",
+            email="forced_user@example.com",
+            password="pass12345",
+            hotel_settings=self.hotel,
+            must_change_password=True,
+        )
+        self.user.roles.add(role)
+
+        self.admin_user = User.objects.create_user(
+            username="creator_user",
+            email="creator_user@example.com",
+            password="pass12345",
+            hotel_settings=self.hotel,
+        )
+        self.admin_user.roles.add(role)
+
+    def test_restricted_endpoints_are_blocked_until_password_is_changed(self):
+        self.client.force_login(self.user)
+
+        blocked = self.client.get("/api/users/")
+        self.assertEqual(blocked.status_code, 403)
+        blocked_payload = getattr(blocked, "data", None) or blocked.json()
+        self.assertEqual(blocked_payload.get("code"), "password_change_required")
+
+        me = self.client.get("/api/auth/me/")
+        self.assertEqual(me.status_code, 200)
+
+    def test_password_change_clears_must_change_password_flag(self):
+        self.client.force_login(self.user)
+
+        change_response = self.client.post(
+            "/api/auth/password/change/",
+            {"old_password": "pass12345", "new_password": "Newpass123!"},
+            format="json",
+        )
+
+        self.assertEqual(change_response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.must_change_password)
+        self.assertIsNotNone(self.user.password_changed_at)
+
+        unblocked = self.client.get("/api/users/")
+        self.assertEqual(unblocked.status_code, 200)
+
+    def test_users_created_by_authenticated_actor_require_password_change(self):
+        self.client.force_login(self.admin_user)
+
+        response = self.client.post(
+            "/api/users/",
+            {
+                "first_name": "Nuevo",
+                "last_name": "Usuario",
+                "username": "nuevo_usuario",
+                "email": "nuevo_usuario@example.com",
+                "job_title": "Recepcionista",
+                "password": "Pass12345!",
+                "is_active": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data.get("must_change_password"))
