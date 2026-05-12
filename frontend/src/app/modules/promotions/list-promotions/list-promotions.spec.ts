@@ -21,6 +21,7 @@ describe('ListPromotions', () => {
           provide: PromotionsService,
           useValue: {
             listPromotions: () => of([]),
+            getTargetCatalog: () => of({ services: [], packages: [] }),
             updatePromotion: () => of({}),
             deletePromotion: () => of({})
           }

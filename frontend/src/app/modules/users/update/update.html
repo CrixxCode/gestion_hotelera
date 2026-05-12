@@ -71,16 +71,64 @@
         </label>
 
         <label>
-          <span>Cargo</span>
-          <input id="job_title" formControlName="job_title" type="text" placeholder="Ej: Recepcionista" />
+          <span>Rol *</span>
+          <select
+            id="role"
+            formControlName="role"
+            [class.input-error]="form.get('role')?.touched && form.get('role')?.invalid"
+          >
+            <option [ngValue]="null">
+              {{ rolesLoading ? 'Cargando roles...' : 'Selecciona un rol' }}
+            </option>
+            <option *ngFor="let role of roles" [ngValue]="role.id">
+              {{ role.name }}
+            </option>
+          </select>
+          <small class="field-error" *ngIf="form.get('role')?.touched && form.get('role')?.invalid">
+            Debes seleccionar un rol.
+          </small>
         </label>
 
         <label>
-          <span>Estado *</span>
-          <select id="status" formControlName="status">
-            <option value="ACTIVE">Activo</option>
-            <option value="INACTIVE">Inactivo</option>
+          <span>Cargo *</span>
+          <select
+            id="job_title_option"
+            formControlName="job_title_option"
+            [disabled]="!form.get('role')?.value || jobTitlesLoading"
+            [class.input-error]="form.get('job_title_option')?.touched && form.get('job_title_option')?.invalid"
+          >
+            <option [ngValue]="null">
+              {{
+                !form.get('role')?.value
+                  ? 'Primero selecciona un rol'
+                  : (jobTitlesLoading ? 'Cargando cargos...' : 'Selecciona un cargo')
+              }}
+            </option>
+            <option *ngFor="let jobTitle of jobTitles" [ngValue]="jobTitle.id">
+              {{ jobTitle.name }}
+            </option>
           </select>
+          <small class="field-error" *ngIf="form.get('job_title_option')?.touched && form.get('job_title_option')?.invalid">
+            Debes seleccionar un cargo.
+          </small>
+        </label>
+
+        <label *ngIf="canSelectHotel">
+          <span>Hotel {{ isSuperAdmin ? '*' : '' }}</span>
+          <select id="hotel_settings" formControlName="hotel_settings" [class.input-error]="form.get('hotel_settings')?.touched && form.get('hotel_settings')?.invalid">
+            <option [ngValue]="null">{{ hotelsLoading ? 'Cargando hoteles...' : 'Selecciona un hotel' }}</option>
+            <option *ngFor="let hotel of hotels" [ngValue]="hotel.id">
+              {{ hotel.hotel_name || ('Hotel #' + hotel.id) }}
+            </option>
+          </select>
+          <small class="field-error" *ngIf="form.get('hotel_settings')?.touched && form.get('hotel_settings')?.invalid">
+            Debes seleccionar un hotel.
+          </small>
+        </label>
+
+        <label class="switch">
+          <span>Usuario activo</span>
+          <input id="is_active" formControlName="is_active" type="checkbox" />
         </label>
       </div>
     </section>
@@ -88,6 +136,8 @@
 
   <footer class="drawer-foot">
     <button type="button" class="btn btn-light" (click)="cancel()">Cancelar</button>
-    <button type="submit" class="btn btn-dark">Guardar cambios</button>
+    <button type="submit" class="btn btn-dark" [disabled]="loading">
+      {{ loading ? 'Guardando...' : 'Guardar cambios' }}
+    </button>
   </footer>
 </form>

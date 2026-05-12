@@ -3,6 +3,7 @@ from django.contrib.auth.models import AbstractUser
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils.text import slugify
 
 
 class User(AbstractUser):
@@ -58,6 +59,29 @@ class Role(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class JobTitle(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="job_titles")
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(max_length=120)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ("role", "slug")
+        ordering = ("sort_order", "name")
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        self.slug = slugify(self.slug)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.role.name} - {self.name}"
 
 
 class Resource(models.Model):

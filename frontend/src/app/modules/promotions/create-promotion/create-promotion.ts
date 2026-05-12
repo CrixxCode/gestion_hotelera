@@ -115,19 +115,35 @@ export class CreatePromotion implements OnInit, OnChanges {
 
   get availableServices(): ServiceI[] {
     const hotelId = this.resolveHotelSettingsId();
+    const normalizedHotelId = Number(hotelId);
+
     return (this.services || []).filter((service) => {
-      if (!service.is_active) return false;
-      if (!hotelId) return true;
-      return Number(service.hotel_settings) === Number(hotelId);
+      if (service.is_active === false) return false;
+      if (!normalizedHotelId || Number.isNaN(normalizedHotelId)) return true;
+
+      // Algunos serializadores no exponen `hotel_settings` en lectura.
+      // En ese caso dejamos pasar el registro y confiamos en el scope del backend.
+      const serviceHotelId = Number((service as { hotel_settings?: unknown }).hotel_settings);
+      if (!serviceHotelId || Number.isNaN(serviceHotelId)) return true;
+
+      return serviceHotelId === normalizedHotelId;
     });
   }
 
   get availablePackages(): PackageI[] {
     const hotelId = this.resolveHotelSettingsId();
+    const normalizedHotelId = Number(hotelId);
+
     return (this.packages || []).filter((pkg) => {
-      if (!pkg.is_active) return false;
-      if (!hotelId) return true;
-      return Number(pkg.hotel_settings) === Number(hotelId);
+      if (pkg.is_active === false) return false;
+      if (!normalizedHotelId || Number.isNaN(normalizedHotelId)) return true;
+
+      // Algunos serializadores no exponen `hotel_settings` en lectura.
+      // En ese caso dejamos pasar el registro y confiamos en el scope del backend.
+      const packageHotelId = Number((pkg as { hotel_settings?: unknown }).hotel_settings);
+      if (!packageHotelId || Number.isNaN(packageHotelId)) return true;
+
+      return packageHotelId === normalizedHotelId;
     });
   }
 

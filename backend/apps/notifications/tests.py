@@ -119,6 +119,29 @@ class NotificationApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["unread_count"], 1)
 
+    def test_global_admin_unread_count_matches_list_scope(self):
+        global_admin = User.objects.create_user(
+            username="global_admin",
+            email="global_admin@test.local",
+            password="test-pass-123",
+            is_active=True,
+            is_superuser=True,
+        )
+        self.client.force_authenticate(global_admin)
+
+        list_response = self.client.get("/api/notifications/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        rows = (
+            list_response.data.get("results")
+            if isinstance(list_response.data, dict)
+            else list_response.data
+        )
+        expected_unread = sum(1 for row in rows if not row.get("is_read"))
+
+        count_response = self.client.get("/api/notifications/unread-count/")
+        self.assertEqual(count_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(count_response.data["unread_count"], expected_unread)
+
 
 class NotificationEventSignalsTests(TestCase):
     def _md(self, group, code, name=None, sort_order=1):

@@ -3,10 +3,10 @@ import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from
 import { FormsModule } from '@angular/forms';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { forkJoin, map, Observable, of, switchMap } from 'rxjs';
-import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
 import { ServiceI } from '../../services/service-model';
 import { PackageFormPayload, PackageI } from '../package-model';
 import { PackagesService } from '../../../services/package';
+import { RoomTypeI } from '../../rooms/room-model';
 
 @Component({
   selector: 'app-update-package',
@@ -17,7 +17,7 @@ import { PackagesService } from '../../../services/package';
 })
 export class UpdatePackage implements OnChanges {
   @Input() packageData: PackageI | null = null;
-  @Input() roomTypes: MasterDataI[] = [];
+  @Input() roomTypes: RoomTypeI[] = [];
   @Input() services: ServiceI[] = [];
   @Input() hotelSettingsId: number | null = null;
 

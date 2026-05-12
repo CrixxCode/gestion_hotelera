@@ -14,12 +14,6 @@ type PersonalFormValue = {
   location: string;
 };
 
-type WorkFormValue = {
-  hotel_name: string;
-  job_title: string;
-  work_role: string;
-};
-
 @Component({
   selector: 'app-my-profile-page',
   standalone: true,
@@ -44,7 +38,6 @@ export class MyProfilePage implements OnInit {
   profileSavedMessage = '';
   profileErrorMessage = '';
   passwordSavedMessage = '';
-  workSavedMessage = '';
   passwordErrorMessage = '';
   forcePasswordChangeRequired = false;
   forcePasswordChangeMessage = '';
@@ -53,9 +46,7 @@ export class MyProfilePage implements OnInit {
   showNewPassword = false;
   showConfirmPassword = false;
   isEditingProfile = false;
-  isEditingWork = false;
   private personalSnapshot: PersonalFormValue | null = null;
-  private workSnapshot: WorkFormValue | null = null;
 
   personalForm = this.fb.nonNullable.group({
     full_name: ['', Validators.required],
@@ -99,9 +90,6 @@ export class MyProfilePage implements OnInit {
 
     if (this.activeTab === 'profile' && this.isEditingProfile && tab !== 'profile') {
       this.cancelProfileEditing();
-    }
-    if (this.activeTab === 'work' && this.isEditingWork && tab !== 'work') {
-      this.cancelWorkEditing();
     }
     this.activeTab = tab;
     this.clearMessages();
@@ -212,28 +200,6 @@ export class MyProfilePage implements OnInit {
     return this.showConfirmPassword ? 'text' : 'password';
   }
 
-  saveWorkInfo(): void {
-    if (!this.isEditingWork) return;
-    this.workForm.markAllAsTouched();
-    if (this.workForm.invalid) return;
-    this.workSavedMessage = 'Interfaz lista. Pendiente conectar endpoint para informacion laboral.';
-    this.finishWorkEditing();
-  }
-
-  startWorkEditing(): void {
-    this.clearMessages();
-    this.workSnapshot = this.workForm.getRawValue();
-    this.isEditingWork = true;
-    this.workForm.enable({ emitEvent: false });
-  }
-
-  cancelWorkEditing(): void {
-    if (this.workSnapshot) {
-      this.workForm.reset(this.workSnapshot);
-    }
-    this.finishWorkEditing();
-  }
-
   private loadCurrentUser(): void {
     this.loading = true;
     this.loadError = '';
@@ -305,7 +271,7 @@ export class MyProfilePage implements OnInit {
       job_title: this.getString(user, 'job_title'),
       work_role: roleName,
     });
-    this.finishWorkEditing();
+    this.workForm.disable({ emitEvent: false });
   }
 
   private resolvePrimaryRole(user: MeResponse): string {
@@ -348,7 +314,6 @@ export class MyProfilePage implements OnInit {
     this.profileSavedMessage = '';
     this.profileErrorMessage = '';
     this.passwordSavedMessage = '';
-    this.workSavedMessage = '';
     this.passwordErrorMessage = '';
   }
 
@@ -375,12 +340,6 @@ export class MyProfilePage implements OnInit {
     this.isEditingProfile = false;
     this.personalSnapshot = null;
     this.personalForm.disable({ emitEvent: false });
-  }
-
-  private finishWorkEditing(): void {
-    this.isEditingWork = false;
-    this.workSnapshot = null;
-    this.workForm.disable({ emitEvent: false });
   }
 
   private splitFullName(fullName: string): { firstName: string; lastName: string } {

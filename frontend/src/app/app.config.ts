@@ -1,11 +1,12 @@
 import { ApplicationConfig, importProvidersFrom, provideBrowserGlobalErrorListeners, provideZoneChangeDetection } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { provideRouter, TitleStrategy } from '@angular/router';
 import { routes } from './app.routes';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { providePrimeNG } from 'primeng/config';
 import Lara from '@primeuix/themes/lara';
 import { provideHttpClient, withXsrfConfiguration } from '@angular/common/http';
 import { ConfirmationService, MessageService } from 'primeng/api';
+import { AppTitleStrategy } from './app-title.strategy';
 
 // ✅ PrimeNG modules para notificaciones y confirmaciones
 import { ToastModule } from 'primeng/toast';
@@ -30,6 +31,7 @@ export const appConfig: ApplicationConfig = {
     ),
     ConfirmationService,
     MessageService,
+    { provide: TitleStrategy, useClass: AppTitleStrategy },
 
     // Tema PrimeNG (Aura)
     providePrimeNG({

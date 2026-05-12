@@ -45,6 +45,7 @@ export class Header implements OnInit {
   private readonly logoutAnimationDuration = 1000;
   private readonly themePrimaryStorageKey = 'gh_theme_primary';
   private readonly themeSecondaryStorageKey = 'gh_theme_secondary';
+  private readonly darkModeStorageKey = 'gh_dark_mode';
   private readonly defaultThemePrimaryColor = '#0f1f41';
   private readonly defaultThemeSecondaryColor = '#112853';
 
@@ -70,9 +71,8 @@ export class Header implements OnInit {
   }
 
   ngOnInit(): void {
-    this.darkMode = false;
-    document.documentElement.classList.remove('my-app-dark');
-    document.documentElement.classList.remove('dark');
+    this.darkMode = this.resolveStoredDarkMode();
+    this.applyDarkModeClass();
     this.applyStoredThemeCustomization();
     this.loadUserInfo();
     this.loadUnreadCount();
@@ -178,8 +178,8 @@ export class Header implements OnInit {
 
   toggleTheme(): void {
     this.darkMode = !this.darkMode;
-    document.documentElement.classList.toggle('my-app-dark', this.darkMode);
-    document.documentElement.classList.toggle('dark', this.darkMode);
+    this.persistDarkMode();
+    this.applyDarkModeClass();
     this.menuOpen = false;
     this.notificationsOpen = false;
   }
@@ -357,5 +357,22 @@ export class Header implements OnInit {
     }
     const firstRole = Array.isArray(user?.roles) ? user.roles[0]?.name : null;
     return firstRole || 'Usuario';
+  }
+
+  private resolveStoredDarkMode(): boolean {
+    if (typeof window === 'undefined') return false;
+    const raw = String(localStorage.getItem(this.darkModeStorageKey) || '').trim().toLowerCase();
+    return raw === '1' || raw === 'true';
+  }
+
+  private persistDarkMode(): void {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(this.darkModeStorageKey, this.darkMode ? '1' : '0');
+  }
+
+  private applyDarkModeClass(): void {
+    if (typeof document === 'undefined') return;
+    document.documentElement.classList.toggle('my-app-dark', this.darkMode);
+    document.documentElement.classList.toggle('dark', this.darkMode);
   }
 }

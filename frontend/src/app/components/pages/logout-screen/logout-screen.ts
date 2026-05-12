@@ -1,10 +1,11 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { LoadingScreen } from '../loading-screen/loading-screen';
 
 @Component({
   selector: 'app-logout-screen',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, LoadingScreen],
   templateUrl: './logout-screen.html',
   styleUrls: ['./logout-screen.css']
 })

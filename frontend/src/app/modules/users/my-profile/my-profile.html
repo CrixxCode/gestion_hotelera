@@ -255,23 +255,11 @@
             <h2>Informacion Laboral</h2>
             <p>Consulta la informacion laboral vinculada a tu cuenta.</p>
           </div>
-          <div class="section-actions">
-            <button type="button" class="btn-light" *ngIf="isEditingWork" (click)="cancelWorkEditing()">
-              Cancelar
-            </button>
-            <button type="button" class="btn-gold" *ngIf="!isEditingWork" (click)="startWorkEditing()">
-              <i class="fa-regular fa-pen-to-square"></i>
-              Editar Informacion
-            </button>
-            <button type="button" class="btn-gold" *ngIf="isEditingWork" (click)="saveWorkInfo()">
-              Guardar Cambios
-            </button>
-          </div>
         </div>
 
-        <p class="mode-badge" *ngIf="!isEditingWork">
+        <p class="mode-badge">
           <i class="fa-regular fa-eye"></i>
-          Modo lectura activo. Usa "Editar Informacion" para modificar datos laborales.
+          Modo lectura activo. La informacion laboral la gestiona administracion.
         </p>
 
         <form [formGroup]="workForm" class="form-grid one-col">
@@ -300,10 +288,6 @@
           </label>
         </form>
 
-        <p class="feedback success" *ngIf="workSavedMessage">
-          <i class="fa-solid fa-circle-check"></i>
-          {{ workSavedMessage }}
-        </p>
       </div>
     </section>
   </div>

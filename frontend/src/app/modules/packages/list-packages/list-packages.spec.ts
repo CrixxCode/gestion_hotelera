@@ -3,8 +3,8 @@ import { of } from 'rxjs';
 import { ConfirmationService } from 'primeng/api';
 
 import { ListPackages } from './list-packages';
-import { MasterDataService } from '../../../services/master-data.service';
 import { PackagesService } from '../../../services/package';
+import { RoomService } from '../../../services/room';
 import { ServicesService } from '../../../services/service';
 import { HotelSettingsService } from '../../../services/hotel-settings';
 
@@ -32,9 +32,9 @@ describe('ListPackages', () => {
           }
         },
         {
-          provide: MasterDataService,
+          provide: RoomService,
           useValue: {
-            listMasterData: () => of([])
+            listRoomTypes: () => of([])
           }
         },
         {

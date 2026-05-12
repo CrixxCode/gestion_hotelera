@@ -64,35 +64,41 @@ const loadActivityLogComponent = () =>
   import('./modules/reports/activity-log/activity-log').then((m) => m.ActivityLogPage);
 const loadMyProfileComponent = () =>
   import('./modules/users/my-profile/my-profile').then((m) => m.MyProfilePage);
+const loadSaasDashboardComponent = () =>
+  import('./modules/saas/list-saas-dashboard/list-saas-dashboard').then((m) => m.ListSaasDashboard);
+const loadSaasHotelsComponent = () =>
+  import('./modules/saas/list-saas-hotels/list-saas-hotels').then((m) => m.ListSaasHotels);
 
 export const routes: Routes = [
     {
         path: '',
         component: LandingPage,
-
+        title: 'Gestion Hotelera',
     },
     {
         path: 'login',
         component: LoginComponent,
-
+        title: 'Login',
     },
     {
         path: 'forgot-password',
         component: ForgotPasswordComponent,
+        title: 'Recuperar Contrasena',
     },
     {
         path: 'reset-password',
         component: ResetPasswordComponent,
+        title: 'Restablecer Contrasena',
     },
     {
         path: '',
         component: LayoutMain,
         canActivateChild: [authChildGuard, permissionChildGuard],
         children: [
-            { path: 'usuarios', component: UserList },
-            { path: 'dashboard', component: Dashboard },
-            { path: 'roles', component: RolesComponent },
-            { path: 'recursos', component: RecursosComponent },
+            { path: 'usuarios', component: UserList, title: 'Usuarios' },
+            { path: 'dashboard', component: Dashboard, title: 'Dashboard' },
+            { path: 'roles', component: RolesComponent, title: 'Roles' },
+            { path: 'recursos', component: RecursosComponent, title: 'Recursos' },
             { path: 'clientes', loadComponent: loadClientsComponent },
             { path: 'reservas', loadComponent: loadReservationsComponent },
             { path: 'habitaciones', loadComponent: loadRoomsComponent },
@@ -141,12 +147,15 @@ export const routes: Routes = [
             { path: 'actividad', loadComponent: loadActivityLogComponent },
             { path: 'activity-log', redirectTo: 'actividad', pathMatch: 'full' },
             { path: 'reports', redirectTo: 'reportes', pathMatch: 'full' },
-            { path: 'mi-perfil', loadComponent: loadMyProfileComponent, data: { breadcrumbLabel: 'Mi Perfil' } },
-            { path: 'hotel-config', component: HotelSettings },
-            { path: 'master-data', component: MasterDataComponent },
-            { path: '403', component: ForbiddenPage, data: { breadcrumbLabel: 'Acceso denegado' } },
-            { path: '404', component: NotFoundPage, data: { breadcrumbLabel: 'Pagina no encontrada' } },
-            { path: '**', component: NotFoundPage, data: { breadcrumbLabel: 'Pagina no encontrada' } },
+            { path: 'mi-perfil', loadComponent: loadMyProfileComponent, title: 'Mi Perfil', data: { breadcrumbLabel: 'Mi Perfil' } },
+            { path: 'hotel-config', component: HotelSettings, title: 'Configuracion Hotel' },
+            { path: 'saas-panel', loadComponent: loadSaasDashboardComponent, title: 'Panel SaaS', data: { breadcrumbLabel: 'Panel SaaS' } },
+            { path: 'saas-hoteles', loadComponent: loadSaasHotelsComponent, title: 'Hoteles Globales SaaS', data: { breadcrumbLabel: 'Hoteles Globales SaaS' } },
+            { path: 'saas-hotels', redirectTo: 'saas-hoteles', pathMatch: 'full' },
+            { path: 'master-data', component: MasterDataComponent, title: 'Master Data' },
+            { path: '403', component: ForbiddenPage, title: 'Acceso Denegado', data: { breadcrumbLabel: 'Acceso denegado' } },
+            { path: '404', component: NotFoundPage, title: 'Pagina No Encontrada', data: { breadcrumbLabel: 'Pagina no encontrada' } },
+            { path: '**', component: NotFoundPage, title: 'Pagina No Encontrada', data: { breadcrumbLabel: 'Pagina no encontrada' } },
         ]
     },
 ];

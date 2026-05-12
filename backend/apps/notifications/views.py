@@ -79,10 +79,7 @@ class NotificationViewSet(
 
     @action(detail=False, methods=["get"], url_path="unread-count")
     def unread_count(self, request):
-        count = Notification.objects.filter(
-            user=request.user,
-            is_read=False,
-        ).count()
+        count = self.get_queryset().filter(is_read=False).count()
         return Response({"unread_count": count}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["post"], url_path="mark-as-read")

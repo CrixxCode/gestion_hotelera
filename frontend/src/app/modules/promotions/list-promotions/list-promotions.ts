@@ -97,6 +97,8 @@ export class ListPromotions implements OnInit {
   infoMessage = '';
   discountTypesLoadFailed = false;
   hotelSettingsLoadFailed = false;
+  servicesLoadFailed = false;
+  packagesLoadFailed = false;
   showDeletedPromotions = false;
 
   promotions: PromotionI[] = [];
@@ -211,6 +213,8 @@ export class ListPromotions implements OnInit {
     this.errorMessage = '';
     this.discountTypesLoadFailed = false;
     this.hotelSettingsLoadFailed = false;
+    this.servicesLoadFailed = false;
+    this.packagesLoadFailed = false;
     const selectedPromotionId = this.selectedPromotion?.id ?? null;
 
     forkJoin({
@@ -230,10 +234,23 @@ export class ListPromotions implements OnInit {
         ),
       services: this.servicesService
         .listServices({ include_inactive: true })
-        .pipe(catchError(() => of([] as ServiceI[]))),
+        .pipe(
+          catchError(() => {
+            this.servicesLoadFailed = true;
+            return of([] as ServiceI[]);
+          })
+        ),
       packages: this.packagesService
         .listPackages({ include_inactive: true })
-        .pipe(catchError(() => of([] as PackageI[]))),
+        .pipe(
+          catchError(() => {
+            this.packagesLoadFailed = true;
+            return of([] as PackageI[]);
+          })
+        ),
+      targetCatalog: this.promotionsService.getTargetCatalog().pipe(
+        catchError(() => of({ services: [] as ServiceI[], packages: [] as PackageI[] }))
+      ),
       settings: this.hotelSettingsService.getCurrentSettings().pipe(
         catchError(() => {
           this.hotelSettingsLoadFailed = true;
@@ -241,14 +258,14 @@ export class ListPromotions implements OnInit {
         })
       )
     }).subscribe({
-      next: ({ promotions, allPromotions, discountTypes, services, packages, settings }) => {
+      next: ({ promotions, allPromotions, discountTypes, services, packages, targetCatalog, settings }) => {
         this.loading = false;
         this.promotions = promotions;
         const visibleIds = new Set(promotions.map((promotion) => promotion.id));
         this.deletedPromotions = allPromotions.filter((promotion) => !visibleIds.has(promotion.id));
         this.discountTypes = discountTypes;
-        this.services = services;
-        this.packages = packages;
+        this.services = services.length ? services : targetCatalog.services;
+        this.packages = packages.length ? packages : targetCatalog.packages;
 
         if (selectedPromotionId) {
           this.selectedPromotion = promotions.find((promotion) => promotion.id === selectedPromotionId) || null;
@@ -271,6 +288,12 @@ export class ListPromotions implements OnInit {
         } else if (this.hotelSettingsLoadFailed) {
           this.infoMessage =
             'No fue posible cargar la configuracion del hotel. Verifica permisos (hotel_settings.read) y el endpoint /api/hotel-settings/current/.';
+        } else if (this.servicesLoadFailed || this.packagesLoadFailed) {
+          const serviceHint = this.servicesLoadFailed ? 'services.read' : '';
+          const packageHint = this.packagesLoadFailed ? 'packages.read' : '';
+          const joiner = serviceHint && packageHint ? ' y ' : '';
+          this.infoMessage =
+            `No fue posible cargar el catalogo de servicios/paquetes para promociones. Verifica permisos (${serviceHint}${joiner}${packageHint}) y los endpoints /api/services/ y /api/packages/.`;
         } else if (!this.hotelSettingsId) {
           this.infoMessage = 'No se encontro una configuracion activa de hotel. Podras ver promociones, pero no crear nuevas.';
         } else if (!this.discountTypes.length) {

@@ -2,34 +2,45 @@ import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-interface LandingStat {
+interface NavLink {
+  label: string;
+  sectionId: string;
+}
+
+interface HeroStat {
   value: string;
   label: string;
   detail: string;
-}
-
-interface LandingModule {
-  title: string;
-  description: string;
-  routes: string;
-  tone: 'blue' | 'green' | 'gold' | 'violet' | 'teal' | 'pink';
   icon: string;
 }
 
-interface LandingStep {
+interface PainPoint {
+  title: string;
+  description: string;
+  icon: string;
+}
+
+interface SolutionStep {
   title: string;
   description: string;
 }
 
-interface LandingArchitectureBlock {
+interface FeatureItem {
   title: string;
-  stack: string;
-  bullets: string[];
+  description: string;
+  icon: string;
 }
 
-interface FaqItem {
-  question: string;
-  answer: string;
+interface BenefitItem {
+  title: string;
+  description: string;
+  icon: string;
+}
+
+interface AudienceItem {
+  title: string;
+  detail: string;
+  icon: string;
 }
 
 @Component({
@@ -40,138 +51,221 @@ interface FaqItem {
   styleUrl: './landing.css',
 })
 export class LandingPage {
-  readonly stats: LandingStat[] = [
-    { value: '31', label: 'rutas funcionales', detail: 'sin contar redirecciones ni comodines' },
-    { value: '23', label: 'modulos lazy-load', detail: 'cargados bajo demanda en Angular' },
-    { value: '13', label: 'apps de negocio', detail: 'integradas en Django REST' },
-    { value: '4', label: 'tableros de reportes', detail: 'ejecutivo, ingresos, ocupacion y servicios' },
+  readonly year = new Date().getFullYear();
+
+  readonly navLinks: NavLink[] = [
+    { label: 'Problemas', sectionId: 'problemas' },
+    { label: 'Solucion', sectionId: 'solucion' },
+    { label: 'Funcionalidades', sectionId: 'funcionalidades' },
+    { label: 'Beneficios', sectionId: 'beneficios' },
+    { label: 'Para quien', sectionId: 'publico' },
   ];
 
-  readonly modules: LandingModule[] = [
+  readonly heroStats: HeroStat[] = [
     {
-      title: 'Reservas y estancias',
-      description: 'Gestiona reservas, check-in, check-out, calendario y estados de ocupacion en una sola vista.',
-      routes: '/reservas',
-      tone: 'blue',
-      icon: 'RS',
+      value: 'Todo en uno',
+      label: 'Operacion centralizada',
+      detail: 'Reservas, habitaciones, pagos, servicios e inventario conectados.',
+      icon: 'pi pi-objects-column',
     },
     {
-      title: 'Habitaciones, tipos y tarifas',
-      description: 'Administra inventario de habitaciones, tipos, amenidades y tarifas activas para reservas nuevas.',
-      routes: '/habitaciones | /tipos-habitacion | /tarifas-habitacion',
-      tone: 'teal',
-      icon: 'HB',
+      value: 'Menos reprocesos',
+      label: 'Flujos estandarizados',
+      detail: 'Check-in, facturacion y reportes en un mismo ciclo operativo.',
+      icon: 'pi pi-sync',
     },
     {
-      title: 'Facturacion y pagos',
-      description: 'Controla facturas por reserva, cobros, notas de credito, reembolsos y estado de cartera.',
-      routes: '/facturas | /pagos | /reembolsos',
-      tone: 'gold',
-      icon: 'FC',
-    },
-    {
-      title: 'Inventario operativo',
-      description: 'Administra items, inventario por habitacion y movimientos de entrada/salida con alertas de stock.',
-      routes: '/items | /inventario-habitaciones | /movimientos-inventario',
-      tone: 'green',
-      icon: 'IV',
-    },
-    {
-      title: 'Reportes y control financiero',
-      description: 'Analiza KPIs, ingresos, ocupacion y servicios con exportacion PDF/CSV y trazabilidad de actividad.',
-      routes: '/reportes | /actividad | /control-financiero | /consolidado-ingresos',
-      tone: 'violet',
-      icon: 'RP',
-    },
-    {
-      title: 'Seguridad y configuracion',
-      description: 'RBAC por roles/recursos, usuarios, branding del hotel, politicas de reserva y ajustes operativos.',
-      routes: '/usuarios | /roles | /recursos | /hotel-config',
-      tone: 'pink',
-      icon: 'SG',
+      value: 'Control diario',
+      label: 'Datos para decidir',
+      detail: 'Visualiza ocupacion, ingresos y rendimiento de forma clara.',
+      icon: 'pi pi-chart-line',
     },
   ];
 
-  readonly steps: LandingStep[] = [
+  readonly painPoints: PainPoint[] = [
     {
-      title: 'Configura tu hotel',
+      title: 'Reservas desorganizadas',
       description:
-        'Define datos generales, pisos, horarios de check-in/check-out, moneda, impuestos y parametros financieros.',
+        'Confirmaciones en varios canales y datos duplicados generan sobreventas o huecos de ocupacion.',
+      icon: 'pi pi-calendar-times',
     },
     {
-      title: 'Opera recepcion y caja',
+      title: 'Control manual de habitaciones',
       description:
-        'Registra reservas, gestiona estancias, emite facturas y aplica pagos o ajustes de forma centralizada.',
+        'Actualizar estados en hojas de calculo retrasa la operacion de recepcion y housekeeping.',
+      icon: 'pi pi-building',
     },
     {
-      title: 'Controla y mejora',
+      title: 'Errores en pagos y facturacion',
       description:
-        'Monitorea inventario, mantenimiento, limpieza y reportes para tomar decisiones con datos reales.',
+        'Cobros incompletos, notas de ajuste dispersas y conciliacion lenta afectan el flujo de caja.',
+      icon: 'pi pi-credit-card',
+    },
+    {
+      title: 'Reportes poco accionables',
+      description:
+        'Sin indicadores confiables es dificil anticipar temporadas, costos y demanda real.',
+      icon: 'pi pi-chart-bar',
+    },
+    {
+      title: 'Inventario y servicios sin trazabilidad',
+      description:
+        'No saber consumos por habitacion o servicio impacta costos y calidad de atencion.',
+      icon: 'pi pi-box',
     },
   ];
 
-  readonly architecture: LandingArchitectureBlock[] = [
+  readonly solutionSteps: SolutionStep[] = [
     {
-      title: 'Frontend',
-      stack: 'Angular 20 + PrimeNG + Tailwind',
-      bullets: [
-        'Aplicacion SPA con rutas protegidas y modulos lazy-load.',
-        'Vistas operativas para reservas, inventario, facturacion y reportes.',
-        'Flujos de interfaz orientados a personal de recepcion y administracion.',
-      ],
+      title: 'Centraliza la operacion de tu hotel en una sola plataforma',
+      description:
+        'Wayra concentra recepcion, caja, inventario y administracion para que tu equipo trabaje con el mismo dato.',
     },
     {
-      title: 'Backend',
-      stack: 'Django + Django REST Framework',
-      bullets: [
-        'API por dominios: clients, rooms, reservations, billing, inventory, finance y reports.',
-        'Autenticacion por sesion con CSRF y control de permisos por scopes.',
-        'Documentacion tecnica disponible en /api/docs/.',
-      ],
+      title: 'Automatiza tareas clave sin perder control',
+      description:
+        'Disponibilidad, cargos, pagos y estados operativos se actualizan en tiempo real entre areas.',
     },
     {
-      title: 'Seguridad y datos',
-      stack: 'RBAC + auditoria operativa',
-      bullets: [
-        'Gestion de usuarios, roles, recursos y asignacion de accesos.',
-        'Registro de actividad y notificaciones para eventos criticos.',
-        'Base de datos SQLite por defecto y soporte PostgreSQL por entorno.',
-      ],
+      title: 'Toma decisiones con reportes claros',
+      description:
+        'Consulta indicadores de ocupacion, ingresos y servicios para ajustar estrategia comercial y operativa.',
     },
   ];
 
-  readonly faqs: FaqItem[] = [
+  readonly features: FeatureItem[] = [
     {
-      question: '?Necesito instalar software en cada computador del hotel?',
-      answer:
-        'No. El proyecto funciona con frontend web y backend API centralizado. Cada usuario entra con su cuenta y permisos.',
+      title: 'Gestion de reservas',
+      description: 'Registra, modifica y da seguimiento a reservas con estado y trazabilidad completa.',
+      icon: 'pi pi-calendar',
     },
     {
-      question: '?El sistema ya tiene control de roles y permisos?',
-      answer:
-        'Si. Incluye RBAC con modulos de usuarios, roles y recursos, y validacion por scopes en frontend y backend.',
+      title: 'Habitaciones y disponibilidad',
+      description: 'Controla tipos, tarifas, ocupacion y estados operativos por habitacion.',
+      icon: 'pi pi-home',
     },
     {
-      question: '?Que operaciones de recepcion estan cubiertas hoy?',
-      answer:
-        'Reservas, check-in/check-out, gestion de habitaciones, facturacion por estancia, pagos y seguimiento de saldos.',
+      title: 'Clientes y huespedes',
+      description: 'Consolida datos de clientes para check-in agil y mejor servicio.',
+      icon: 'pi pi-id-card',
     },
     {
-      question: '?Se puede exportar informacion para gestion administrativa?',
-      answer:
-        'Si. Diferentes modulos permiten exportacion CSV y el modulo de reportes permite exportar PDF del tablero activo.',
+      title: 'Pagos, facturas y notas de credito',
+      description: 'Administra cobros, saldos y documentos de forma ordenada y auditable.',
+      icon: 'pi pi-wallet',
     },
     {
-      question: '?Que motor de base de datos usa el proyecto?',
-      answer:
-        'La configuracion por defecto usa SQLite y puede cambiarse a PostgreSQL mediante variables de entorno.',
+      title: 'Servicios, paquetes y promociones',
+      description: 'Configura ofertas y servicios extra para aumentar el valor por reserva.',
+      icon: 'pi pi-megaphone',
+    },
+    {
+      title: 'Inventario y control financiero',
+      description: 'Monitorea entradas, salidas y costos para evitar quiebres o sobrecostos.',
+      icon: 'pi pi-box',
+    },
+    {
+      title: 'Reportes administrativos',
+      description: 'Analiza ocupacion, ingresos y actividad con informacion lista para gestion.',
+      icon: 'pi pi-chart-line',
+    },
+    {
+      title: 'Roles, usuarios y permisos',
+      description: 'Protege la operacion con accesos por rol y control por area.',
+      icon: 'pi pi-shield',
     },
   ];
 
-  activeFaqIndex = 0;
+  readonly benefits: BenefitItem[] = [
+    {
+      title: 'Ahorro de tiempo operativo',
+      description: 'Tu equipo dedica menos tiempo a tareas manuales y mas tiempo al huesped.',
+      icon: 'pi pi-clock',
+    },
+    {
+      title: 'Menos errores diarios',
+      description: 'Procesos estandarizados reducen errores en reservas, cobros y registros.',
+      icon: 'pi pi-check-circle',
+    },
+    {
+      title: 'Mejor control administrativo',
+      description: 'Supervisa indicadores y operaciones sin depender de reportes aislados.',
+      icon: 'pi pi-briefcase',
+    },
+    {
+      title: 'Experiencia mas fluida para el huesped',
+      description: 'Check-in agil, informacion clara y mejor coordinacion entre areas.',
+      icon: 'pi pi-star',
+    },
+    {
+      title: 'Informacion centralizada',
+      description: 'Una sola fuente de datos para recepcion, caja, administracion y gerencia.',
+      icon: 'pi pi-database',
+    },
+    {
+      title: 'Decisiones basadas en reportes',
+      description: 'Evalua resultados con datos actualizados y consistentes.',
+      icon: 'pi pi-chart-scatter',
+    },
+  ];
 
-  toggleFaq(index: number): void {
-    this.activeFaqIndex = this.activeFaqIndex === index ? -1 : index;
+  readonly audiences: AudienceItem[] = [
+    {
+      title: 'Hoteles pequenos y medianos',
+      detail: 'Estandariza la gestion sin procesos complejos ni hojas dispersas.',
+      icon: 'pi pi-building-columns',
+    },
+    {
+      title: 'Hostales',
+      detail: 'Controla alta rotacion de reservas y recepcion con mayor orden.',
+      icon: 'pi pi-building',
+    },
+    {
+      title: 'Apartahoteles',
+      detail: 'Gestiona estancias, servicios y disponibilidad desde un mismo panel.',
+      icon: 'pi pi-home',
+    },
+    {
+      title: 'Alojamientos turisticos',
+      detail: 'Centraliza operacion y control para crecer con procesos mas profesionales.',
+      icon: 'pi pi-globe',
+    },
+    {
+      title: 'Administradores hoteleros',
+      detail: 'Visualiza indicadores clave y toma decisiones con respaldo operativo.',
+      icon: 'pi pi-users',
+    },
+  ];
+
+  mobileMenuOpen = false;
+
+  toggleMobileMenu(): void {
+    this.mobileMenuOpen = !this.mobileMenuOpen;
+  }
+
+  closeMobileMenu(): void {
+    this.mobileMenuOpen = false;
+  }
+
+  scrollToSection(event: Event, sectionId: string): void {
+    event.preventDefault();
+
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+
+    const header = document.querySelector('.wayra-header') as HTMLElement | null;
+    const headerOffset = header?.offsetHeight ?? 0;
+    const sectionTop = section.getBoundingClientRect().top + window.scrollY;
+    const targetTop = Math.max(sectionTop - headerOffset - 12, 0);
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    window.scrollTo({
+      top: targetTop,
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+    });
+
+    window.history.replaceState(null, '', `#${sectionId}`);
+    this.closeMobileMenu();
   }
 
   trackByIndex(index: number): number {

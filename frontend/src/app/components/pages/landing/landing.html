@@ -1,248 +1,413 @@
-<div class="ghl-page">
-  <header class="ghl-header">
-    <div class="ghl-container ghl-header__inner">
-      <a class="ghl-brand" href="#inicio">
-        <img src="logo-black.png" alt="Wayra" />
-        <span>Wayra</span>
+<div class="wayra-landing relative overflow-x-clip bg-slate-50 text-slate-700">
+  <header class="wayra-header sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
+    <div class="mx-auto flex h-20 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <a class="group inline-flex items-center gap-3" href="#inicio" (click)="scrollToSection($event, 'inicio')">
+        <img src="/logo-black.png" alt="Wayra" class="h-9 w-auto sm:h-10" />
+        <span class="wayra-heading text-lg font-extrabold tracking-tight text-slate-900 sm:text-xl">Wayra</span>
       </a>
 
-      <nav class="ghl-nav" aria-label="Principal">
-        <a href="#funciones">Funciones</a>
-        <a href="#modulos">Modulos</a>
-        <a href="#flujo">Flujo</a>
-        <a href="#faq">FAQ</a>
+      <nav class="hidden items-center gap-7 lg:flex" aria-label="Navegacion principal">
+        <a
+          *ngFor="let link of navLinks; trackBy: trackByIndex"
+          class="wayra-link text-sm font-semibold text-slate-600"
+          href="#{{ link.sectionId }}"
+          (click)="scrollToSection($event, link.sectionId)">
+          {{ link.label }}
+        </a>
       </nav>
 
-      <a class="ghl-btn ghl-btn--dark" routerLink="/login">Iniciar sesion</a>
+      <div class="hidden items-center gap-3 lg:flex">
+        <a
+          class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-100"
+          routerLink="/login"
+          (click)="closeMobileMenu()">
+          Iniciar sesion
+        </a>
+        <a
+          class="rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-800"
+          href="#cta"
+          (click)="scrollToSection($event, 'cta')">
+          Solicitar demo
+        </a>
+      </div>
+
+      <button
+        type="button"
+        class="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 text-slate-700 transition hover:bg-slate-100 lg:hidden"
+        (click)="toggleMobileMenu()"
+        [attr.aria-expanded]="mobileMenuOpen"
+        aria-controls="wayra-mobile-menu"
+        aria-label="Abrir menu">
+        <i class="text-base" [ngClass]="mobileMenuOpen ? 'pi pi-times' : 'pi pi-bars'"></i>
+      </button>
+    </div>
+
+    <div
+      *ngIf="mobileMenuOpen"
+      id="wayra-mobile-menu"
+      class="border-t border-slate-200 bg-white px-4 py-4 shadow-2xl shadow-slate-900/10 lg:hidden">
+      <nav class="flex flex-col gap-2" aria-label="Navegacion movil">
+        <a
+          *ngFor="let link of navLinks; trackBy: trackByIndex"
+          class="rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+          href="#{{ link.sectionId }}"
+          (click)="scrollToSection($event, link.sectionId)">
+          {{ link.label }}
+        </a>
+        <a
+          class="mt-2 rounded-xl bg-slate-900 px-4 py-2.5 text-center text-sm font-semibold text-white"
+          href="#cta"
+          (click)="scrollToSection($event, 'cta')">
+          Solicitar demo
+        </a>
+      </nav>
     </div>
   </header>
 
   <main>
-    <section class="ghl-hero" id="inicio">
-      <div class="ghl-hero__veil"></div>
-      <div class="ghl-container ghl-hero__grid">
-        <article class="ghl-hero__copy ghl-reveal" style="animation-delay: 70ms">
-          <span class="ghl-chip">Sistema real de gestion hotelera</span>
-          <h1>
-            Administra tu hotel con
-            <span>modulos ya implementados</span>
-            y listos para operar
+    <section id="inicio" class="wayra-section-bg wayra-bg-hero wayra-v-center relative overflow-hidden py-12 sm:py-16">
+      <div class="mx-auto grid w-full max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-12 lg:gap-12 lg:px-8">
+        <article class="wayra-reveal wayra-hero-copy mx-auto w-full max-w-3xl rounded-3xl border border-slate-200/30 p-5 backdrop-blur-sm lg:col-span-7 lg:mx-0 lg:max-w-none lg:p-8">
+          <span
+            class="inline-flex items-center rounded-full border border-sky-200/40 bg-slate-950/35 px-3 py-1 text-xs font-bold uppercase tracking-wider text-sky-100">
+            SaaS de gestion hotelera
+          </span>
+
+          <h1 class="wayra-heading mt-5 text-4xl font-extrabold leading-tight text-white sm:text-5xl lg:text-6xl">
+            Digitaliza la administracion hotelera de forma simple y profesional.
           </h1>
-          <p>
-            Wayra integra recepcion, habitaciones, facturacion, inventario, reportes y seguridad
-            en una sola plataforma. Todo el contenido de esta landing refleja funcionalidades existentes en el
-            proyecto actual.
+
+          <p class="mt-5 max-w-2xl text-base leading-8 text-slate-100 sm:text-lg">
+            Gestiona reservas, habitaciones, pagos, inventario y reportes desde un solo lugar. Wayra ayuda a hoteles,
+            hostales y alojamientos turisticos a operar con mas control, menos errores y mejor experiencia para el
+            huesped.
           </p>
 
-          <div class="ghl-actions">
-            <a class="ghl-btn ghl-btn--gold" routerLink="/login">Entrar al sistema</a>
-            <a class="ghl-btn ghl-btn--ghost" href="#modulos">Ver modulos</a>
+          <div class="mt-8 flex flex-wrap gap-3">
+            <a
+              class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow-xl shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-800"
+              href="#cta"
+              (click)="scrollToSection($event, 'cta')">
+              Solicitar demo
+              <i class="pi pi-arrow-right text-xs"></i>
+            </a>
+            <a
+              class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-100"
+              href="#funcionalidades"
+              (click)="scrollToSection($event, 'funcionalidades')">
+              Ver funcionalidades
+            </a>
+            <a
+              class="inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-6 py-3 text-sm font-bold text-emerald-700 transition hover:-translate-y-0.5 hover:bg-emerald-100"
+              routerLink="/login"
+              (click)="closeMobileMenu()">
+              Ingresar a la plataforma
+            </a>
           </div>
 
-          <ul class="ghl-bullets">
-            <li>Check-in y check-out en flujo operativo</li>
-            <li>RBAC con roles, recursos y permisos por scope</li>
-            <li>Reportes de ingresos, ocupacion y servicios</li>
-          </ul>
-        </article>
-
-        <aside class="ghl-hero__panel ghl-reveal" style="animation-delay: 190ms" aria-label="Resumen tecnico">
-          <header>
-            <h2>Panel tecnico del proyecto</h2>
-            <p>Datos verificados desde la configuracion y rutas actuales</p>
-          </header>
-
-          <div class="ghl-mini-stats">
-            <article *ngFor="let stat of stats; let i = index; trackBy: trackByIndex">
-              <span class="value">{{ stat.value }}</span>
-              <span class="label">{{ stat.label }}</span>
+          <div class="mt-9 grid gap-3 sm:grid-cols-3">
+            <article
+              *ngFor="let stat of heroStats; trackBy: trackByIndex"
+              class="wayra-reveal wayra-reveal-delay-1 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-lg shadow-slate-900/5">
+              <div class="mb-2 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-white">
+                <i [class]="stat.icon"></i>
+              </div>
+              <p class="text-sm font-extrabold text-slate-900">{{ stat.value }}</p>
+              <p class="mt-1 text-xs font-semibold uppercase tracking-wider text-slate-500">{{ stat.label }}</p>
+              <p class="mt-2 text-xs leading-5 text-slate-600">{{ stat.detail }}</p>
             </article>
           </div>
+        </article>
 
-          <div class="ghl-mini-list">
-            <div>
-              <strong>Backend</strong>
-              <span>accounts, reservations, billing, inventory, finance, reports</span>
+        <aside class="wayra-reveal wayra-reveal-delay-2 mx-auto w-full max-w-xl lg:col-span-5 lg:mx-0 lg:max-w-none" aria-label="Vista de la plataforma Wayra">
+          <div class="wayra-panel rounded-3xl border border-slate-200/70 bg-white p-5 shadow-2xl shadow-slate-900/10 sm:p-6">
+            <header class="flex items-center justify-between border-b border-slate-200 pb-4">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Panel operativo</p>
+                <h2 class="wayra-heading mt-1 text-lg font-extrabold text-slate-900">Control diario del hotel</h2>
+              </div>
+              <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">En linea</span>
+            </header>
+
+            <figure class="wayra-photo-frame relative mt-4 overflow-hidden rounded-2xl">
+              <img
+                src="/landing/landing-1.png"
+                alt="Recepcion hotelera con operacion digital"
+                class="h-52 w-full object-cover sm:h-56" />
+              <figcaption class="wayra-photo-caption absolute inset-x-0 bottom-0 p-3">
+                <p class="text-xs font-bold uppercase tracking-wider text-sky-200">Operacion conectada</p>
+                <p class="mt-1 text-sm font-semibold text-white">
+                  Recepcion, caja e inventario sincronizados en tiempo real.
+                </p>
+              </figcaption>
+            </figure>
+
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
+              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p class="text-xs font-semibold text-slate-500">Ocupacion actual</p>
+                <p class="mt-1 text-2xl font-extrabold text-slate-900">78%</p>
+                <p class="text-xs text-emerald-700">Actualizacion en tiempo real</p>
+              </article>
+              <article class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p class="text-xs font-semibold text-slate-500">Cobros del dia</p>
+                <p class="mt-1 text-2xl font-extrabold text-slate-900">$ 12.4M</p>
+                <p class="text-xs text-sky-700">Pagos y facturas conciliados</p>
+              </article>
             </div>
-            <div>
-              <strong>Frontend</strong>
-              <span>Rutas publicas + modulo autenticado con carga diferida</span>
-            </div>
-            <div>
-              <strong>Operaciones</strong>
-              <span>Reservas, facturacion, inventario por habitacion y actividad</span>
+
+            <div class="mt-4 space-y-2">
+              <div class="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
+                <span class="text-sm font-semibold text-slate-600">Reservas confirmadas</span>
+                <span class="text-sm font-bold text-slate-900">42</span>
+              </div>
+              <div class="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
+                <span class="text-sm font-semibold text-slate-600">Habitaciones listas</span>
+                <span class="text-sm font-bold text-slate-900">36</span>
+              </div>
+              <div class="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
+                <span class="text-sm font-semibold text-slate-600">Alertas de inventario</span>
+                <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">5 activas</span>
+              </div>
             </div>
           </div>
         </aside>
       </div>
     </section>
 
-    <section class="ghl-trust">
-      <div class="ghl-container ghl-stats-grid">
-        <article
-          class="ghl-stat-card ghl-reveal"
-          *ngFor="let stat of stats; let i = index; trackBy: trackByIndex"
-          [style.animationDelay.ms]="120 + i * 90">
-          <h3>{{ stat.value }}</h3>
-          <p>{{ stat.label }}</p>
-          <small>{{ stat.detail }}</small>
-        </article>
-      </div>
-    </section>
-
-    <section class="ghl-section ghl-overview" id="funciones">
-      <div class="ghl-container ghl-overview__grid">
-        <article class="ghl-overview__copy ghl-reveal" style="animation-delay: 90ms">
-          <span class="ghl-chip ghl-chip--light">Flujo operativo real</span>
-          <h2>Un panel pensado para recepcion, administracion y control</h2>
-          <p>
-            El sistema incluye vistas de uso diario para reservas, habitaciones, facturacion, pagos, inventario,
-            mantenimiento y reportes. Tambien incorpora configuracion del hotel, politicas y seguridad por rol.
+    <section id="problemas" class="wayra-section-neutral py-16 sm:py-20">
+      <div class="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-3xl text-center">
+          <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Problemas frecuentes</p>
+          <h2 class="wayra-heading mt-3 text-3xl font-extrabold text-slate-900 sm:text-4xl">
+            Los retos operativos que frenan el crecimiento hotelero
+          </h2>
+          <p class="mt-4 text-base leading-7 text-slate-600">
+            Cuando la operacion depende de procesos manuales, la gestion pierde velocidad, control y capacidad de
+            respuesta.
           </p>
-          <ul>
-            <li>Dashboard con eventos del dia, alertas de stock y mantenimientos</li>
-            <li>Facturacion por reserva con control de estado y cobro pendiente</li>
-            <li>Inventario con niveles minimo/maximo y movimientos auditables</li>
-            <li>Exportaciones en CSV y PDF para gestion administrativa</li>
-          </ul>
+        </div>
+
+        <div class="mb-10 mt-8 grid items-center gap-4 lg:grid-cols-12">
+          <article class="h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-lg shadow-slate-900/5 lg:col-span-5">
+            <p class="text-xs font-bold uppercase tracking-wider text-slate-500">Impacto operativo</p>
+            <h3 class="wayra-heading mt-3 text-xl font-extrabold text-slate-900">
+              Sin procesos centralizados, cada turno trabaja con informacion distinta.
+            </h3>
+            <p class="mt-3 text-sm leading-6 text-slate-600">
+              Esto genera retrasos en check-in, errores de cobro y poca visibilidad para tomar decisiones al cierre de
+              cada jornada.
+            </p>
+          </article>
+
+          <figure class="wayra-photo-frame wayra-photo-frame--wide relative overflow-hidden rounded-2xl lg:col-span-7">
+            <img
+              src="/landing/landing-2.png"
+              alt="Recepcion hotelera con alta carga operativa"
+              class="h-64 w-full object-cover sm:h-80" />
+            <figcaption class="wayra-photo-caption absolute inset-x-0 bottom-0 p-4 sm:p-5">
+              <p class="text-xs font-bold uppercase tracking-wider text-slate-200">Reto diario de recepcion</p>
+              <p class="mt-2 text-sm font-semibold text-white sm:text-base">
+                El objetivo es pasar de la improvisacion a una operacion estandarizada y medible.
+              </p>
+            </figcaption>
+          </figure>
+        </div>
+
+        <div class="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <article
+            *ngFor="let item of painPoints; trackBy: trackByIndex"
+            class="wayra-reveal h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-lg shadow-slate-900/5 transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-900/10">
+            <div class="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-rose-100 text-rose-700">
+              <i [class]="item.icon"></i>
+            </div>
+            <h3 class="wayra-heading mt-4 text-lg font-bold text-slate-900">{{ item.title }}</h3>
+            <p class="mt-2 text-sm leading-6 text-slate-600">{{ item.description }}</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="solucion" class="wayra-section-bg wayra-bg-solucion wayra-v-center py-12 sm:py-16">
+      <div class="mx-auto grid w-full max-w-7xl items-center gap-8 px-4 sm:px-6 lg:grid-cols-12 lg:gap-12 lg:px-8">
+        <article class="mx-auto w-full max-w-xl rounded-3xl border border-slate-200/20 bg-slate-950/55 p-6 backdrop-blur-sm lg:col-span-5 lg:mx-0 lg:max-w-none">
+          <p class="text-xs font-bold uppercase tracking-widest text-slate-200">La solucion Wayra</p>
+          <h2 class="wayra-heading mt-3 text-3xl font-extrabold text-white sm:text-4xl">
+            Menos procesos manuales, mas control para tu hotel
+          </h2>
+          <p class="mt-5 text-base leading-8 text-slate-100">
+            Wayra conecta areas operativas y administrativas para que toda la informacion viva en una sola plataforma,
+            con trazabilidad y procesos claros para cada equipo.
+          </p>
+
+          <div class="mt-6 rounded-2xl border border-emerald-300/45 bg-emerald-500/15 p-5">
+            <p class="text-sm font-semibold text-emerald-50">
+              Gestiona reservas, habitaciones, pagos y reportes desde un solo lugar.
+            </p>
+          </div>
         </article>
 
-        <div class="ghl-overview__visual ghl-reveal" style="animation-delay: 200ms">
-          <img src="login/fondo-login-6.jpg" alt="Vista de habitacion de hotel" />
-          <div class="ghl-float-card">
-            <strong>Reportes activos</strong>
-            <p>Ejecutivo | Ingresos | Ocupacion | Servicios</p>
+        <div class="mx-auto w-full max-w-3xl space-y-4 lg:col-span-7 lg:mx-0 lg:max-w-none">
+          <article
+            *ngFor="let step of solutionSteps; let i = index; trackBy: trackByIndex"
+            class="wayra-reveal h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-lg shadow-slate-900/5">
+            <div class="flex items-start gap-4">
+              <span class="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-extrabold text-white">
+                {{ i + 1 }}
+              </span>
+              <div>
+                <h3 class="wayra-heading text-lg font-bold text-slate-900">{{ step.title }}</h3>
+                <p class="mt-2 text-sm leading-6 text-slate-600">{{ step.description }}</p>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="funcionalidades" class="wayra-section-neutral py-16 sm:py-20">
+      <div class="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-3xl text-center">
+          <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Funcionalidades principales</p>
+          <h2 class="wayra-heading mt-3 text-3xl font-extrabold text-slate-900 sm:text-4xl">
+            Todo lo necesario para operar y administrar tu alojamiento
+          </h2>
+        </div>
+
+        <div class="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <article
+            *ngFor="let feature of features; trackBy: trackByIndex"
+            class="wayra-reveal h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-lg shadow-slate-900/5 transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-900/10">
+            <div class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+              <i [class]="feature.icon"></i>
+            </div>
+            <h3 class="wayra-heading mt-4 text-lg font-bold text-slate-900">{{ feature.title }}</h3>
+            <p class="mt-2 text-sm leading-6 text-slate-600">{{ feature.description }}</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="beneficios" class="wayra-surface py-16 sm:py-20">
+      <div class="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-3xl text-center">
+          <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Beneficios para tu negocio</p>
+          <h2 class="wayra-heading mt-3 text-3xl font-extrabold text-slate-900 sm:text-4xl">
+            Impacto real en eficiencia, control y servicio
+          </h2>
+        </div>
+
+        <div class="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <article
+            *ngFor="let benefit of benefits; trackBy: trackByIndex"
+            class="wayra-reveal h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-lg shadow-slate-900/5 transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-900/10">
+            <div class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+              <i [class]="benefit.icon"></i>
+            </div>
+            <h3 class="wayra-heading mt-4 text-lg font-bold text-slate-900">{{ benefit.title }}</h3>
+            <p class="mt-2 text-sm leading-6 text-slate-600">{{ benefit.description }}</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="publico" class="wayra-section-neutral py-16 sm:py-20">
+      <div class="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-3xl text-center">
+          <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Publico objetivo</p>
+          <h2 class="wayra-heading mt-3 text-3xl font-extrabold text-slate-900 sm:text-4xl">
+            Disenado para operaciones hoteleras reales
+          </h2>
+        </div>
+
+        <div class="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <article
+            *ngFor="let audience of audiences; trackBy: trackByIndex"
+            class="wayra-reveal h-full rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-lg shadow-slate-900/5 transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-900/10">
+            <div class="mx-auto inline-flex h-11 w-11 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+              <i [class]="audience.icon"></i>
+            </div>
+            <h3 class="wayra-heading mt-4 text-lg font-bold text-slate-900">{{ audience.title }}</h3>
+            <p class="mt-2 text-sm leading-6 text-slate-600">{{ audience.detail }}</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="cta" class="wayra-section-bg wayra-bg-cta wayra-v-center py-12 sm:py-16">
+      <div class="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="wayra-cta mx-auto w-full max-w-5xl rounded-3xl border border-slate-200/20 px-6 py-12 text-center shadow-2xl shadow-slate-900/25 backdrop-blur-sm sm:px-10">
+          <p class="text-xs font-bold uppercase tracking-widest text-sky-200">Comienza con Wayra</p>
+          <h2 class="wayra-heading mt-4 text-3xl font-extrabold text-white sm:text-4xl">
+            Lleva la gestion de tu hotel a un nivel mas profesional
+          </h2>
+          <p class="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-200 sm:text-base">
+            Solicita una demo y descubre como centralizar reservas, habitaciones, pagos y reportes en un flujo simple,
+            confiable y escalable.
+          </p>
+
+          <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <a
+              class="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-bold text-slate-900 transition hover:-translate-y-0.5 hover:bg-slate-100"
+              routerLink="/login"
+              (click)="closeMobileMenu()">
+              Solicitar demo
+              <i class="pi pi-arrow-up-right text-xs"></i>
+            </a>
+            <a
+              class="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-transparent px-6 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-white/10"
+              href="#funcionalidades"
+              (click)="scrollToSection($event, 'funcionalidades')">
+              Conocer funcionalidades
+            </a>
           </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="ghl-section" id="modulos">
-      <div class="ghl-container">
-        <div class="ghl-section-head">
-          <span class="ghl-chip ghl-chip--light">Modulos implementados</span>
-          <h2>Funcionalidades disponibles en el estado actual del proyecto</h2>
-          <p>Estos bloques corresponden a rutas y componentes operativos que ya existen en el frontend.</p>
-        </div>
-
-        <div class="ghl-modules-grid">
-          <article
-            class="ghl-module-card ghl-reveal"
-            *ngFor="let module of modules; let i = index; trackBy: trackByIndex"
-            [style.animationDelay.ms]="80 + i * 80">
-            <span class="ghl-module-icon" [attr.data-tone]="module.tone">{{ module.icon }}</span>
-            <h3>{{ module.title }}</h3>
-            <p>{{ module.description }}</p>
-            <code>{{ module.routes }}</code>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section class="ghl-section ghl-process" id="flujo">
-      <div class="ghl-container">
-        <div class="ghl-section-head ghl-section-head--inverse">
-          <span class="ghl-chip">Operacion en 3 pasos</span>
-          <h2>Implementacion practica para empezar sin friccion</h2>
-          <p>El flujo coincide con los modulos reales disponibles en el sistema.</p>
-        </div>
-
-        <div class="ghl-process-grid">
-          <article
-            class="ghl-process-card ghl-reveal"
-            *ngFor="let step of steps; let i = index; trackBy: trackByIndex"
-            [style.animationDelay.ms]="120 + i * 110">
-            <span class="ghl-step">{{ i + 1 }}</span>
-            <h3>{{ step.title }}</h3>
-            <p>{{ step.description }}</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section class="ghl-section ghl-architecture">
-      <div class="ghl-container">
-        <div class="ghl-section-head">
-          <span class="ghl-chip ghl-chip--light">Arquitectura real</span>
-          <h2>Base tecnica del proyecto de gestion hotelera</h2>
-        </div>
-
-        <div class="ghl-arch-grid">
-          <article
-            class="ghl-arch-card ghl-reveal"
-            *ngFor="let block of architecture; let i = index; trackBy: trackByIndex"
-            [style.animationDelay.ms]="90 + i * 90">
-            <h3>{{ block.title }}</h3>
-            <p class="stack">{{ block.stack }}</p>
-            <ul>
-              <li *ngFor="let bullet of block.bullets; trackBy: trackByIndex">{{ bullet }}</li>
-            </ul>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section class="ghl-section ghl-faq" id="faq">
-      <div class="ghl-container">
-        <div class="ghl-section-head">
-          <span class="ghl-chip ghl-chip--light">Preguntas frecuentes</span>
-          <h2>Respuestas sobre el alcance actual del sistema</h2>
-        </div>
-
-        <div class="ghl-faq-list">
-          <article class="ghl-faq-item" *ngFor="let faq of faqs; let i = index; trackBy: trackByIndex">
-            <button type="button" (click)="toggleFaq(i)" [attr.aria-expanded]="activeFaqIndex === i">
-              <span>{{ faq.question }}</span>
-              <span class="ghl-faq-toggle" [class.is-open]="activeFaqIndex === i">+</span>
-            </button>
-            <p *ngIf="activeFaqIndex === i">{{ faq.answer }}</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section class="ghl-cta">
-      <div class="ghl-cta__veil"></div>
-      <div class="ghl-container ghl-cta__content">
-        <span class="ghl-chip">Proyecto gestion_hotelera</span>
-        <h2>Listo para seguir evolucionando sobre una base funcional</h2>
-        <p>
-          La aplicacion ya tiene estructura modular, seguridad por roles y operaciones clave de hoteleria.
-          Puedes usar esta landing como portada institucional del proyecto.
-        </p>
-        <div class="ghl-actions">
-          <a class="ghl-btn ghl-btn--gold" routerLink="/login">Acceder al sistema</a>
-          <a class="ghl-btn ghl-btn--ghost" href="#inicio">Volver arriba</a>
         </div>
       </div>
     </section>
   </main>
 
-  <footer class="ghl-footer">
-    <div class="ghl-container ghl-footer__grid">
-      <div>
-        <a class="ghl-brand" href="#inicio">
-          <img src="logo-white.png" alt="Wayra" />
-          <span>Wayra</span>
+  <footer class="bg-slate-950 py-12 text-slate-300">
+    <div class="mx-auto grid w-full max-w-7xl gap-10 px-4 sm:px-6 md:grid-cols-2 lg:grid-cols-4 lg:px-8">
+      <div class="md:col-span-2">
+        <a class="inline-flex items-center gap-3" href="#inicio" (click)="scrollToSection($event, 'inicio')">
+          <img src="/logo-white.png" alt="Wayra" class="h-10 w-auto" />
+          <span class="wayra-heading text-xl font-extrabold text-white">Wayra</span>
         </a>
-        <p>Plataforma de gestion hotelera basada en Angular + Django para operacion y control administrativo.</p>
+        <p class="mt-4 max-w-xl text-sm leading-7 text-slate-400">
+          Plataforma SaaS para centralizar la operacion hotelera y mejorar el control administrativo de hoteles,
+          hostales y alojamientos turisticos.
+        </p>
       </div>
 
       <div>
-        <h4>Producto</h4>
-        <a href="#funciones">Funciones</a>
-        <a href="#modulos">Modulos</a>
-        <a href="#flujo">Flujo</a>
+        <h3 class="wayra-heading text-sm font-bold uppercase tracking-widest text-slate-100">Navegacion</h3>
+        <div class="mt-4 space-y-2">
+          <a
+            *ngFor="let link of navLinks; trackBy: trackByIndex"
+            class="block text-sm text-slate-400 transition hover:text-white"
+            href="#{{ link.sectionId }}"
+            (click)="scrollToSection($event, link.sectionId)">
+            {{ link.label }}
+          </a>
+        </div>
       </div>
 
       <div>
-        <h4>Acceso</h4>
-        <a routerLink="/login">Iniciar sesion</a>
-        <a href="#faq">FAQ</a>
+        <h3 class="wayra-heading text-sm font-bold uppercase tracking-widest text-slate-100">Acciones</h3>
+        <div class="mt-4 space-y-2">
+          <a class="block text-sm text-slate-400 transition hover:text-white" href="#cta" (click)="scrollToSection($event, 'cta')">
+            Solicitar demo
+          </a>
+          <a class="block text-sm text-slate-400 transition hover:text-white" routerLink="/login" (click)="closeMobileMenu()">
+            Iniciar sesion
+          </a>
+        </div>
       </div>
     </div>
-    <div class="ghl-container ghl-footer__copy">
-      <small>Wayra | Proyecto gestion_hotelera</small>
+
+    <div class="mx-auto mt-10 w-full max-w-7xl border-t border-slate-800 px-4 pt-6 text-xs text-slate-500 sm:px-6 lg:px-8">
+      <p>Wayra SaaS hotelero. Todos los derechos reservados. {{ year }}</p>
     </div>
   </footer>
 </div>
+
+

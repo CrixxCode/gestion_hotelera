@@ -1,5 +1,12 @@
 :host {
   display: block;
+  --auth-brand: var(--gh-brand, #0f1f41);
+  --auth-brand-hover: var(--gh-brand-hover, #112853);
+  --auth-ink: #0f172a;
+  --auth-muted: #475569;
+  --auth-border: #cfd8e6;
+  --auth-focus: #2563eb;
+  --auth-surface: rgba(248, 251, 255, 0.94);
 }
 
 .login-shell {
@@ -36,8 +43,8 @@ swiper-slide-active img {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 76% 24%, rgba(66, 101, 201, 0.2), transparent 48%),
-    linear-gradient(112deg, rgba(8, 17, 47, 0.9) 20%, rgba(9, 20, 56, 0.76) 50%, rgba(11, 25, 68, 0.68) 100%);
+    radial-gradient(circle at 76% 24%, rgba(56, 189, 248, 0.22), transparent 48%),
+    linear-gradient(112deg, rgba(2, 6, 23, 0.9) 20%, rgba(15, 23, 42, 0.78) 50%, rgba(15, 23, 42, 0.7) 100%);
 }
 
 .login-card {
@@ -47,7 +54,7 @@ swiper-slide-active img {
   border: 1px solid rgba(225, 235, 255, 0.45);
   border-radius: 22px;
   padding: 1.55rem;
-  background: rgba(247, 250, 255, 0.92);
+  background: var(--auth-surface);
   box-shadow: 0 22px 45px rgba(7, 14, 38, 0.28);
   backdrop-filter: blur(8px);
 }
@@ -62,7 +69,7 @@ swiper-slide-active img {
   padding: 0.35rem 0.75rem;
   border-radius: 999px;
   background: rgba(15, 31, 65, 0.1);
-  color: var(--gh-brand, #0f1f41);
+  color: var(--auth-brand);
   font-size: 0.77rem;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -79,18 +86,18 @@ swiper-slide-active img {
 
 .login-brand img {
   width: auto;
-  height: clamp(36px, 5vw, 44px);
-  max-width: min(180px, 48vw);
+  height: clamp(52px, 7vw, 64px);
+  max-width: min(64px, 18vw);
   border-radius: 0;
   object-fit: contain;
   object-position: left center;
   flex: 0 1 auto;
-  box-shadow: 0 6px 16px rgba(10, 19, 48, 0.2);
+  box-shadow: none;
 }
 
 .login-brand h1 {
   margin: 0;
-  color: #0f1f41;
+  color: var(--auth-ink);
   font-size: 1.3rem;
   line-height: 1.1;
   font-weight: 800;
@@ -102,13 +109,13 @@ swiper-slide-active img {
 
 .login-brand p {
   margin: 0.28rem 0 0;
-  color: #5e6d8e;
+  color: var(--auth-muted);
   font-size: 0.84rem;
 }
 
 .login-head h2 {
   margin: 1rem 0 0;
-  color: #111c3f;
+  color: var(--auth-ink);
   font-size: 1.75rem;
   font-weight: 800;
 }
@@ -148,7 +155,7 @@ swiper-slide-active img {
 }
 
 .login-field label {
-  color: #2f3e63;
+  color: #334155;
   font-size: 0.86rem;
   font-weight: 700;
 }
@@ -156,10 +163,10 @@ swiper-slide-active img {
 :host ::ng-deep .login-input.p-inputtext,
 :host ::ng-deep .login-password-input {
   width: 100%;
-  border: 1px solid #d6dfef;
+  border: 1px solid var(--auth-border);
   border-radius: 12px;
   background: #ffffff;
-  color: #1f2f57;
+  color: #1e293b;
   font-size: 0.95rem;
   padding: 0.68rem 0.75rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
@@ -167,8 +174,8 @@ swiper-slide-active img {
 
 :host ::ng-deep .login-input.p-inputtext:enabled:focus,
 :host ::ng-deep .login-password-input:enabled:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: var(--auth-focus);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
 :host ::ng-deep .login-password,
@@ -194,8 +201,8 @@ swiper-slide-active img {
 }
 
 :host ::ng-deep .p-checkbox.p-checkbox-checked .p-checkbox-box {
-  border-color: var(--gh-brand, #0f1f41);
-  background: var(--gh-brand, #0f1f41);
+  border-color: var(--auth-brand);
+  background: var(--auth-brand);
 }
 
 :host ::ng-deep .p-checkbox .p-checkbox-icon {
@@ -224,14 +231,14 @@ swiper-slide-active img {
 }
 
 .login-meta a {
-  color: #3658a5;
+  color: var(--auth-brand);
   font-size: 0.85rem;
   font-weight: 700;
   text-decoration: none;
 }
 
 .login-meta a:hover {
-  color: #1e3a8a;
+  color: var(--auth-brand-hover);
   text-decoration: underline;
 }
 
@@ -239,9 +246,9 @@ swiper-slide-active img {
   width: 100%;
   min-height: 46px;
   border-radius: 13px;
-  border: 1px solid var(--gh-brand, #0f1f41);
-  background: var(--gh-brand, #0f1f41);
-  color: #ffffff;
+  border: 1px solid var(--auth-brand) !important;
+  background: var(--auth-brand) !important;
+  color: #ffffff !important;
   font-size: 1rem;
   font-weight: 700;
   box-shadow: 0 12px 24px rgba(15, 31, 65, 0.26);
@@ -249,13 +256,18 @@ swiper-slide-active img {
 }
 
 :host ::ng-deep .login-submit.p-button:hover {
-  background: var(--gh-brand-hover, #112853);
-  border-color: var(--gh-brand-hover, #112853);
+  background: var(--auth-brand-hover) !important;
+  border-color: var(--auth-brand-hover) !important;
   transform: translateY(-1px);
 }
 
 :host ::ng-deep .login-submit.p-button:focus {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.24), 0 12px 24px rgba(15, 31, 65, 0.26);
+}
+
+:host ::ng-deep .login-submit.p-button:enabled:active {
+  background: var(--auth-brand-hover) !important;
+  border-color: var(--auth-brand-hover) !important;
 }
 
 @media (max-width: 640px) {

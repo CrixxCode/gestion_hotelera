@@ -95,9 +95,19 @@ export class UserService {
     // Estado (usar is_active)
     formData.append('is_active', user.is_active ? 'true' : 'false');
 
-    // Rol (si usas un solo rol)
-    if (user.role && user.role.id) {
-      formData.append('role', String(user.role.id));
+    const roleId = this.resolveRoleId(user);
+    if (roleId !== null) {
+      formData.append('role', roleId);
+    }
+
+    const jobTitleOptionId = this.resolveUuidLike((user as { job_title_option?: unknown }).job_title_option);
+    if (jobTitleOptionId !== null) {
+      formData.append('job_title_option', jobTitleOptionId);
+    }
+
+    const hotelSettingsId = this.resolveHotelSettingsId(user.hotel_settings);
+    if (hotelSettingsId !== null) {
+      formData.append('hotel_settings', String(hotelSettingsId));
     }
 
     return this.http.post<UserI>(
@@ -117,6 +127,22 @@ export class UserService {
     formData.append('job_title', user.job_title || '');
     formData.append('avatar', user.avatar || '');
     formData.append('is_active', user.is_active ? 'true' : 'false');
+    formData.append('status', user.is_active ? 'ACTIVE' : 'INACTIVE');
+
+    const roleId = this.resolveRoleId(user);
+    if (roleId !== null) {
+      formData.append('role', roleId);
+    }
+
+    const jobTitleOptionId = this.resolveUuidLike((user as { job_title_option?: unknown }).job_title_option);
+    if (jobTitleOptionId !== null) {
+      formData.append('job_title_option', jobTitleOptionId);
+    }
+
+    const hotelSettingsId = this.resolveHotelSettingsId(user.hotel_settings);
+    if (hotelSettingsId !== null) {
+      formData.append('hotel_settings', String(hotelSettingsId));
+    }
 
     return this.http.patch<UserI>(
       `${this.usersUrl}${id}/`,
@@ -148,5 +174,49 @@ export class UserService {
       {},
       this.authService.buildCsrfRequestOptions()
     );
+  }
+
+  private resolveHotelSettingsId(hotelSettings: UserI['hotel_settings']): number | null {
+    if (typeof hotelSettings === 'number' && Number.isFinite(hotelSettings) && hotelSettings > 0) {
+      return hotelSettings;
+    }
+
+    if (
+      hotelSettings &&
+      typeof hotelSettings === 'object' &&
+      typeof hotelSettings.id === 'number' &&
+      Number.isFinite(hotelSettings.id) &&
+      hotelSettings.id > 0
+    ) {
+      return hotelSettings.id;
+    }
+
+    return null;
+  }
+
+  private resolveRoleId(user: UserI): string | null {
+    const roleValue = (user as { role?: unknown }).role;
+
+    const fromRaw = this.resolveUuidLike(roleValue);
+    if (fromRaw !== null) {
+      return fromRaw;
+    }
+
+    if (roleValue && typeof roleValue === 'object' && 'id' in roleValue) {
+      return this.resolveUuidLike((roleValue as { id?: unknown }).id);
+    }
+
+    return null;
+  }
+
+  private resolveUuidLike(value: unknown): string | null {
+    if (typeof value === 'string') {
+      const normalized = value.trim();
+      return normalized ? normalized : null;
+    }
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      return String(value);
+    }
+    return null;
   }
 }

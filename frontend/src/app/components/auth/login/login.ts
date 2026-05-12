@@ -5,6 +5,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
 import { CheckboxModule } from 'primeng/checkbox';
 import { ButtonModule } from 'primeng/button';
+import { MessageService } from 'primeng/api';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../services/auth/auth';
 import { LoadingScreen } from '../../pages/loading-screen/loading-screen';
@@ -62,7 +63,8 @@ export class LoginComponent {
   constructor(
     private fb: FormBuilder,
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private messageService: MessageService
   ) {
     this.loginForm = this.fb.group({
       username: ['', Validators.required],
@@ -86,6 +88,7 @@ export class LoginComponent {
         this.errorMessage = null;
         this.showLoading = true;
 
+        const isFirstLogin = Boolean(res?.is_first_login);
         const mustChangePassword = Boolean(
           res?.must_change_password ?? res?.user?.must_change_password
         );
@@ -99,11 +102,19 @@ export class LoginComponent {
                 forcePasswordChange: 1,
                 tab: 'password',
               },
+            }).then(() => {
+              if (isFirstLogin) {
+                this.showWelcomeToast();
+              }
             });
             return;
           }
 
-          this.router.navigate(['/dashboard']);
+          this.router.navigate(['/dashboard']).then(() => {
+            if (isFirstLogin) {
+              this.showWelcomeToast();
+            }
+          });
         }, 2000);
       },
       error: (err) => {
@@ -128,6 +139,16 @@ export class LoginComponent {
 
         setTimeout(() => (this.errorMessage = null), 4000);
       },
+    });
+  }
+
+  private showWelcomeToast(): void {
+    this.messageService.add({
+      key: 'auth',
+      severity: 'success',
+      summary: 'Bienvenido',
+      detail: 'Este es tu primer inicio de sesion. Bienvenido al sistema.',
+      life: 4500,
     });
   }
 }

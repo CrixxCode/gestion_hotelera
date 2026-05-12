@@ -4,9 +4,22 @@ import { Observable, map } from 'rxjs';
 import { environment } from '../../enviorements/environment';
 import { AuthService } from './auth/auth';
 import { PromotionFormPayload, PromotionI } from '../modules/promotions/promotion-model';
+import { ServiceI } from '../modules/services/service-model';
+import { PackageI } from '../modules/packages/package-model';
 
 type DRFPaginated<T> = {
   results?: T[];
+};
+
+type PromotionTargetCatalogItem = {
+  id?: number;
+  name?: string;
+  hotel_settings?: number | null;
+};
+
+type PromotionTargetCatalogResponse = {
+  services?: PromotionTargetCatalogItem[];
+  packages?: PromotionTargetCatalogItem[];
 };
 
 @Injectable({
@@ -79,6 +92,59 @@ export class PromotionsService {
 
   restorePromotion(id: number): Observable<PromotionI> {
     return this.http.post<PromotionI>(`${this.promotionsUrl}${id}/restore/`, {}, this.auth.buildCsrfRequestOptions());
+  }
+
+  getTargetCatalog(hotelSettingsId?: number | null): Observable<{ services: ServiceI[]; packages: PackageI[] }> {
+    let params = new HttpParams();
+    if (typeof hotelSettingsId === 'number' && Number.isFinite(hotelSettingsId) && hotelSettingsId > 0) {
+      params = params.set('hotel_settings', String(hotelSettingsId));
+    }
+
+    return this.http
+      .get<PromotionTargetCatalogResponse>(`${this.promotionsUrl}target-catalog/`, {
+        withCredentials: true,
+        params
+      })
+      .pipe(
+        map((res) => {
+          const servicesRaw = Array.isArray(res?.services) ? res.services : [];
+          const packagesRaw = Array.isArray(res?.packages) ? res.packages : [];
+
+          const services: ServiceI[] = servicesRaw
+            .filter((item) => Number(item?.id) > 0)
+            .map((item) => ({
+              id: Number(item.id),
+              hotel_settings: Number(item.hotel_settings || 0),
+              service_type: null,
+              service_type_name: '',
+              service_type_code: '',
+              name: String(item.name || `Servicio #${item.id}`).trim(),
+              description: '',
+              base_price: 0,
+              is_active: true
+            }));
+
+          const packages: PackageI[] = packagesRaw
+            .filter((item) => Number(item?.id) > 0)
+            .map((item) => ({
+              id: Number(item.id),
+              hotel_settings: Number(item.hotel_settings || 0),
+              hotel_name: '',
+              room_type: null,
+              room_type_name: '',
+              room_type_code: '',
+              name: String(item.name || `Paquete #${item.id}`).trim(),
+              description: '',
+              base_price: 0,
+              is_active: true,
+              start_date: null,
+              end_date: null,
+              package_services: []
+            }));
+
+          return { services, packages };
+        })
+      );
   }
 
   private unwrapArray<T>(res: unknown): T[] {

@@ -100,6 +100,7 @@ export class HotelSettings implements OnInit {
   settingsId: number | null = null;
   updatedAt: string | null = null;
   selectedHotelSettingsId: number | null = null;
+  isCreatingHotel = false;
   superAdminHotelOptions: HotelSettingsModel[] = [];
 
   form: SettingsForm = this.buildDefaultForm();
@@ -217,7 +218,7 @@ export class HotelSettings implements OnInit {
   }
 
   get canManageSelectedHotel(): boolean {
-    return !this.isSuperAdmin || this.selectedHotelSettingsId !== null;
+    return !this.isSuperAdmin || this.selectedHotelSettingsId !== null || this.isCreatingHotel;
   }
 
   get activePoliciesCount(): number {
@@ -447,6 +448,7 @@ export class HotelSettings implements OnInit {
           this.settingsId = saved.id ?? null;
           if (this.isSuperAdmin && this.settingsId) {
             this.selectedHotelSettingsId = this.settingsId;
+            this.isCreatingHotel = false;
           }
           this.updatedAt = this.extractUpdatedAt(saved);
           if (!saved.id) return of(saved);
@@ -635,6 +637,7 @@ export class HotelSettings implements OnInit {
 
     const selectedId = this.toOptionalPositiveInt(this.selectedHotelSettingsId);
     this.selectedHotelSettingsId = selectedId;
+    this.isCreatingHotel = false;
 
     if (!selectedId) {
       this.loading = false;
@@ -644,6 +647,18 @@ export class HotelSettings implements OnInit {
     }
 
     this.loadCurrentSettings(selectedId);
+  }
+
+  startSuperAdminHotelCreate(): void {
+    if (!this.isSuperAdmin || !this.canEdit) return;
+
+    this.errorMessage = '';
+    this.successMessage = '';
+    this.selectedHotelSettingsId = null;
+    this.isCreatingHotel = true;
+    this.loading = false;
+    this.applySettings(null);
+    this.initialSnapshot = this.currentSnapshot();
   }
 
   private loadCurrentSettings(hotelSettingsId?: number | null): void {
@@ -688,11 +703,13 @@ export class HotelSettings implements OnInit {
         }
 
         if (this.isSuperAdmin) {
+          this.isCreatingHotel = false;
           this.loadSuperAdminHotelOptions();
           return;
         }
 
         this.selectedHotelSettingsId = null;
+        this.isCreatingHotel = false;
         this.superAdminHotelOptions = [];
         this.loadCurrentSettings();
       },
@@ -705,6 +722,7 @@ export class HotelSettings implements OnInit {
         this.canReadFinancialConfig = false;
         this.canEditFinancialConfig = false;
         this.selectedHotelSettingsId = null;
+        this.isCreatingHotel = false;
         this.superAdminHotelOptions = [];
         this.resetPolicyState();
         this.resetFinancialConfigState();
@@ -748,6 +766,7 @@ export class HotelSettings implements OnInit {
           preferredId !== null &&
           this.superAdminHotelOptions.some((hotel) => hotel.id === preferredId);
         this.selectedHotelSettingsId = hasPreferredSelection ? preferredId : null;
+        this.isCreatingHotel = false;
 
         if (!this.selectedHotelSettingsId) {
           this.loading = false;
@@ -762,6 +781,7 @@ export class HotelSettings implements OnInit {
         this.loading = false;
         this.superAdminHotelOptions = [];
         this.selectedHotelSettingsId = null;
+        this.isCreatingHotel = false;
         this.applySettings(null);
         this.initialSnapshot = this.currentSnapshot();
         this.errorMessage = 'No se pudo cargar el listado de hoteles.';
@@ -787,6 +807,9 @@ export class HotelSettings implements OnInit {
           !this.superAdminHotelOptions.some((hotel) => hotel.id === this.selectedHotelSettingsId)
         ) {
           this.selectedHotelSettingsId = null;
+          if (!this.settingsId) {
+            this.isCreatingHotel = false;
+          }
         }
       });
   }

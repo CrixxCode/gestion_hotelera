@@ -17,7 +17,7 @@ from accounts.tenancy import is_effective_global_admin
 
 from rest_framework import serializers
 
-from .models import Role, Resource
+from .models import JobTitle, Role, Resource, UserRole
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -62,6 +62,15 @@ class RoleSerializer(serializers.ModelSerializer):
             .order_by("order", "name", "key")
         )
         return ResourceSerializer(qs, many=True).data
+
+
+class JobTitleSerializer(serializers.ModelSerializer):
+    role_id = serializers.UUIDField(read_only=True)
+
+    class Meta:
+        model = JobTitle
+        fields = ["id", "name", "slug", "description", "is_active", "sort_order", "role_id"]
+
 
 class UserHotelSettingsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -266,6 +275,18 @@ class RegisterSerializer(serializers.ModelSerializer):
     last_name = serializers.CharField(required=True, max_length=50)
     email = serializers.EmailField(required=True)
     job_title = serializers.CharField(required=False, allow_blank=True, max_length=120)
+    role = serializers.PrimaryKeyRelatedField(
+        queryset=Role.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    job_title_option = serializers.PrimaryKeyRelatedField(
+        queryset=JobTitle.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
     is_active = serializers.BooleanField(default=True, required=False)
     force_password_change = serializers.BooleanField(default=True, required=False, write_only=True)
     status = serializers.CharField(required=False, write_only=True)
@@ -287,6 +308,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             "username",
             "email",
             "job_title",
+            "role",
+            "job_title_option",
             "password",
             "is_active",
             "force_password_change",
@@ -312,11 +335,43 @@ class RegisterSerializer(serializers.ModelSerializer):
         password_validation.validate_password(value)
         return value
 
+    def validate(self, attrs):
+        selected_role = attrs.get("role")
+        selected_job_title = attrs.get("job_title_option")
+
+        if selected_job_title and not selected_role:
+            raise serializers.ValidationError(
+                {"job_title_option": "Debes seleccionar un rol antes de elegir un cargo."}
+            )
+
+        if selected_role and selected_job_title and selected_job_title.role_id != selected_role.id:
+            raise serializers.ValidationError(
+                {"job_title_option": "El cargo seleccionado no pertenece al rol elegido."}
+            )
+
+        return attrs
+
+    def _actor_can_assign_hotel(self, actor) -> bool:
+        if not actor or not actor.is_authenticated:
+            return False
+
+        if is_effective_global_admin(actor):
+            return True
+
+        return Role.objects.filter(
+            is_active=True,
+            slug__in=["admin", "superadmin", "super-admin"],
+            userrole__user=actor,
+            userrole__is_active=True,
+        ).exists()
+
     def create(self, validated_data):
         request = self.context.get("request")
         actor = getattr(request, "user", None)
 
         password = validated_data.pop("password")
+        role = validated_data.pop("role", None)
+        selected_job_title = validated_data.pop("job_title_option", None)
         status = validated_data.pop("status", "ACTIVE")
         force_password_change = bool(validated_data.pop("force_password_change", True))
         incoming_hotel = validated_data.pop("hotel_settings", None)
@@ -330,13 +385,18 @@ class RegisterSerializer(serializers.ModelSerializer):
         validated_data["first_name"] = validated_data.get("first_name", "").strip()
         validated_data["last_name"] = validated_data.get("last_name", "").strip()
         validated_data["job_title"] = validated_data.get("job_title", "").strip()
+        if selected_job_title is not None:
+            validated_data["job_title"] = selected_job_title.name
         validated_data["is_active"] = is_active
 
         assigned_hotel = None
 
         if actor and actor.is_authenticated:
-            if is_effective_global_admin(actor):
-                assigned_hotel = incoming_hotel
+            if self._actor_can_assign_hotel(actor):
+                if incoming_hotel is not None:
+                    assigned_hotel = incoming_hotel
+                else:
+                    assigned_hotel = actor.hotel_settings
             else:
                 if actor.hotel_settings is None:
                     raise serializers.ValidationError({
@@ -379,7 +439,183 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         user.full_clean()
         user.save()
+
+        if role is not None:
+            rel, created = UserRole.objects.get_or_create(
+                user=user,
+                role=role,
+                defaults={"is_active": True},
+            )
+            if not created and not rel.is_active:
+                rel.is_active = True
+                rel.save(update_fields=["is_active"])
         return user
+
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    role = serializers.PrimaryKeyRelatedField(
+        queryset=Role.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    job_title_option = serializers.PrimaryKeyRelatedField(
+        queryset=JobTitle.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+    status = serializers.CharField(required=False, write_only=True)
+    hotel_settings = serializers.PrimaryKeyRelatedField(
+        queryset=HotelSettings.objects.all(),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
+
+    class Meta:
+        model = User
+        fields = [
+            "avatar",
+            "first_name",
+            "last_name",
+            "username",
+            "email",
+            "job_title",
+            "role",
+            "job_title_option",
+            "is_active",
+            "status",
+            "hotel_settings",
+        ]
+
+    def validate_username(self, value):
+        username = (value or "").strip()
+        if not username:
+            raise serializers.ValidationError("El nombre de usuario no puede estar vacío.")
+
+        qs = User.objects.filter(username__iexact=username)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("Ya existe un usuario con este nombre de usuario.")
+        return username
+
+    def validate_email(self, value):
+        email = (value or "").strip().lower()
+        qs = User.objects.filter(email__iexact=email)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("Ya existe un usuario con este correo.")
+        return email
+
+    def validate(self, attrs):
+        if isinstance(getattr(self, "initial_data", None), dict) and "password" in self.initial_data:
+            raise serializers.ValidationError(
+                {"password": "La contraseña no se puede editar aquí. Cada usuario debe cambiarla desde su perfil."}
+            )
+
+        selected_role = attrs.get("role", None)
+        selected_job_title = attrs.get("job_title_option", None)
+
+        if selected_job_title is None:
+            return attrs
+
+        effective_role = selected_role
+        if effective_role is None and self.instance is not None:
+            effective_role = (
+                Role.objects.filter(
+                    is_active=True,
+                    userrole__user=self.instance,
+                    userrole__is_active=True,
+                )
+                .distinct()
+                .order_by("name")
+                .first()
+            )
+
+        if effective_role is None:
+            raise serializers.ValidationError(
+                {"job_title_option": "Debes seleccionar un rol antes de elegir un cargo."}
+            )
+
+        if selected_job_title.role_id != effective_role.id:
+            raise serializers.ValidationError(
+                {"job_title_option": "El cargo seleccionado no pertenece al rol elegido."}
+            )
+
+        return attrs
+
+    def _actor_can_assign_hotel(self, actor) -> bool:
+        if not actor or not actor.is_authenticated:
+            return False
+
+        if is_effective_global_admin(actor):
+            return True
+
+        return Role.objects.filter(
+            is_active=True,
+            slug__in=["admin", "superadmin", "super-admin"],
+            userrole__user=actor,
+            userrole__is_active=True,
+        ).exists()
+
+    def update(self, instance, validated_data):
+        request = self.context.get("request")
+        actor = getattr(request, "user", None)
+
+        marker = object()
+        selected_role = validated_data.pop("role", marker)
+        selected_job_title = validated_data.pop("job_title_option", marker)
+        incoming_hotel = validated_data.pop("hotel_settings", marker)
+        status = validated_data.pop("status", None)
+        is_active = validated_data.pop("is_active", None)
+
+        if isinstance(status, str):
+            is_active = status.upper() == "ACTIVE"
+
+        if is_active is not None:
+            instance.is_active = bool(is_active)
+
+        for field in ("username", "email", "first_name", "last_name", "job_title", "avatar"):
+            if field not in validated_data:
+                continue
+            value = validated_data.get(field, "")
+            setattr(instance, field, str(value or "").strip())
+
+        if selected_job_title is not marker and selected_job_title is not None:
+            instance.job_title = selected_job_title.name
+
+        if incoming_hotel is not marker:
+            if self._actor_can_assign_hotel(actor):
+                instance.hotel_settings = incoming_hotel
+            else:
+                if actor is None or not actor.is_authenticated or actor.hotel_settings is None:
+                    raise serializers.ValidationError(
+                        {"hotel_settings": "El usuario autenticado no tiene un hotel asignado."}
+                    )
+                instance.hotel_settings = actor.hotel_settings
+
+        if selected_role is not marker:
+            if selected_role is None:
+                UserRole.objects.filter(user=instance, is_active=True).update(is_active=False)
+            else:
+                UserRole.objects.filter(user=instance, is_active=True).exclude(role=selected_role).update(
+                    is_active=False
+                )
+                rel, created = UserRole.objects.get_or_create(
+                    user=instance,
+                    role=selected_role,
+                    defaults={"is_active": True},
+                )
+                if not created and not rel.is_active:
+                    rel.is_active = True
+                    rel.save(update_fields=["is_active"])
+
+        instance.full_clean()
+        instance.save()
+        return instance
 
 
 class PasswordChangeSerializer(serializers.Serializer):

@@ -12,14 +12,14 @@
   [showHeader]="false" [style]="{ width: '450px', maxWidth: '100vw', height: '100vh', margin: '0' }"
   [contentStyle]="{ padding: '0', overflow: 'hidden' }" styleClass="user-drawer-dialog user-profile-dialog"
   [draggable]="false" [resizable]="false" (onHide)="visibleViewDialog = false">
-  <app-user-profile [user]="selectedUser" (close)="visibleViewDialog = false"></app-user-profile>
+  <app-user-profile [user]="selectedUser" (close)="visibleViewDialog = false" (edit)="onEditFromView()"></app-user-profile>
 </p-dialog>
 
 <p-dialog [(visible)]="visibleEditDialog" [modal]="true" [position]="'right'" [dismissableMask]="true"
   [showHeader]="false" [style]="{ width: '470px', maxWidth: '100vw', height: '100vh', margin: '0' }"
   [contentStyle]="{ padding: '0', overflow: 'hidden' }" styleClass="user-drawer-dialog"
-  [draggable]="false" [resizable]="false" (onHide)="closeEditDialog()">
-  <app-user-update [user]="selectedUser" (updated)="onUserUpdated()" (close)="closeEditDialog()"></app-user-update>
+  [draggable]="false" [resizable]="false" (onHide)="onEditDialogHide()">
+  <app-user-update [user]="selectedUser" (updated)="onUserUpdated()" (close)="visibleEditDialog = false"></app-user-update>
 </p-dialog>
 
 <div class="users-page">

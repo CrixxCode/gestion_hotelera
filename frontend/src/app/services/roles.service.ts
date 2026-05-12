@@ -12,6 +12,16 @@ export interface Role {
   resources?: ResourcePermission[];
 }
 
+export interface JobTitle {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  is_active?: boolean;
+  sort_order?: number;
+  role_id?: string;
+}
+
 export interface ResourcePermission {
   id: string;
   key: string;
@@ -124,6 +134,12 @@ export class RolesService {
       `${this.rolesUrl}${roleId}/remove-users/`,
       { user_ids: userIds },
       this.auth.buildCsrfRequestOptions()
+    );
+  }
+
+  roleJobTitles(roleId: string): Observable<JobTitle[]> {
+    return this.http.get<any>(`${this.rolesUrl}${roleId}/job-titles/`, { withCredentials: true }).pipe(
+      map((res) => this.unwrapArray<JobTitle>(res))
     );
   }
 

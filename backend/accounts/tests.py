@@ -1,7 +1,7 @@
 from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
 from django.contrib.auth import get_user_model
-from accounts.models import Role, Resource
+from accounts.models import JobTitle, Role, Resource, UserRole
 from apps.hotel_settings.models import HotelSettings
 
 User = get_user_model()
@@ -284,3 +284,213 @@ class ForcedPasswordChangeTests(APITestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertTrue(response.data.get("must_change_password"))
+
+
+class UserHotelAssignmentByRoleTests(APITestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.hotel_a = HotelSettings.objects.create(hotel_name="Hotel A Assignment")
+        self.hotel_b = HotelSettings.objects.create(hotel_name="Hotel B Assignment")
+
+        users_read = Resource.objects.create(
+            key="users.read",
+            name="Users Read Assignment",
+            link_backend="/api/users/",
+        )
+        users_write = Resource.objects.create(
+            key="users.write",
+            name="Users Write Assignment",
+            link_backend="/api/users/",
+        )
+
+        self.admin_role = Role.objects.create(name="Administrador", slug="admin")
+        self.admin_role.resources.add(users_read, users_write)
+
+        self.operator_role = Role.objects.create(name="Operador", slug="operator")
+        self.operator_role.resources.add(users_read, users_write)
+        self.reception_role = Role.objects.create(name="Recepcion", slug="reception")
+        self.reception_role.resources.add(users_read, users_write)
+
+        self.reception_title = JobTitle.objects.create(
+            role=self.reception_role,
+            name="Recepcionista",
+            slug="recepcionista",
+            is_active=True,
+        )
+
+        self.admin_user = User.objects.create_user(
+            username="tenant_admin",
+            email="tenant_admin@example.com",
+            password="pass12345",
+            hotel_settings=self.hotel_a,
+        )
+        self.admin_user.roles.add(self.admin_role)
+
+        self.operator_user = User.objects.create_user(
+            username="tenant_operator",
+            email="tenant_operator@example.com",
+            password="pass12345",
+            hotel_settings=self.hotel_a,
+        )
+        self.operator_user.roles.add(self.operator_role)
+
+        self.target_user = User.objects.create_user(
+            username="target_user",
+            email="target_user@example.com",
+            password="pass12345",
+            hotel_settings=self.hotel_a,
+            first_name="Target",
+            last_name="User",
+        )
+        self.target_user.roles.add(self.operator_role)
+
+    def test_admin_role_can_assign_target_hotel_on_user_create(self):
+        self.client.force_login(self.admin_user)
+
+        response = self.client.post(
+            "/api/users/",
+            {
+                "first_name": "User",
+                "last_name": "Cross Hotel",
+                "username": "user_cross_hotel",
+                "email": "user_cross_hotel@example.com",
+                "password": "Pass12345!",
+                "hotel_settings": self.hotel_b.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["hotel_settings"]["id"], self.hotel_b.id)
+
+    def test_non_admin_role_keeps_actor_hotel_on_user_create(self):
+        self.client.force_login(self.operator_user)
+
+        response = self.client.post(
+            "/api/users/",
+            {
+                "first_name": "User",
+                "last_name": "Tenant Bound",
+                "username": "user_tenant_bound",
+                "email": "user_tenant_bound@example.com",
+                "password": "Pass12345!",
+                "hotel_settings": self.hotel_b.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["hotel_settings"]["id"], self.hotel_a.id)
+
+    def test_admin_role_can_update_user_with_create_fields(self):
+        self.client.force_login(self.admin_user)
+
+        response = self.client.patch(
+            f"/api/users/{self.target_user.id}/",
+            {
+                "first_name": "Editado",
+                "last_name": "Usuario",
+                "username": "target_user_editado",
+                "email": "target_user_editado@example.com",
+                "role": str(self.reception_role.id),
+                "job_title_option": str(self.reception_title.id),
+                "hotel_settings": self.hotel_b.id,
+                "is_active": False,
+                "avatar": "https://example.com/avatar.jpg",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.target_user.refresh_from_db()
+
+        self.assertEqual(self.target_user.first_name, "Editado")
+        self.assertEqual(self.target_user.username, "target_user_editado")
+        self.assertEqual(self.target_user.email, "target_user_editado@example.com")
+        self.assertEqual(self.target_user.job_title, "Recepcionista")
+        self.assertEqual(self.target_user.hotel_settings_id, self.hotel_b.id)
+        self.assertFalse(self.target_user.is_active)
+        self.assertTrue(self.target_user.check_password("pass12345"))
+        self.assertFalse(self.target_user.must_change_password)
+
+        self.assertTrue(
+            UserRole.objects.filter(
+                user=self.target_user,
+                role=self.reception_role,
+                is_active=True,
+            ).exists()
+        )
+        self.assertFalse(
+            UserRole.objects.filter(
+                user=self.target_user,
+                role=self.operator_role,
+                is_active=True,
+            ).exists()
+        )
+
+    def test_non_admin_role_cannot_move_user_to_other_hotel_on_update(self):
+        self.client.force_login(self.operator_user)
+
+        response = self.client.patch(
+            f"/api/users/{self.target_user.id}/",
+            {
+                "hotel_settings": self.hotel_b.id,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.target_user.refresh_from_db()
+        self.assertEqual(self.target_user.hotel_settings_id, self.hotel_a.id)
+
+    def test_user_update_rejects_password_changes(self):
+        self.client.force_login(self.admin_user)
+
+        response = self.client.patch(
+            f"/api/users/{self.target_user.id}/",
+            {
+                "password": "NewPass123!",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("password", response.data.get("errors", {}))
+
+        self.target_user.refresh_from_db()
+        self.assertTrue(self.target_user.check_password("pass12345"))
+
+
+class SessionLoginFirstAccessTests(APITestCase):
+    def setUp(self):
+        self.login_url = "/api/auth/login/"
+        self.hotel = HotelSettings.objects.create(hotel_name="Hotel Login")
+        self.user = User.objects.create_user(
+            username="first_login_user",
+            email="first_login_user@example.com",
+            password="Pass12345!",
+            hotel_settings=self.hotel,
+        )
+
+    def test_login_returns_first_access_flag(self):
+        first_response = self.client.post(
+            self.login_url,
+            {"username": "first_login_user", "password": "Pass12345!"},
+            format="json",
+        )
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertTrue(first_response.data.get("is_first_login"))
+
+        self.user.refresh_from_db()
+        self.assertIsNotNone(self.user.last_login)
+
+        second_client = APIClient()
+        second_response = second_client.post(
+            self.login_url,
+            {"username": "first_login_user", "password": "Pass12345!"},
+            format="json",
+        )
+
+        self.assertEqual(second_response.status_code, 200)
+        self.assertFalse(second_response.data.get("is_first_login"))

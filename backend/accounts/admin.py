@@ -2,12 +2,12 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
 
-from .models import NotificationReadState, Role, Resource, RoleResource, User, UserRole
+from .models import JobTitle, NotificationReadState, Role, Resource, RoleResource, User, UserRole
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     fieldsets = BaseUserAdmin.fieldsets + (
-        (_("Información adicional"), {"fields": ("avatar",)}),
+        (_("Información adicional"), {"fields": ("avatar", "job_title", "hotel_settings")}),
     )
     add_fieldsets = BaseUserAdmin.add_fieldsets + (
         (
@@ -19,6 +19,8 @@ class UserAdmin(BaseUserAdmin):
                     "password1",
                     "password2",
                     "avatar",
+                    "job_title",
+                    "hotel_settings",
                 ),
             },
         ),
@@ -27,6 +29,12 @@ class UserAdmin(BaseUserAdmin):
 @admin.register(Role)
 class RoleAdmin(admin.ModelAdmin):
     list_display = ("name", "slug")
+
+@admin.register(JobTitle)
+class JobTitleAdmin(admin.ModelAdmin):
+    list_display = ("name", "role", "is_active", "sort_order")
+    list_filter = ("role", "is_active")
+    search_fields = ("name", "slug", "role__name")
 
 @admin.register(Resource)
 class ResourceAdmin(admin.ModelAdmin):

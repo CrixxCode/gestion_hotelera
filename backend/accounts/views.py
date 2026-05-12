@@ -30,7 +30,7 @@ from accounts.tenancy import is_effective_global_admin
 
 from .models import Role, Resource, UserRole, RoleResource, NotificationReadState
 from .serializers import (
-    RegisterSerializer, UserSerializer, RoleSerializer, ResourceSerializer,
+    JobTitleSerializer, RegisterSerializer, UserSerializer, UserUpdateSerializer, RoleSerializer, ResourceSerializer,
     UserMiniSerializer, PasswordChangeSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer,
     NotificationKeysSerializer, ProfileUpdateSerializer
 )
@@ -119,6 +119,7 @@ class SessionLoginView(APIView):
             return Response({"detail": "Credenciales inválidas."}, status=status.HTTP_401_UNAUTHORIZED)
         if not user.is_active:
             return Response({"detail": "Usuario inactivo."}, status=status.HTTP_403_FORBIDDEN)
+        is_first_login = user.last_login is None
 
         # Django rota la sesión en login (mitiga session fixation)
         login(request, user)
@@ -129,6 +130,7 @@ class SessionLoginView(APIView):
         return Response({
             "detail": "Sesión iniciada",
             "remember_me": remember,
+            "is_first_login": is_first_login,
             "must_change_password": bool(user.must_change_password),
             "user": UserSerializer(user).data
         }, status=status.HTTP_200_OK)
@@ -248,6 +250,8 @@ class UserViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     serializer_action_classes = {
         "create": RegisterSerializer,
         "register": RegisterSerializer,
+        "update": UserUpdateSerializer,
+        "partial_update": UserUpdateSerializer,
     }
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["roles__slug", "is_active", "is_staff"]
@@ -291,6 +295,19 @@ class UserViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         user = serializer.save()
         response_data = UserSerializer(user, context=self.get_serializer_context()).data
         return Response(response_data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        response_data = UserSerializer(user, context=self.get_serializer_context()).data
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
 
     @action(detail=False, methods=["post"], url_path="register")
     def register(self, request):
@@ -351,6 +368,16 @@ class RoleViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
     # -------------------------
     # Usuarios por rol
     # -------------------------
+
+    @action(detail=True, methods=["get"], url_path="job-titles")
+    def job_titles(self, request, pk=None):
+        """
+        GET /api/roles/<id>/job-titles/
+        Devuelve los cargos disponibles para ese rol.
+        """
+        role = self.get_object()
+        qs = role.job_titles.filter(is_active=True).order_by("sort_order", "name")
+        return Response(JobTitleSerializer(qs, many=True).data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"], url_path="users")
     def users(self, request, pk=None):

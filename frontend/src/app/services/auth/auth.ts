@@ -40,6 +40,14 @@ export interface ProfileUpdatePayload {
   avatar?: string;
 }
 
+export interface SessionLoginResponse {
+  detail: string;
+  remember_me: boolean;
+  is_first_login?: boolean;
+  must_change_password?: boolean;
+  user?: MeResponse;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly apiBase = environment.API_URI.replace(/\/$/, '');
@@ -61,10 +69,10 @@ export class AuthService {
   }
 
   /** Inicia sesión (flujo completo con CSRF) */
-  login(username: string, password: string): Observable<any> {
+  login(username: string, password: string): Observable<SessionLoginResponse> {
     return this.getCsrfToken().pipe(
       switchMap(() =>
-        this.http.post(
+        this.http.post<SessionLoginResponse>(
           this.loginUrl,
           { username, password },
           this.buildCsrfRequestOptions()

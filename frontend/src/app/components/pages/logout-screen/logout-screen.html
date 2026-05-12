@@ -1,7 +1,5 @@
-<div
-  *ngIf="show"
-  class="fixed inset-0 flex flex-col items-center justify-center bg-white z-50 fade-in-out"
->
-  <img src="logo-black.png" alt="Logo Wayra" class="h-20 w-auto max-w-[78vw] object-contain mb-4 animate-bounce" />
-  <h2 class="text-3xl font-semibold text-gray-800">Cerrando sesión...</h2>
-</div>
+<app-loading-screen
+  [visible]="show"
+  [message]="'Cerrando sesion...'"
+  color="#0f1f41"
+></app-loading-screen>

@@ -62,6 +62,7 @@ export class UserList implements OnInit {
   visibleRegisterDialog = false;
   visibleEditDialog = false;
   visibleViewDialog = false;
+  private shouldReloadAfterEdit = false;
 
   statCards = [
     {
@@ -226,11 +227,14 @@ export class UserList implements OnInit {
   }
 
   onEdit(user: UserI): void {
-    this.selectedUser = user;
+    this.selectedUser = this.cloneUser(user);
+    this.visibleViewDialog = false;
+    this.shouldReloadAfterEdit = false;
     this.visibleEditDialog = true;
   }
 
   onUserUpdated(): void {
+    this.shouldReloadAfterEdit = true;
     this.messageService.add({
       severity: 'success',
       summary: ACTION_ALERT_SUCCESS_SUMMARY,
@@ -239,14 +243,23 @@ export class UserList implements OnInit {
     });
   }
 
-  closeEditDialog(): void {
+  onEditDialogHide(): void {
     this.visibleEditDialog = false;
-    this.loadUsers();
+    this.selectedUser = null;
+    if (this.shouldReloadAfterEdit) {
+      this.shouldReloadAfterEdit = false;
+      this.loadUsers();
+    }
   }
 
   onView(user: UserI): void {
-    this.selectedUser = user;
+    this.selectedUser = this.cloneUser(user);
     this.visibleViewDialog = true;
+  }
+
+  onEditFromView(): void {
+    if (!this.selectedUser) return;
+    this.onEdit(this.selectedUser);
   }
 
   confirmDelete(user: UserI): void {
@@ -429,5 +442,17 @@ export class UserList implements OnInit {
     const normalized = String(value ?? '');
     const escaped = normalized.replace(/"/g, '""');
     return `"${escaped}"`;
+  }
+
+  private cloneUser(user: UserI): UserI {
+    return {
+      ...user,
+      role: user.role ? { ...user.role } : user.role,
+      roles: Array.isArray(user.roles) ? user.roles.map((role) => ({ ...role })) : user.roles,
+      hotel_settings:
+        user.hotel_settings && typeof user.hotel_settings === 'object'
+          ? { ...user.hotel_settings }
+          : user.hotel_settings,
+    };
   }
 }

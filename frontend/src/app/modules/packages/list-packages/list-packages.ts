@@ -3,10 +3,9 @@ import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { catchError, forkJoin, of } from 'rxjs';
 import { ConfirmationService } from 'primeng/api';
-import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
 import { HotelSettingsService } from '../../../services/hotel-settings';
-import { MasterDataService } from '../../../services/master-data.service';
 import { PackagesService } from '../../../services/package';
+import { RoomService } from '../../../services/room';
 import { ServicesService } from '../../../services/service';
 import { openActionConfirmation } from '../../../services/action-confirmations';
 import { ServiceI } from '../../services/service-model';
@@ -14,6 +13,7 @@ import { CreatePackage } from '../create-package/create-package';
 import { DetailPackage } from '../detail-package/detail-package';
 import { PackageI, PackageServiceI } from '../package-model';
 import { UpdatePackage } from '../update-package/update-package';
+import { RoomTypeI } from '../../rooms/room-model';
 
 type PackageStatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 
@@ -136,7 +136,7 @@ export class ListPackages implements OnInit {
   filteredPackages: PackageI[] = [];
   groupedPackages: PackageGroup[] = [];
 
-  roomTypes: MasterDataI[] = [];
+  roomTypes: RoomTypeI[] = [];
   services: ServiceI[] = [];
   categoryTabs: PackageCategoryTab[] = [];
 
@@ -157,14 +157,14 @@ export class ListPackages implements OnInit {
     { value: 'INACTIVE', label: 'Inactivos' }
   ];
 
-  private roomTypeMap = new Map<number, MasterDataI>();
+  private roomTypeMap = new Map<number, RoomTypeI>();
   private roomTypeOrderMap = new Map<string, number>();
   private featuredByGroup = new Map<string, Set<number>>();
 
   constructor(
     private packagesService: PackagesService,
     private servicesService: ServicesService,
-    private masterDataService: MasterDataService,
+    private roomService: RoomService,
     private hotelSettingsService: HotelSettingsService,
     private confirmationService: ConfirmationService
   ) {}
@@ -216,9 +216,9 @@ export class ListPackages implements OnInit {
       allPackages: this.packagesService
         .listPackages({ include_inactive: true, include_deleted: true })
         .pipe(catchError(() => of([] as PackageI[]))),
-      roomTypes: this.masterDataService
-        .listMasterData({ group: 'ROOM_TYPE', is_active: 'true', ordering: 'sort_order,name' })
-        .pipe(catchError(() => of([] as MasterDataI[]))),
+      roomTypes: this.roomService
+        .listRoomTypes({ ordering: 'sort_order,name' })
+        .pipe(catchError(() => of([] as RoomTypeI[]))),
       servicesCatalog: this.servicesService
         .listServices({ include_inactive: true })
         .pipe(catchError(() => of([] as ServiceI[]))),
@@ -635,12 +635,12 @@ export class ListPackages implements OnInit {
     return 999;
   }
 
-  private getRoomTypeByPackage(pkg: PackageI): MasterDataI | null {
+  private getRoomTypeByPackage(pkg: PackageI): RoomTypeI | null {
     if (typeof pkg.room_type !== 'number') return null;
     return this.roomTypeMap.get(pkg.room_type) || null;
   }
 
-  private getCategoryKeyFromRoomType(roomType: MasterDataI): string {
+  private getCategoryKeyFromRoomType(roomType: RoomTypeI): string {
     return `id:${roomType.id}`;
   }
 

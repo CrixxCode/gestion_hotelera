@@ -13,9 +13,14 @@ import { environment } from '../../../../enviorements/environment';
 export class UserProfile {
   @Input() user: UserI | null = null;
   @Output() close = new EventEmitter<void>();
+  @Output() edit = new EventEmitter<void>();
 
   closeDialog(): void {
     this.close.emit();
+  }
+
+  editUser(): void {
+    this.edit.emit();
   }
 
   isActive(): boolean {

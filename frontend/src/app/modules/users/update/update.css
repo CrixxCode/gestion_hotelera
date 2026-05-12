@@ -149,7 +149,10 @@ label span {
   font-size: 13px;
 }
 
-input,
+input[type='text'],
+input[type='email'],
+input[type='password'],
+input[type='url'],
 select {
   border: 1px solid var(--drawer-border-strong);
   border-radius: 10px;
@@ -165,6 +168,30 @@ select:focus {
   outline: 0;
   border-color: var(--gh-search-focus);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--drawer-border-strong);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.switch input {
+  width: 18px;
+  height: 18px;
+}
+
+.input-error {
+  border-color: #ef4444 !important;
+}
+
+.field-error {
+  color: #ef4444;
+  font-size: 12px;
+  margin-top: 4px;
 }
 
 .drawer-foot {

@@ -3,10 +3,10 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { forkJoin, map, Observable, of, switchMap } from 'rxjs';
-import { MasterDataI } from '../../../components/pages/master-data/master-data-model';
 import { ServiceI } from '../../services/service-model';
 import { PackageFormPayload } from '../package-model';
 import { PackagesService } from '../../../services/package';
+import { RoomTypeI } from '../../rooms/room-model';
 
 @Component({
   selector: 'app-create-package',
@@ -16,7 +16,7 @@ import { PackagesService } from '../../../services/package';
   styleUrls: ['./create-package.css']
 })
 export class CreatePackage {
-  @Input() roomTypes: MasterDataI[] = [];
+  @Input() roomTypes: RoomTypeI[] = [];
   @Input() services: ServiceI[] = [];
   @Input() hotelSettingsId: number | null = null;
 
