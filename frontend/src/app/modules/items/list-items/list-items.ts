@@ -184,6 +184,10 @@ export class ListItems implements OnInit {
     return this.items.filter((item) => this.isLowStock(item)).length;
   }
 
+  get outOfStockItems(): number {
+    return this.items.filter((item) => this.toNonNegativeInt(item.stock) <= 0).length;
+  }
+
   get totalStockUnits(): number {
     return this.items.reduce((sum, item) => sum + this.toNonNegativeInt(item.stock), 0);
   }

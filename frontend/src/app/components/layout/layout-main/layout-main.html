@@ -1,11 +1,11 @@
-<main class="relative grid min-h-screen w-full grid-cols-[auto_1fr] grid-rows-[auto_1fr] bg-gray-100 overflow-hidden">
+<main class="layout-shell relative grid min-h-screen w-full grid-cols-[auto_1fr] grid-rows-[auto_1fr] overflow-hidden">
   <!-- OVERLAY (fondo borroso animado) -->
   <div *ngIf="isAsideOpen() && isMobile"
     class="fixed inset-0 bg-black/40 backdrop-blur-sm z-20 md:hidden transition-opacity duration-300 ease-in-out opacity-100"
     (click)="toggleAside()"></div>
 
   <!-- ASIDE con animación -->
-  <aside class="fixed md:static top-0 left-0 h-screen
+  <aside class="layout-aside fixed md:static top-0 left-0 h-screen
            shadow-2xl z-30 md:z-auto
            transition-all duration-300 ease-in-out transform
            overflow-hidden shrink-0" [class.w-64]="isAsideOpen()" [class.w-0]="!isAsideOpen() && !isMobile"
@@ -19,12 +19,12 @@
 
 
   <!-- HEADER + CONTENT -->
-  <div class="flex flex-col h-screen overflow-hidden flex-1">
-    <header class="h-20 bg-gray-100 text-black flex items-center px-2 flex-shrink-0 z-10">
+  <div class="layout-main-area flex flex-col h-screen overflow-hidden flex-1">
+    <header class="layout-header h-16 text-black flex items-center px-2 flex-shrink-0 z-10">
       <app-header (menuToggle)="toggleAside()" class="w-full"></app-header>
     </header>
 
-    <section class="flex-1 overflow-y-auto bg-gray-100 px-6 pb-8 text-[#111827]
+    <section class="layout-content flex-1 overflow-y-auto px-6 pb-8 text-[#111827]
              custom-scroll">
       <app-content></app-content>
     </section>

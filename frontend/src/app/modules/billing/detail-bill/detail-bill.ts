@@ -10,7 +10,7 @@ import { ReservationService } from '../../../services/reservation';
 import { ServicesService } from '../../../services/service';
 import { errorActionAlert, successActionAlert } from '../../../services/action-alerts';
 import { openActionConfirmation } from '../../../services/action-confirmations';
-import { ReservationDetailI } from '../../reservations/reservation-model';
+import { ReservationDetailI, ReservationI } from '../../reservations/reservation-model';
 import { PackageI } from '../../packages/package-model';
 import { ServiceI } from '../../services/service-model';
 import { CreatePayment } from '../../payments/create-payment/create-payment';
@@ -46,6 +46,9 @@ type PaymentMethodTone = {
   badgeBg: string;
   badgeColor: string;
 };
+
+type ReservationModalContextI = ReservationI &
+  Partial<Pick<ReservationDetailI, 'rooms_detail' | 'guests' | 'deposits'>>;
 
 const CHARGE_GROUP_TONES: Record<string, ChargeGroupTone> = {
   RESTAURANTE: {
@@ -174,6 +177,7 @@ const PAYMENT_METHOD_TONES: Record<string, PaymentMethodTone> = {
 })
 export class DetailBill implements OnChanges {
   @Input() invoice: InvoiceI | null = null;
+  @Input() initialReservation: ReservationModalContextI | null = null;
 
   @Output() closed = new EventEmitter<void>();
   @Output() invoiceUpdated = new EventEmitter<InvoiceI>();
@@ -192,7 +196,7 @@ export class DetailBill implements OnChanges {
   showCreditNotesModal = false;
 
   activeInvoice: InvoiceI | null = null;
-  reservation: ReservationDetailI | null = null;
+  reservation: ReservationModalContextI | null = null;
   charges: ChargeI[] = [];
   payments: PaymentI[] = [];
   creditNotes: CreditNoteI[] = [];
@@ -206,6 +210,11 @@ export class DetailBill implements OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['invoice']) {
       this.loadDetail();
+      return;
+    }
+
+    if (changes['initialReservation'] && this.invoice && !this.reservation) {
+      this.reservation = this.buildReservationContext(this.initialReservation);
     }
   }
 
@@ -334,7 +343,11 @@ export class DetailBill implements OnChanges {
   }
 
   get firstRoomFullLabel(): string {
-    if (!this.reservation?.rooms_detail?.length) return 'Sin habitacion';
+    if (!this.reservation?.rooms_detail?.length) {
+      const totalRooms = Number(this.reservation?.total_rooms || 0);
+      return totalRooms > 0 ? `${totalRooms} habitacion(es)` : 'Sin habitacion';
+    }
+
     const firstRoom = this.reservation.rooms_detail[0];
     const roomNumber = String(firstRoom.room_number || firstRoom.room || '').trim();
     if (!roomNumber) return 'Sin habitacion';
@@ -564,6 +577,13 @@ export class DetailBill implements OnChanges {
     const invoiceId = this.invoice.id;
     const reservationId = this.invoice.reservation;
 
+    this.activeInvoice = this.invoice;
+    this.reservation = this.buildReservationContext(this.initialReservation);
+    this.charges = [];
+    this.payments = [];
+    this.creditNotes = [];
+    this.groupedCharges = [];
+
     this.loading = true;
     this.refreshing = false;
     this.errorMessage = '';
@@ -575,7 +595,9 @@ export class DetailBill implements OnChanges {
 
     forkJoin({
       invoice: this.billingService.getInvoiceById(invoiceId).pipe(catchError(() => of(this.invoice as InvoiceI))),
-      reservation: this.reservationService.getReservationById(reservationId).pipe(catchError(() => of(null))),
+      reservation: this.reservationService
+        .getReservationById(reservationId)
+        .pipe(catchError(() => of(this.reservation))),
       charges: this.billingService
         .listCharges({ reservation: reservationId, ordering: '-charge_date,-id', is_active: true })
         .pipe(catchError(() => of([] as ChargeI[]))),
@@ -615,7 +637,7 @@ export class DetailBill implements OnChanges {
       }) => {
         this.loading = false;
         this.activeInvoice = invoice;
-        this.reservation = reservation;
+        this.reservation = this.buildReservationContext(reservation);
         this.chargeTypes = chargeTypes;
         this.paymentMethods = paymentMethods;
         this.creditNoteStatuses = creditNoteStatuses;
@@ -698,6 +720,17 @@ export class DetailBill implements OnChanges {
     const invoiceId = Number(this.activeInvoice?.id || 0);
     const filtered = creditNotes.filter((creditNote) => Number(creditNote.invoice) === invoiceId);
     this.creditNotes = filtered.sort((a, b) => b.id - a.id);
+  }
+
+  private buildReservationContext(reservation: ReservationModalContextI | null): ReservationModalContextI | null {
+    if (!reservation) return null;
+
+    return {
+      ...reservation,
+      rooms_detail: Array.isArray(reservation.rooms_detail) ? reservation.rooms_detail : [],
+      guests: Array.isArray(reservation.guests) ? reservation.guests : [],
+      deposits: Array.isArray(reservation.deposits) ? reservation.deposits : []
+    };
   }
 
   private buildChargeGroups(charges: ChargeI[]): ChargeGroupI[] {

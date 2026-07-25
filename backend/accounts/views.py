@@ -26,7 +26,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from accounts.pagination import OptionalPageNumberPagination
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
-from accounts.tenancy import is_effective_global_admin
+from accounts.tenancy import is_effective_global_admin, scope_queryset_to_hotel
 
 from .models import Role, Resource, UserRole, RoleResource, NotificationReadState
 from .serializers import (
@@ -266,13 +266,11 @@ class UserViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         if not user.is_authenticated:
             return User.objects.none()
 
-        if is_effective_global_admin(user):
-            return qs
-
-        if user.hotel_settings_id is None:
-            return User.objects.none()
-
-        return qs.filter(hotel_settings_id=user.hotel_settings_id)
+        return scope_queryset_to_hotel(
+            qs,
+            request=self.request,
+            tenant_filter="hotel_settings",
+        )
 
     def get_serializer_class(self):
         return self.serializer_action_classes.get(self.action, self.serializer_class)
@@ -350,13 +348,11 @@ class RoleViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
         if not user or not user.is_authenticated:
             return queryset.none()
 
-        if is_effective_global_admin(user):
-            return queryset
-
-        if user.hotel_settings_id is None:
-            return queryset.none()
-
-        return queryset.filter(hotel_settings_id=user.hotel_settings_id)
+        return scope_queryset_to_hotel(
+            queryset,
+            request=self.request,
+            tenant_filter="hotel_settings",
+        )
 
     def _resolve_role_user_ids(self, ids):
         scoped_users = self._role_user_scope_queryset().filter(id__in=ids)

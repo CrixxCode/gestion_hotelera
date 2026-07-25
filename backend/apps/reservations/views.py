@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from accounts.pagination import OptionalPageNumberPagination
 from accounts.permissions import HasResourcePermission
 from accounts.soft_delete import LogicalDeleteViewSetMixin
-from accounts.tenancy import is_effective_global_admin
+from accounts.tenancy import is_effective_global_admin, scope_queryset_to_hotel
 from apps.billing.models import Payment
 from apps.inventory.services import apply_checkout_consumption_inventory
 from apps.reservations.models import (
@@ -133,14 +133,11 @@ class ReservationViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
             .order_by("-id")
         )
 
-        if not user.is_authenticated:
-            return Reservation.objects.none()
-
-        if not is_effective_global_admin(user):
-            if user.hotel_settings_id is None:
-                return Reservation.objects.none()
-
-            queryset = queryset.filter(hotel_settings_id=user.hotel_settings_id)
+        queryset = scope_queryset_to_hotel(
+            queryset,
+            request=self.request,
+            tenant_filter="hotel_settings",
+        )
 
         if self.action == "list":
             queryset = queryset.prefetch_related(
@@ -524,16 +521,11 @@ class ReservationRoomViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
             .order_by("-id")
         )
 
-        if not user.is_authenticated:
-            return ReservationRoom.objects.none()
-
-        if is_effective_global_admin(user):
-            return qs
-
-        if user.hotel_settings_id is None:
-            return ReservationRoom.objects.none()
-
-        return qs.filter(reservation__hotel_settings_id=user.hotel_settings_id)
+        return scope_queryset_to_hotel(
+            qs,
+            request=self.request,
+            tenant_filter="reservation__hotel_settings",
+        )
 
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
@@ -580,16 +572,11 @@ class ReservationGuestViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet):
             .order_by("-id")
         )
 
-        if not user.is_authenticated:
-            return ReservationGuest.objects.none()
-
-        if is_effective_global_admin(user):
-            return qs
-
-        if user.hotel_settings_id is None:
-            return ReservationGuest.objects.none()
-
-        return qs.filter(reservation__hotel_settings_id=user.hotel_settings_id)
+        return scope_queryset_to_hotel(
+            qs,
+            request=self.request,
+            tenant_filter="reservation__hotel_settings",
+        )
 
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
@@ -637,16 +624,11 @@ class ReservationDepositViewSet(LogicalDeleteViewSetMixin, viewsets.ModelViewSet
             .order_by("-id")
         )
 
-        if not user.is_authenticated:
-            return Payment.objects.none()
-
-        if is_effective_global_admin(user):
-            return qs
-
-        if user.hotel_settings_id is None:
-            return Payment.objects.none()
-
-        return qs.filter(invoice__reservation__hotel_settings_id=user.hotel_settings_id)
+        return scope_queryset_to_hotel(
+            qs,
+            request=self.request,
+            tenant_filter="invoice__reservation__hotel_settings",
+        )
 
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
@@ -686,16 +668,11 @@ class ReservationInventoryCheckViewSet(LogicalDeleteViewSetMixin, viewsets.Model
             .order_by("-created_at")
         )
 
-        if not user.is_authenticated:
-            return ReservationInventoryCheck.objects.none()
-
-        if is_effective_global_admin(user):
-            return qs
-
-        if user.hotel_settings_id is None:
-            return ReservationInventoryCheck.objects.none()
-
-        return qs.filter(reservation__hotel_settings_id=user.hotel_settings_id)
+        return scope_queryset_to_hotel(
+            qs,
+            request=self.request,
+            tenant_filter="reservation__hotel_settings",
+        )
 
     def get_required_scopes(self):
         if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
@@ -742,17 +719,10 @@ class ReservationInventoryCheckLineViewSet(LogicalDeleteViewSetMixin, viewsets.M
             .order_by("room__number", "item__name", "id")
         )
 
-        if not user.is_authenticated:
-            return ReservationInventoryCheckLine.objects.none()
-
-        if is_effective_global_admin(user):
-            return qs
-
-        if user.hotel_settings_id is None:
-            return ReservationInventoryCheckLine.objects.none()
-
-        return qs.filter(
-            inventory_check__reservation__hotel_settings_id=user.hotel_settings_id
+        return scope_queryset_to_hotel(
+            qs,
+            request=self.request,
+            tenant_filter="inventory_check__reservation__hotel_settings",
         )
 
     def get_required_scopes(self):

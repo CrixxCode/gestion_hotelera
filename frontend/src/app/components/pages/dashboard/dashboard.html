@@ -8,7 +8,7 @@
 
     <div class="welcome-clock">
       <p class="clock-time">{{ currentTimeLabel }}</p>
-      <p class="clock-hotel">Wayra - Recepcion</p>
+      <p class="clock-hotel">Wayra - Recepción</p>
       <button type="button" class="refresh-btn" (click)="refreshData()" [disabled]="isLoading">
         <i class="fa-solid fa-rotate-right" [class.fa-spin]="isLoading"></i>
         Actualizar
@@ -17,7 +17,7 @@
   </section>
 
   <section class="dashboard-state" *ngIf="isLoading || loadError">
-    <p *ngIf="isLoading">Cargando datos reales del backend...</p>
+    <p *ngIf="isLoading">Actualizando datos del hotel...</p>
     <p class="state-error" *ngIf="!isLoading && loadError">{{ loadError }}</p>
   </section>
 
@@ -41,7 +41,7 @@
     <article class="panel panel-occupancy">
       <header class="panel-header">
         <div>
-          <h3>Ocupacion de la Semana</h3>
+          <h3>Ocupación de la Semana</h3>
           <p>Habitaciones ocupadas vs disponibles</p>
         </div>
 
@@ -60,7 +60,7 @@
       <header class="panel-header">
         <div>
           <h3>Ingresos Diarios</h3>
-          <p>Ultimos 7 dias</p>
+          <p>Últimos 7 días</p>
         </div>
       </header>
 
@@ -95,13 +95,6 @@
         </div>
       </header>
 
-      <ul class="status-legend">
-        <li *ngFor="let state of roomLegend">
-          <i class="dot" [ngClass]="'dot-' + state.state"></i>
-          {{ state.label }}
-        </li>
-      </ul>
-
       <div class="room-grid">
         <article class="room-tile" *ngFor="let room of roomTiles" [ngClass]="'state-' + room.state">
           <p class="room-number">{{ room.number }}</p>
@@ -109,73 +102,59 @@
           <p class="room-detail">{{ room.detail || '-' }}</p>
         </article>
       </div>
+
+      <ul class="status-legend">
+        <li *ngFor="let state of roomLegend">
+          <i class="dot" [ngClass]="'dot-' + state.state"></i>
+          {{ state.label }}
+        </li>
+      </ul>
     </article>
 
-    <div class="stacked-panels">
-      <article class="panel list-panel">
-        <header class="panel-header panel-header-tight">
-          <div>
-            <h3>Check-ins de Hoy</h3>
-            <p>{{ checkInsToday.length }} llegadas programadas</p>
+    <article class="panel list-panel checkins-panel">
+      <header class="panel-header panel-header-tight">
+        <div>
+          <h3>Check-ins de Hoy</h3>
+          <p>{{ checkInsToday.length }} llegadas programadas</p>
+        </div>
+        <button type="button" class="panel-link" (click)="openCheckInsList()">Ver todos</button>
+      </header>
+
+      <ul class="stay-list" *ngIf="checkInsToday.length > 0">
+        <li class="stay-item" *ngFor="let stay of checkInsToday">
+          <span class="avatar" [ngClass]="'avatar-' + stay.avatarTone">{{ stay.initials }}</span>
+
+          <div class="stay-copy">
+            <p class="stay-guest">{{ stay.guest }}</p>
+            <p class="stay-detail">{{ stay.detail }}</p>
           </div>
-          <button type="button" class="panel-link" (click)="openCheckInsList()">Ver todos</button>
-        </header>
 
-        <ul class="stay-list">
-          <li class="stay-item" *ngFor="let stay of checkInsToday">
-            <span class="avatar" [ngClass]="'avatar-' + stay.avatarTone">{{ stay.initials }}</span>
-
-            <div class="stay-copy">
-              <p class="stay-guest">{{ stay.guest }}</p>
-              <p class="stay-detail">{{ stay.detail }}</p>
-            </div>
-
-            <div class="stay-meta">
-              <p class="stay-time">{{ stay.time }}</p>
-              <p class="stay-state" [ngClass]="{ 'is-pending': stay.status === 'Pendiente' }">{{ stay.status }}</p>
-            </div>
-          </li>
-        </ul>
-      </article>
-
-      <article class="panel list-panel">
-        <header class="panel-header panel-header-tight">
-          <div>
-            <h3>Check-outs de Hoy</h3>
-            <p>{{ checkOutsToday.length }} salidas programadas</p>
+          <div class="stay-meta">
+            <p class="stay-time">{{ stay.time }}</p>
+            <p class="stay-state" [ngClass]="{ 'is-pending': stay.status === 'Pendiente' }">{{ stay.status }}</p>
           </div>
-          <button type="button" class="panel-link" (click)="openCheckOutsList()">Ver todos</button>
-        </header>
+        </li>
+      </ul>
 
-        <ul class="stay-list">
-          <li class="stay-item" *ngFor="let stay of checkOutsToday">
-            <span class="avatar" [ngClass]="'avatar-' + stay.avatarTone">{{ stay.initials }}</span>
-
-            <div class="stay-copy">
-              <p class="stay-guest">{{ stay.guest }}</p>
-              <p class="stay-detail">{{ stay.detail }}</p>
-            </div>
-
-            <div class="stay-meta checkout-meta">
-              <p class="checkout-amount">{{ stay.amount }}</p>
-              <p class="stay-time">{{ stay.time }}</p>
-            </div>
-          </li>
-        </ul>
-      </article>
-    </div>
+      <div class="empty-stay" *ngIf="checkInsToday.length === 0">
+        <span class="empty-icon"><i class="fa-regular fa-calendar-xmark"></i></span>
+        <p>Sin llegadas programadas</p>
+        <span>Todas las llegadas aparecerán aquí.</span>
+      </div>
+    </article>
 
     <article class="panel alerts-panel">
       <header class="panel-header panel-header-tight">
         <div>
-          <h3>Alertas</h3>
-          <p>Notificaciones recientes</p>
+          <h3>Alertas <span class="alert-count" [ngClass]="{ 'is-empty': unreadAlertsCount === 0 }">{{ unreadAlertsCount }}</span></h3>
         </div>
-        <span class="alert-count" [ngClass]="{ 'is-empty': unreadAlertsCount === 0 }">{{ unreadAlertsCount }}</span>
+        <button type="button" class="alerts-settings" aria-label="Configurar alertas">
+          <i class="fa-solid fa-gear"></i>
+        </button>
       </header>
 
       <ul class="alert-list">
-        <li class="alert-row" *ngFor="let alert of alerts" [ngClass]="{ 'alert-unread': alert.unread }">
+        <li class="alert-row" *ngFor="let alert of alerts" [ngClass]="{ 'alert-unread': alert.unread, 'alert-system': alert.id === 'none' }">
           <span
             class="alert-icon fa-solid"
             [ngClass]="{
@@ -188,20 +167,53 @@
           <div class="alert-copy">
             <p>{{ alert.text }}</p>
             <span>{{ alert.age }}</span>
-            <span class="alert-read-state" [ngClass]="alert.unread ? 'state-unread' : 'state-read'">{{ alert.unread ? 'No leida' : 'Leida' }}</span>
+            <span class="alert-read-state" [ngClass]="alert.unread ? 'state-unread' : 'state-read'">{{ alert.unread ? 'No leída' : 'Leída' }}</span>
           </div>
 
-          <button type="button" class="alert-action" (click)="onAlertAction(alert)">{{ alert.action }}</button>
+          <button type="button" class="alert-action" *ngIf="alert.id !== 'none'" (click)="onAlertAction(alert)">{{ alert.action }}</button>
         </li>
       </ul>
+
+      <p class="alerts-empty" *ngIf="unreadAlertsCount === 0">No hay alertas activas en este momento</p>
     </article>
   </section>
 
   <section class="bottom-grid">
+    <article class="panel list-panel">
+      <header class="panel-header panel-header-tight">
+        <div>
+          <h3>Check-outs de Hoy</h3>
+          <p>{{ checkOutsToday.length }} salidas programadas</p>
+        </div>
+        <button type="button" class="panel-link" (click)="openCheckOutsList()">Ver todos</button>
+      </header>
+
+      <ul class="stay-list" *ngIf="checkOutsToday.length > 0">
+        <li class="stay-item" *ngFor="let stay of checkOutsToday">
+          <span class="avatar" [ngClass]="'avatar-' + stay.avatarTone">{{ stay.initials }}</span>
+
+          <div class="stay-copy">
+            <p class="stay-guest">{{ stay.guest }}</p>
+            <p class="stay-detail">{{ stay.detail }}</p>
+          </div>
+
+          <div class="stay-meta checkout-meta">
+            <p class="checkout-amount">{{ stay.amount }}</p>
+            <p class="stay-time">{{ stay.time }}</p>
+          </div>
+        </li>
+      </ul>
+
+      <div class="empty-stay compact" *ngIf="checkOutsToday.length === 0">
+        <span class="empty-icon"><i class="fa-solid fa-door-open"></i></span>
+        <p>Sin salidas programadas</p>
+      </div>
+    </article>
+
     <article class="panel services-panel">
       <header class="panel-header panel-header-tight">
         <div>
-          <h3>Servicios del Dia</h3>
+          <h3>Servicios del Día</h3>
           <p>Ingresos por departamento</p>
         </div>
 
@@ -240,7 +252,7 @@
       <header class="panel-header panel-header-tight">
         <div>
           <h3>Actividad Reciente</h3>
-          <p>Ultimos eventos del sistema</p>
+          <p>Últimos eventos del sistema</p>
         </div>
 
         <p class="live-status">

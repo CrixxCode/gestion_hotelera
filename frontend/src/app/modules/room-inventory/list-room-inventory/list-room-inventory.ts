@@ -155,6 +155,10 @@ export class ListRoomInventory implements OnInit {
     return this.roomInventory.filter((record) => this.resolveCoverageState(record) === 'OUT').length;
   }
 
+  get totalAssignedUnits(): number {
+    return this.roomInventory.reduce((sum, record) => sum + this.toNonNegativeInt(record.quantity), 0);
+  }
+
   get roomsWithInventoryCount(): number {
     const keys = new Set(this.roomInventory.map((record) => this.getRoomKey(record)));
     return keys.size;

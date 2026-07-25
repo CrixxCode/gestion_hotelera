@@ -30,7 +30,7 @@
       <div class="stat-note">registros en operacion</div>
     </article>
 
-    <article class="stat-card">
+    <article class="stat-card warning">
       <div class="stat-head">
         <span>Bajo minimo</span>
         <span class="stat-icon gold"><i class="fa-solid fa-triangle-exclamation"></i></span>
@@ -39,13 +39,22 @@
       <div class="stat-note">requieren reposicion</div>
     </article>
 
-    <article class="stat-card">
+    <article class="stat-card danger">
       <div class="stat-head">
         <span>Sin stock</span>
         <span class="stat-icon purple"><i class="fa-solid fa-box-open"></i></span>
       </div>
       <div class="stat-value">{{ outOfStockAssignments }}</div>
       <div class="stat-note">habitaciones desabastecidas</div>
+    </article>
+
+    <article class="stat-card info">
+      <div class="stat-head">
+        <span>Unidades</span>
+        <span class="stat-icon cyan"><i class="fa-solid fa-cubes-stacked"></i></span>
+      </div>
+      <div class="stat-value">{{ totalAssignedUnits }}</div>
+      <div class="stat-note">items asignados</div>
     </article>
   </section>
 

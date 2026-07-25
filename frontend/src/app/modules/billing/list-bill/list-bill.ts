@@ -12,6 +12,7 @@ import { DetailBill } from '../detail-bill/detail-bill';
 
 type InvoiceStatusFilter = 'ALL' | 'BORRADOR' | 'EMITIDA' | 'PAGADA' | 'ANULADA';
 type InvoiceActivityFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
+type InvoiceViewMode = 'cards' | 'table';
 
 @Component({
   selector: 'app-list-bill',
@@ -33,6 +34,7 @@ export class ListBill implements OnInit {
   search = '';
   statusFilter: InvoiceStatusFilter = 'ALL';
   activityFilter: InvoiceActivityFilter = 'ACTIVE';
+  viewMode: InvoiceViewMode = 'cards';
 
   selectedInvoice: InvoiceI | null = null;
 
@@ -69,10 +71,11 @@ export class ListBill implements OnInit {
   }
 
   get issuedCount(): number {
-    return this.invoices.filter((invoice) => {
-      const code = this.normalizeCode(invoice.status_code);
-      return code === 'EMITIDA' || code === 'PAGADA';
-    }).length;
+    return this.invoices.filter((invoice) => this.normalizeCode(invoice.status_code) === 'EMITIDA').length;
+  }
+
+  get paidCount(): number {
+    return this.invoices.filter((invoice) => this.normalizeCode(invoice.status_code) === 'PAGADA').length;
   }
 
   get totalBilledLabel(): string {
@@ -216,6 +219,10 @@ export class ListBill implements OnInit {
     this.selectedInvoice = invoice;
   }
 
+  setViewMode(mode: InvoiceViewMode): void {
+    this.viewMode = mode;
+  }
+
   closeDetail(): void {
     this.selectedInvoice = null;
   }
@@ -305,6 +312,18 @@ export class ListBill implements OnInit {
   getGuestDocument(invoice: InvoiceI): string {
     const reservation = this.reservationsMap.get(invoice.reservation) || null;
     return reservation?.client_document_number || 'Sin documento';
+  }
+
+  getGuestInitials(invoice: InvoiceI): string {
+    const label = this.getGuestLabel(invoice).trim();
+    if (!label) return 'FC';
+
+    return label
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join('');
   }
 
   getStayLabel(invoice: InvoiceI): string {

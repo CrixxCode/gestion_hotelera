@@ -44,7 +44,8 @@
           *ngIf="canManageCharges"
           type="button"
           class="btn btn-dark"
-          (click)="togglePosBarForm()">
+          (click)="togglePosBarForm()"
+          [disabled]="loading">
           <i class="fa-solid fa-store"></i>
           {{ showPosBarForm ? 'Ocultar bar/tienda' : 'Bar / Mini tienda' }}
         </button>
@@ -53,7 +54,8 @@
           *ngIf="canManageCharges"
           type="button"
           class="btn btn-dark"
-          (click)="toggleCreateChargeForm()">
+          (click)="toggleCreateChargeForm()"
+          [disabled]="loading">
           <i class="fa-solid fa-plus"></i>
           {{ showCreateChargeForm ? 'Ocultar cargo' : 'Agregar cargo' }}
         </button>
@@ -63,17 +65,17 @@
           type="button"
           class="btn btn-success"
           (click)="toggleCreatePaymentForm()"
-          [disabled]="!showCreatePaymentForm && !canRegisterPayments">
+          [disabled]="loading || (!showCreatePaymentForm && !canRegisterPayments)">
           <i class="fa-solid fa-money-bill-wave"></i>
           {{ showCreatePaymentForm ? 'Ocultar pago' : 'Agregar pago' }}
         </button>
 
-        <button type="button" class="btn btn-light" (click)="openCreditNotesModal()">
+        <button type="button" class="btn btn-light" (click)="openCreditNotesModal()" [disabled]="loading || !activeInvoice">
           <i class="fa-regular fa-note-sticky"></i>
           Notas credito ({{ creditNotesCount }})
         </button>
 
-        <button type="button" class="btn btn-light" (click)="printInvoice()" [disabled]="printing || !activeInvoice">
+        <button type="button" class="btn btn-light" (click)="printInvoice()" [disabled]="loading || printing || !activeInvoice">
           <i class="fa-solid fa-file-pdf"></i>
           {{ printing ? 'Generando PDF...' : 'Descargar PDF' }}
         </button>
@@ -85,11 +87,34 @@
     </div>
 
     <div class="bill-body">
-      <section class="state-card" *ngIf="loading || errorMessage || infoMessage || refreshing">
-        <p *ngIf="loading">Cargando detalle de factura...</p>
-        <p *ngIf="refreshing && !loading">Actualizando datos...</p>
+      <section class="state-card" *ngIf="loading || errorMessage || infoMessage || refreshing" aria-live="polite">
+        <div class="loading-row" *ngIf="loading">
+          <span class="modal-spinner" aria-hidden="true"></span>
+          <div>
+            <strong>Cargando detalle de factura...</strong>
+            <small>Trayendo cargos, pagos, notas credito y catalogos.</small>
+          </div>
+        </div>
+        <div class="loading-row" *ngIf="refreshing && !loading">
+          <span class="modal-spinner modal-spinner-small" aria-hidden="true"></span>
+          <div>
+            <strong>Actualizando datos...</strong>
+            <small>Sincronizando los totales del modal.</small>
+          </div>
+        </div>
         <p class="error" *ngIf="!loading && errorMessage">{{ errorMessage }}</p>
         <p class="info" *ngIf="!loading && !errorMessage && infoMessage">{{ infoMessage }}</p>
+      </section>
+
+      <section class="loading-skeleton" *ngIf="loading" aria-hidden="true">
+        <div class="skeleton-block skeleton-block-wide"></div>
+        <div class="skeleton-grid">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="skeleton-line"></div>
+        <div class="skeleton-line skeleton-line-short"></div>
       </section>
 
       <app-pos-bar

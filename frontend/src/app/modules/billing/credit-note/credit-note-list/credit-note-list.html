@@ -1,13 +1,30 @@
 <div class="credit-overlay" (click)="close()">
   <article class="credit-modal" (click)="$event.stopPropagation()">
     <header class="credit-head">
-      <div>
+      <div class="credit-title">
+        <span>Gestion de ajustes</span>
         <h2>{{ modalTitle }}</h2>
-        <p>
-          {{ activeCreditNotes.length }} activa(s) |
-          Total acreditado: {{ formatCurrency(totalCreditAmount) }} |
-          Disponible: {{ formatCurrency(availableCreditAmount) }}
-        </p>
+      </div>
+
+      <button type="button" class="btn btn-close" (click)="close()" title="Cerrar">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </header>
+
+    <section class="credit-toolbar">
+      <div class="credit-summary">
+        <div>
+          <span>Activas</span>
+          <strong>{{ activeCreditNotes.length }}</strong>
+        </div>
+        <div>
+          <span>Total acreditado</span>
+          <strong>{{ formatCurrency(totalCreditAmount) }}</strong>
+        </div>
+        <div>
+          <span>Disponible</span>
+          <strong>{{ formatCurrency(availableCreditAmount) }}</strong>
+        </div>
       </div>
 
       <div class="head-actions">
@@ -24,12 +41,8 @@
           <i class="fa-solid fa-plus"></i>
           Nueva nota
         </button>
-
-        <button type="button" class="btn btn-close" (click)="close()" title="Cerrar">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
       </div>
-    </header>
+    </section>
 
     <section class="state-card" *ngIf="loading || errorMessage || infoMessage">
       <p *ngIf="loading">Cargando notas de credito...</p>

@@ -30,7 +30,7 @@
       <div class="stat-note">ingresos de inventario</div>
     </article>
 
-    <article class="stat-card">
+    <article class="stat-card danger">
       <div class="stat-head">
         <span>Salidas / Perdidas</span>
         <span class="stat-icon gold"><i class="fa-solid fa-arrow-trend-down"></i></span>
@@ -39,7 +39,16 @@
       <div class="stat-note">egresos del stock</div>
     </article>
 
-    <article class="stat-card">
+    <article class="stat-card info">
+      <div class="stat-head">
+        <span>Ajustes</span>
+        <span class="stat-icon cyan"><i class="fa-solid fa-sliders"></i></span>
+      </div>
+      <div class="stat-value">{{ adjustmentMovements }}</div>
+      <div class="stat-note">ajustes y transferencias</div>
+    </article>
+
+    <article class="stat-card accent">
       <div class="stat-head">
         <span>Variacion neta</span>
         <span class="stat-icon purple"><i class="fa-solid fa-chart-line"></i></span>

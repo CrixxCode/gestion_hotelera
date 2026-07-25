@@ -1,12 +1,14 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
+from accounts.models import Resource, Role
 from apps.hotel_settings.models import HotelFloor, HotelSettings
 from apps.inventory.models import InventoryMovement, Item, RoomInventory
 from apps.master_data.models import MasterData
 from apps.rooms.models import CleaningTask, MaintenanceOrder, Room, RoomType
 from apps.rooms.serializers import AmenitySerializer
+from apps.rooms.views import RoomTypeViewSet
 
 
 class RoomOperationInventoryAutomationTestCase(TestCase):
@@ -206,3 +208,65 @@ class AmenitySerializerTenantAutofillTests(TestCase):
         )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
+
+
+class RoomTypeInactiveUpdateTests(TestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.hotel = HotelSettings.objects.create(hotel_name="Hotel Tipos")
+        self.room_type = RoomType.objects.create(
+            hotel_settings=self.hotel,
+            code="STD",
+            name="Standard",
+            capacity=2,
+            is_active=False,
+        )
+
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(
+            username="room_type_writer",
+            password="test-pass-123",
+            hotel_settings=self.hotel,
+        )
+        self.role = Role.objects.create(
+            name="Room Type Writer Role",
+            slug="room-type-writer-role",
+        )
+
+        read_resource, _ = Resource.objects.get_or_create(
+            key="room_type.read",
+            defaults={"name": "Room Type Read", "link_backend": "/api/room-types/"},
+        )
+        write_resource, _ = Resource.objects.get_or_create(
+            key="room_type.write",
+            defaults={"name": "Room Type Write", "link_backend": "/api/room-types/"},
+        )
+        self.role.resources.add(read_resource, write_resource)
+        self.user.roles.add(self.role)
+
+    def test_inactive_room_type_is_hidden_from_default_list(self):
+        request = self.factory.get("/api/room-types/")
+        force_authenticate(request, user=self.user)
+
+        response = RoomTypeViewSet.as_view({"get": "list"})(request)
+
+        self.assertEqual(response.status_code, 200)
+        visible_ids = [row["id"] for row in response.data]
+        self.assertNotIn(self.room_type.id, visible_ids)
+
+    def test_patch_can_activate_inactive_room_type_without_query_filter(self):
+        request = self.factory.patch(
+            f"/api/room-types/{self.room_type.id}/",
+            {"is_active": True},
+            format="json",
+        )
+        force_authenticate(request, user=self.user)
+
+        response = RoomTypeViewSet.as_view({"patch": "partial_update"})(
+            request,
+            pk=self.room_type.id,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.room_type.refresh_from_db()
+        self.assertTrue(self.room_type.is_active)

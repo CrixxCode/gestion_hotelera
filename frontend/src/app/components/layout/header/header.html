@@ -1,7 +1,7 @@
-<header class="app-header-shell w-full h-20 px-3 sm:px-6 flex items-center border-b">
+<header class="app-header-shell w-full h-16 px-3 sm:px-6 flex items-center border-b">
   <div class="flex items-center justify-between w-full">
-    <!-- IZQUIERDA: Boton hamburguesa -->
-    <div class="flex items-center">
+    <!-- IZQUIERDA: Boton hamburguesa + contexto del hotel -->
+    <div class="header-left flex items-center min-w-0">
       <button
         class="header-menu-btn p-2 rounded-lg inline-flex items-center justify-center"
         (click)="menuToggle.emit()"
@@ -9,6 +9,24 @@
       >
         <i class="fa-solid fa-bars text-lg"></i>
       </button>
+
+      <label class="hotel-context-selector" *ngIf="hotelOptions.length > 0 || hotelSelectorLoading">
+        <span>Hotel activo</span>
+        <div class="hotel-context-control">
+          <i class="fa-solid fa-hotel"></i>
+          <select
+            [(ngModel)]="selectedHotelSettingsId"
+            (change)="onHotelSelectionChange()"
+            [disabled]="hotelSelectorLoading || !isGlobalAdmin"
+            aria-label="Seleccionar hotel activo">
+            <option *ngIf="hotelSelectorLoading" [ngValue]="null">Cargando hoteles...</option>
+            <option *ngFor="let hotel of hotelOptions" [ngValue]="hotel.id">
+              {{ hotel.hotel_name }}
+            </option>
+          </select>
+          <i class="fa-solid fa-chevron-down selector-chevron"></i>
+        </div>
+      </label>
     </div>
 
     <!-- DERECHA: Notificaciones + menu usuario -->
@@ -22,7 +40,7 @@
           <i class="fa-regular fa-bell text-lg"></i>
           <span
             *ngIf="unreadCount > 0"
-            class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[11px] font-bold flex items-center justify-center"
+            class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[11px] font-semibold flex items-center justify-center"
           >
             {{ unreadCount > 9 ? '9+' : unreadCount }}
           </span>

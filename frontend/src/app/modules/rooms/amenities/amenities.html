@@ -49,10 +49,19 @@
       <div class="stat-value">{{ usedAmenities }}</div>
       <div class="stat-note">Asignadas a habitaciones</div>
     </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Sin uso</span>
+        <span class="stat-icon red"><i class="fa-solid fa-box-open"></i></span>
+      </div>
+      <div class="stat-value">{{ unusedAmenities }}</div>
+      <div class="stat-note">Pendientes por asignar</div>
+    </article>
   </section>
 
-  <section class="gh-filters-card">
-    <div class="gh-filters-grid">
+  <section class="filters-card">
+    <div class="filters-grid">
       <label class="search-field search-wrap gh-search-wrap">
         <span>Buscar</span>
         <div class="search-control gh-search-control">
@@ -83,29 +92,27 @@
           <option value="NO_USE">Sin uso</option>
         </select>
       </label>
-    </div>
 
-    <div class="gh-filters-actions gh-filters-actions-single">
-      <div class="gh-action-group">
-        <button type="button" class="gh-btn gh-btn-light" (click)="loadData()" [disabled]="loading">
+      <div class="filter-actions-inline">
+        <button type="button" class="icon-action" (click)="loadData()" [disabled]="loading" title="Actualizar">
           <i class="fa-solid fa-rotate-right"></i>
-          Actualizar
         </button>
-        <button type="button" class="gh-btn gh-btn-light" (click)="exportCsv()">
-          <i class="fa-solid fa-file-export"></i>
-          Exportar
+
+        <button type="button" class="icon-action" (click)="exportCsv()" title="Exportar">
+          <i class="fa-solid fa-download"></i>
         </button>
       </div>
     </div>
   </section>
 
-  <section class="gh-filters-card" *ngIf="!loading && deletedAmenitiesCount > 0">
-    <div class="gh-filters-actions">
+  <section class="deleted-alert-card" *ngIf="!loading && deletedAmenitiesCount > 0">
+    <div class="deleted-alert-head">
       <p class="state-note">
+        <i class="fa-solid fa-circle-info"></i>
         Hay {{ deletedAmenitiesCount }} amenidad(es) eliminadas logicamente.
       </p>
-      <div class="gh-action-group">
-        <button type="button" class="gh-btn gh-btn-light" (click)="showDeletedAmenities = !showDeletedAmenities">
+      <div>
+        <button type="button" class="deleted-link" (click)="showDeletedAmenities = !showDeletedAmenities">
           <i class="fa-solid" [class.fa-eye]="!showDeletedAmenities" [class.fa-eye-slash]="showDeletedAmenities"></i>
           {{ showDeletedAmenities ? 'Ocultar eliminadas' : 'Ver eliminadas' }}
         </button>
@@ -150,8 +157,8 @@
       <table>
         <thead>
           <tr>
-            <th>AMENIDAD</th>
             <th>ICONO</th>
+            <th>AMENIDAD &amp; DESCRIPCION</th>
             <th>USO</th>
             <th>ESTADO</th>
             <th>CREADA</th>
@@ -173,18 +180,15 @@
 
           <tr *ngFor="let amenity of filteredAmenities; trackBy: trackByAmenity">
             <td>
-              <div class="amenity-cell">
-                <span class="amenity-icon">
-                  <i [class]="amenity.icon || defaultIcon()"></i>
-                </span>
-                <div class="amenity-meta">
-                  <div class="amenity-name">{{ amenity.name }}</div>
-                  <div class="amenity-desc">{{ amenity.description || 'Sin descripcion' }}</div>
-                </div>
-              </div>
+              <span class="amenity-icon">
+                <i [class]="amenity.icon || defaultIcon()"></i>
+              </span>
             </td>
             <td>
-              <span class="mono">{{ amenity.icon || '-' }}</span>
+              <div class="amenity-meta">
+                <div class="amenity-name">{{ amenity.name }}</div>
+                <div class="amenity-desc">{{ amenity.description || 'Sin descripcion' }}</div>
+              </div>
             </td>
             <td>
               <span class="count-pill">{{ getUsageCount(amenity.id) }}</span>

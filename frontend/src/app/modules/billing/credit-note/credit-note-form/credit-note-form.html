@@ -4,6 +4,10 @@
       <h3>{{ title }}</h3>
       <p>Factura {{ invoiceNumber || ('#' + (invoiceId || '--')) }}</p>
     </div>
+
+    <button type="button" class="form-close" (click)="close()" [disabled]="saving" title="Cerrar">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
   </header>
 
   <form [formGroup]="creditNoteForm" (ngSubmit)="submit()" class="credit-note-form">

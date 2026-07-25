@@ -1,29 +1,40 @@
 <div class="payment-overlay" (click)="closeDrawer()">
   <article class="payment-modal" (click)="$event.stopPropagation()">
     <header class="payment-head">
-      <div>
-        <h2>Pago #{{ activePayment?.id || payment?.id }}</h2>
+      <div class="payment-title-block">
+        <div class="payment-title-row">
+          <h2>Pago #{{ activePayment?.id || payment?.id }}</h2>
+          <span
+            class="status-chip"
+            [ngStyle]="{
+              'background-color': paymentStatusTone.bg,
+              color: paymentStatusTone.color
+            }">
+            <span class="dot" [ngStyle]="{ 'background-color': paymentStatusTone.dot }"></span>
+            {{ paymentStatusLabel }}
+          </span>
+        </div>
         <p>Factura: {{ activePayment?.invoice_number || invoice?.invoice_number || ('FAC-' + (activePayment?.invoice || payment?.invoice || 0)) }}</p>
       </div>
 
-      <span
-        class="status-chip"
-        [ngStyle]="{
-          'background-color': paymentStatusTone.bg,
-          color: paymentStatusTone.color
-        }">
-        <span class="dot" [ngStyle]="{ 'background-color': paymentStatusTone.dot }"></span>
-        {{ paymentStatusLabel }}
-      </span>
+      <button type="button" class="head-close" (click)="closeDrawer()" title="Cerrar">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
     </header>
 
-    <section class="state-card" *ngIf="loading || errorMessage || infoMessage">
-      <p *ngIf="loading">Cargando detalle del pago...</p>
+    <section class="state-card" *ngIf="loading || errorMessage || infoMessage" aria-live="polite">
+      <div class="loading-row" *ngIf="loading">
+        <span class="modal-spinner" aria-hidden="true"></span>
+        <div>
+          <strong>Cargando detalle del pago...</strong>
+          <small>Calculando factura, pagos relacionados y reembolsos.</small>
+        </div>
+      </div>
       <p class="error" *ngIf="!loading && errorMessage">{{ errorMessage }}</p>
       <p class="info" *ngIf="!loading && !errorMessage && infoMessage">{{ infoMessage }}</p>
     </section>
 
-    <section class="detail-grid" *ngIf="!loading && activePayment">
+    <section class="detail-grid" *ngIf="activePayment">
       <article class="detail-card">
         <h3>Informacion del pago</h3>
         <dl>
@@ -52,52 +63,73 @@
 
       <article class="detail-card">
         <h3>Resumen de factura</h3>
-        <dl>
-          <div>
-            <dt>Total factura</dt>
-            <dd>{{ formatCurrency(invoiceTotalAmount) }}</dd>
+        <ng-container *ngIf="!loading; else invoiceSummaryLoading">
+          <dl>
+            <div>
+              <dt>Total factura</dt>
+              <dd>{{ formatCurrency(invoiceTotalAmount) }}</dd>
+            </div>
+            <div>
+              <dt>Pagos activos</dt>
+              <dd>{{ formatCurrency(totalPaidAmount) }}</dd>
+            </div>
+            <div>
+              <dt>Reembolsos procesados</dt>
+              <dd>{{ formatCurrency(totalProcessedRefundAmount) }}</dd>
+            </div>
+            <div>
+              <dt>Pago neto aplicado</dt>
+              <dd>{{ formatCurrency(netPaidAmount) }}</dd>
+            </div>
+            <div>
+              <dt>Saldo pendiente</dt>
+              <dd>{{ formatCurrency(pendingBalanceAmount) }}</dd>
+            </div>
+            <div>
+              <dt>Pagos registrados</dt>
+              <dd>{{ invoicePayments.length }}</dd>
+            </div>
+          </dl>
+        </ng-container>
+
+        <ng-template #invoiceSummaryLoading>
+          <div class="skeleton-stack" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
           </div>
-          <div>
-            <dt>Pagos activos</dt>
-            <dd>{{ formatCurrency(totalPaidAmount) }}</dd>
-          </div>
-          <div>
-            <dt>Reembolsos procesados</dt>
-            <dd>{{ formatCurrency(totalProcessedRefundAmount) }}</dd>
-          </div>
-          <div>
-            <dt>Pago neto aplicado</dt>
-            <dd>{{ formatCurrency(netPaidAmount) }}</dd>
-          </div>
-          <div>
-            <dt>Saldo pendiente</dt>
-            <dd>{{ formatCurrency(pendingBalanceAmount) }}</dd>
-          </div>
-          <div>
-            <dt>Pagos registrados</dt>
-            <dd>{{ invoicePayments.length }}</dd>
-          </div>
-        </dl>
+        </ng-template>
       </article>
 
       <article class="detail-card">
         <h3>Registrar reembolso</h3>
-        <dl class="refund-summary">
-          <div>
-            <dt>Saldo reembolsable</dt>
-            <dd>{{ formatCurrency(paymentRefundableAmount) }}</dd>
-          </div>
-          <div>
-            <dt>Reembolsos procesados</dt>
-            <dd>{{ formatCurrency(paymentProcessedRefundAmount) }}</dd>
-          </div>
-          <div>
-            <dt>Solicitudes activas</dt>
-            <dd>{{ paymentRefunds.length }}</dd>
-          </div>
-        </dl>
+        <ng-container *ngIf="!loading; else refundSummaryLoading">
+          <dl class="refund-summary">
+            <div>
+              <dt>Saldo reembolsable</dt>
+              <dd>{{ formatCurrency(paymentRefundableAmount) }}</dd>
+            </div>
+            <div>
+              <dt>Reembolsos procesados</dt>
+              <dd>{{ formatCurrency(paymentProcessedRefundAmount) }}</dd>
+            </div>
+            <div>
+              <dt>Solicitudes activas</dt>
+              <dd>{{ paymentRefunds.length }}</dd>
+            </div>
+          </dl>
+        </ng-container>
 
-        <form class="refund-form" [formGroup]="refundForm" (ngSubmit)="registerRefund()" *ngIf="activePayment?.is_active">
+        <ng-template #refundSummaryLoading>
+          <div class="skeleton-stack refund-skeleton" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </ng-template>
+
+        <form class="refund-form" [formGroup]="refundForm" (ngSubmit)="registerRefund()" *ngIf="!loading && activePayment?.is_active">
           <label>
             <span>Monto</span>
             <input type="number" min="1" step="0.01" formControlName="amount" />
@@ -126,50 +158,61 @@
           </div>
         </form>
 
-        <p class="muted" *ngIf="!activePayment?.is_active">El pago esta inactivo. No se pueden registrar reembolsos.</p>
-        <p class="muted" *ngIf="activePayment?.is_active && paymentRefundableAmount <= 0">
+        <p class="muted" *ngIf="loading && activePayment?.is_active">Calculando saldo disponible para reembolso...</p>
+        <p class="muted" *ngIf="!loading && !activePayment?.is_active">El pago esta inactivo. No se pueden registrar reembolsos.</p>
+        <p class="muted" *ngIf="!loading && activePayment?.is_active && paymentRefundableAmount <= 0">
           Este pago no tiene saldo disponible para reembolso.
         </p>
       </article>
     </section>
 
-    <section class="detail-card refund-history" *ngIf="!loading && activePayment">
+    <section class="detail-card refund-history" *ngIf="activePayment">
       <h3>Historial de reembolsos del pago</h3>
 
-      <p class="muted" *ngIf="paymentRefunds.length === 0">No hay reembolsos registrados para este pago.</p>
+      <ng-container *ngIf="!loading; else refundHistoryLoading">
+        <p class="muted" *ngIf="paymentRefunds.length === 0">No hay reembolsos registrados para este pago.</p>
 
-      <div class="refund-table-wrap" *ngIf="paymentRefunds.length > 0">
-        <table class="refund-table">
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Estado</th>
-              <th>Monto</th>
-              <th>Motivo</th>
-              <th>Referencia</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let refund of paymentRefunds; trackBy: trackByRefund">
-              <td>{{ formatDateTime(refund.refund_date || refund.created_at) }}</td>
-              <td>
-                <span
-                  class="status-chip"
-                  [ngStyle]="{
-                    'background-color': getRefundStatusTone(refund).bg,
-                    color: getRefundStatusTone(refund).color
-                  }">
-                  <span class="dot" [ngStyle]="{ 'background-color': getRefundStatusTone(refund).dot }"></span>
-                  {{ getRefundStatusLabel(refund) }}
-                </span>
-              </td>
-              <td>{{ formatCurrency(+refund.amount) }}</td>
-              <td>{{ refund.reason }}</td>
-              <td>{{ refund.reference || '--' }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <div class="refund-table-wrap" *ngIf="paymentRefunds.length > 0">
+          <table class="refund-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Estado</th>
+                <th>Monto</th>
+                <th>Motivo</th>
+                <th>Referencia</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let refund of paymentRefunds; trackBy: trackByRefund">
+                <td>{{ formatDateTime(refund.refund_date || refund.created_at) }}</td>
+                <td>
+                  <span
+                    class="status-chip"
+                    [ngStyle]="{
+                      'background-color': getRefundStatusTone(refund).bg,
+                      color: getRefundStatusTone(refund).color
+                    }">
+                    <span class="dot" [ngStyle]="{ 'background-color': getRefundStatusTone(refund).dot }"></span>
+                    {{ getRefundStatusLabel(refund) }}
+                  </span>
+                </td>
+                <td>{{ formatCurrency(+refund.amount) }}</td>
+                <td>{{ refund.reason }}</td>
+                <td>{{ refund.reference || '--' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ng-container>
+
+      <ng-template #refundHistoryLoading>
+        <div class="skeleton-stack skeleton-stack-table" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </ng-template>
     </section>
 
     <footer class="payment-foot">

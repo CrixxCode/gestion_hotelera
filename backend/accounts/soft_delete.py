@@ -2,6 +2,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import models, transaction
 from django.db.models.functions import Cast
 from django.shortcuts import get_object_or_404
+from rest_framework.permissions import SAFE_METHODS
 from rest_framework.decorators import action
 from rest_framework import status
 from rest_framework.response import Response
@@ -30,6 +31,9 @@ class LogicalDeleteViewSetMixin:
         request = getattr(self, "request", None)
         if not request:
             return False
+
+        if request.method not in SAFE_METHODS:
+            return True
 
         # Respect explicit filters already used by several endpoints.
         if request.query_params.get("is_active") is not None:

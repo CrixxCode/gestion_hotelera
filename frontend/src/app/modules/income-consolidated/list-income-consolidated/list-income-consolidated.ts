@@ -12,6 +12,7 @@ import {
 import { ReportsService } from '../../../services/reports';
 import { AuthService, MeResponse } from '../../../services/auth/auth';
 import { HotelSettingsService } from '../../../services/hotel-settings';
+import { HotelContextService } from '../../../services/hotel-context';
 
 type IncomeActivityFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 type IncomePeriodFilter = 'ALL' | 'TODAY' | 'LAST_7_DAYS' | 'THIS_MONTH' | 'THIS_YEAR';
@@ -90,6 +91,7 @@ export class ListIncomeConsolidated implements OnInit {
     private reportsService: ReportsService,
     private authService: AuthService,
     private hotelSettingsService: HotelSettingsService,
+    private hotelContextService: HotelContextService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -216,6 +218,10 @@ export class ListIncomeConsolidated implements OnInit {
   }
 
   private resolveHotelSettingsAndLoad(): void {
+    this.loading = true;
+    this.errorMessage = '';
+    this.infoMessage = '';
+
     forkJoin({
       settings: this.hotelSettingsService
         .getCurrentSettings()
@@ -224,14 +230,20 @@ export class ListIncomeConsolidated implements OnInit {
     }).subscribe(({ settings, me }) => {
       const settingsId = Number((settings as { id?: unknown } | null)?.id || 0);
       const meId = this.resolveHotelIdFromMe(me);
-      const resolvedId = settingsId > 0 ? settingsId : meId;
+      const contextId = Number(this.hotelContextService.selectedHotelSettingsId || 0);
+      const isGlobalAdmin = Boolean(me?.is_staff) && meId <= 0;
+      const resolvedId = isGlobalAdmin
+        ? contextId
+        : meId > 0
+          ? meId
+          : settingsId;
 
       this.hotelSettingsId = resolvedId > 0 ? resolvedId : null;
       if (!this.hotelSettingsId) {
         this.loading = false;
         this.renderReady = false;
         this.errorMessage =
-          'No se encontro un hotel activo. Verifica la configuracion del hotel o tu sesion.';
+          'No se encontro un hotel activo. Selecciona un hotel en el encabezado.';
         this.cdr.markForCheck();
         return;
       }

@@ -33,6 +33,15 @@
 
     <article class="stat-card">
       <div class="stat-head">
+        <span>Reservadas</span>
+        <span class="stat-icon violet"><i class="fa-regular fa-calendar-check"></i></span>
+      </div>
+      <div class="stat-value">{{ reservedCount }}</div>
+      <div class="stat-note">de {{ totalRooms }} hab.</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
         <span>Ocupadas</span>
         <span class="stat-icon blue"><i class="fa-solid fa-user-group"></i></span>
       </div>
@@ -85,42 +94,34 @@
           </option>
         </select>
       </label>
-    </div>
 
-    <div class="filters-actions">
-      <div class="view-toggle">
+      <div class="filter-actions-inline">
         <button type="button" [class.active]="viewMode === 'table'" (click)="setViewMode('table')" title="Vista tabla">
           <i class="fa-solid fa-list"></i>
         </button>
         <button type="button" [class.active]="viewMode === 'cards'" (click)="setViewMode('cards')" title="Vista cuadricula">
           <i class="fa-solid fa-grip"></i>
         </button>
-      </div>
-
-      <div class="action-group">
-        <button type="button" class="btn btn-light" (click)="loadModuleData()">
+        <button type="button" (click)="loadModuleData()" [disabled]="loading" title="Actualizar">
           <i class="fa-solid fa-rotate-right"></i>
-          Actualizar
         </button>
-
-        <button type="button" class="btn btn-light" (click)="exportCsv()">
-          <i class="fa-solid fa-file-export"></i>
-          Exportar
+        <button type="button" (click)="exportCsv()" title="Exportar">
+          <i class="fa-solid fa-download"></i>
         </button>
       </div>
     </div>
-  </section>
 
-  <div class="status-tabs">
-    <button
-      type="button"
-      *ngFor="let tab of statusTabs"
-      [class.active]="statusFilter === tab.key"
-      (click)="selectStatus(tab.key)">
-      {{ tab.label }}
-      <span>{{ getStatusCount(tab.key) }}</span>
-    </button>
-  </div>
+    <div class="status-tabs">
+      <button
+        type="button"
+        *ngFor="let tab of statusTabs"
+        [class.active]="statusFilter === tab.key"
+        (click)="selectStatus(tab.key)">
+        {{ tab.label }}
+        <span>{{ getStatusCount(tab.key) }}</span>
+      </button>
+    </div>
+  </section>
 
   <section class="state-message" *ngIf="loading || errorMessage || filteredRooms.length === 0">
     <p *ngIf="loading">Cargando habitaciones...</p>
@@ -128,14 +129,17 @@
     <p *ngIf="!loading && !errorMessage && filteredRooms.length === 0">No hay habitaciones para los filtros seleccionados.</p>
   </section>
 
-  <section class="rooms-grid" *ngIf="!loading && !errorMessage && filteredRooms.length > 0 && viewMode === 'cards'">
+  <section class="rooms-grid" *ngIf="!loading && !errorMessage && viewMode === 'cards'">
     <article
       class="room-card"
       *ngFor="let room of filteredRooms; trackBy: trackByRoom"
       [ngClass]="getCardStatusClass(room)"
       (click)="openDetail(room)">
       <header class="room-head">
-        <h2>{{ room.number }}</h2>
+        <div>
+          <span class="room-label">Habitacion</span>
+          <h2>{{ room.number }}</h2>
+        </div>
         <span
           class="status-chip status-chip-card"
           [ngStyle]="{ 'background-color': getStatusStyle(room).bg, color: getStatusStyle(room).color }">
@@ -147,7 +151,11 @@
         <i class="fa-solid fa-bed"></i>
         {{ getCardTypeSummary(room) }}
       </p>
-      <p class="room-price">{{ getPriceLabel(room) }}<small>/noche</small></p>
+      <p class="room-floor">
+        <i class="fa-solid fa-layer-group"></i>
+        {{ room.floor_name || 'Piso no definido' }}
+      </p>
+      <p class="room-price">{{ getPriceLabel(room) }}<small>/ noche</small></p>
 
       <div class="reservation-info" *ngIf="hasReservationInfo(room)">
         <p>
@@ -178,6 +186,12 @@
         </button>
       </div>
     </article>
+
+    <button type="button" class="add-room-card" (click)="openCreateDrawer()">
+      <span><i class="fa-solid fa-plus"></i></span>
+      <strong>Agregar habitacion</strong>
+      <small>Crea una nueva unidad para el hotel.</small>
+    </button>
   </section>
 
   <section class="table-card" *ngIf="!loading && !errorMessage && filteredRooms.length > 0 && viewMode === 'table'">

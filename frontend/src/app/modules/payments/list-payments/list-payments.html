@@ -1,9 +1,14 @@
 <div class="payments-page">
   <header class="page-header">
     <div>
-      <h1>Pagos</h1>
-      <p>Consulta de cobros registrados por factura y metodo de pago.</p>
+      <h1>Gestion de Pagos</h1>
+      <p>Consulta y seguimiento de pagos registrados por factura, huesped y metodo de pago.</p>
     </div>
+
+    <a class="btn btn-dark" routerLink="/reembolsos">
+      <i class="fa-solid fa-arrow-rotate-left"></i>
+      Reembolsos
+    </a>
   </header>
 
   <section class="stats-grid">
@@ -13,16 +18,25 @@
         <span class="stat-icon blue"><i class="fa-solid fa-money-bills"></i></span>
       </div>
       <div class="stat-value">{{ totalPayments }}</div>
-      <div class="stat-note">registros historicos</div>
+      <div class="stat-note">Registros historicos</div>
     </article>
 
     <article class="stat-card">
       <div class="stat-head">
-        <span>Activos</span>
+        <span>Pagos activos</span>
         <span class="stat-icon green"><i class="fa-solid fa-circle-check"></i></span>
       </div>
       <div class="stat-value">{{ activePaymentsCount }}</div>
-      <div class="stat-note">pagos vigentes</div>
+      <div class="stat-note">Disponibles para conciliacion</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
+        <span>Inactivos</span>
+        <span class="stat-icon red"><i class="fa-solid fa-circle-pause"></i></span>
+      </div>
+      <div class="stat-value">{{ inactivePaymentsCount }}</div>
+      <div class="stat-note">Anulados o fuera de operacion</div>
     </article>
 
     <article class="stat-card">
@@ -31,21 +45,21 @@
         <span class="stat-icon gold"><i class="fa-solid fa-wallet"></i></span>
       </div>
       <div class="stat-value stat-money">{{ collectedAmountLabel }}</div>
-      <div class="stat-note">solo pagos activos</div>
+      <div class="stat-note">Solo pagos activos</div>
     </article>
 
     <article class="stat-card">
       <div class="stat-head">
         <span>Ticket promedio</span>
-        <span class="stat-icon gray"><i class="fa-solid fa-chart-column"></i></span>
+        <span class="stat-icon purple"><i class="fa-solid fa-chart-column"></i></span>
       </div>
       <div class="stat-value stat-money">{{ averageTicketLabel }}</div>
-      <div class="stat-note">monto medio por pago</div>
+      <div class="stat-note">{{ methodCount }} metodos activos</div>
     </article>
   </section>
 
-  <section class="gh-filters-card">
-    <div class="gh-filters-grid">
+  <section class="filters-card">
+    <div class="filters-grid">
       <label class="search-field search-wrap gh-search-wrap">
         <span>Buscar</span>
         <div class="search-control gh-search-control">
@@ -55,7 +69,8 @@
             type="text"
             [(ngModel)]="search"
             (input)="applyFilters()"
-            placeholder="Buscar por factura, huesped, documento o referencia..." />
+            placeholder="Buscar por factura, huesped, documento o referencia..."
+          />
         </div>
       </label>
 
@@ -72,32 +87,42 @@
           <option *ngFor="let option of methodOptions" [ngValue]="option.value">{{ option.label }}</option>
         </select>
       </label>
-    </div>
 
-    <div class="gh-filters-actions">
-      <div class="gh-view-toggle">
-        <button type="button" [class.active]="viewMode === 'table'" (click)="setViewMode('table')" title="Vista tabla">
-          <i class="fa-solid fa-list"></i>
+      <label class="gh-filter-field">
+        <span>Fecha</span>
+        <select class="gh-filter-select" [(ngModel)]="dateFilter" (change)="applyFilters()">
+          <option *ngFor="let option of dateOptions" [ngValue]="option.value">{{ option.label }}</option>
+        </select>
+      </label>
+
+      <div class="filter-actions-inline">
+        <button type="button" class="icon-action" (click)="refreshPaymentsData()" [disabled]="loading" title="Actualizar">
+          <i class="fa-solid fa-rotate-right"></i>
         </button>
-        <button type="button" [class.active]="viewMode === 'grid'" (click)="setViewMode('grid')" title="Vista cuadricula">
-          <i class="fa-solid fa-grip"></i>
+
+        <button type="button" class="icon-action icon-action-dark" (click)="exportCsv()" title="Exportar">
+          <i class="fa-solid fa-download"></i>
         </button>
       </div>
+    </div>
 
-      <div class="gh-action-group">
-        <a class="gh-btn gh-btn-light" routerLink="/reembolsos">
-          <i class="fa-solid fa-arrow-rotate-left"></i>
-          Reembolsos
-        </a>
-
-        <button type="button" class="gh-btn gh-btn-light" (click)="refreshPaymentsData()" [disabled]="loading">
-          <i class="fa-solid fa-rotate-right"></i>
-          Actualizar
+    <div class="view-toolbar">
+      <div class="view-toggle" role="group" aria-label="Modo de vista">
+        <button
+          type="button"
+          [class.active]="viewMode === 'cards'"
+          [attr.aria-pressed]="viewMode === 'cards'"
+          (click)="setViewMode('cards')">
+          <i class="fa-solid fa-grip"></i>
+          Tarjetas
         </button>
-
-        <button type="button" class="gh-btn gh-btn-light" (click)="exportCsv()">
-          <i class="fa-solid fa-file-export"></i>
-          Exportar
+        <button
+          type="button"
+          [class.active]="viewMode === 'table'"
+          [attr.aria-pressed]="viewMode === 'table'"
+          (click)="setViewMode('table')">
+          <i class="fa-solid fa-table-list"></i>
+          Tabla
         </button>
       </div>
     </div>
@@ -121,10 +146,11 @@
             <th>Huesped</th>
             <th>Reserva</th>
             <th>Metodo</th>
+            <th>Referencia</th>
             <th>Fecha</th>
             <th>Monto</th>
             <th>Estado</th>
-            <th>Acciones</th>
+            <th>Accion</th>
           </tr>
         </thead>
 
@@ -134,22 +160,24 @@
             class="clickable-row"
             (click)="openDetail(payment)">
             <td>
-              <p class="table-main">{{ getInvoiceNumber(payment) }}</p>
-              <small>{{ payment.reference ? ('Ref: ' + payment.reference) : 'Sin referencia' }}</small>
+              <span class="table-main">{{ getInvoiceNumber(payment) }}</span>
             </td>
-
             <td>
-              <p class="table-main">{{ getGuestLabel(payment) }}</p>
-              <small>{{ getGuestDocument(payment) }}</small>
+              <div class="table-guest">
+                <span class="table-avatar">{{ getPaymentInitials(payment) }}</span>
+                <div>
+                  <span class="table-main">{{ getGuestLabel(payment) }}</span>
+                  <small>{{ getGuestDocument(payment) }}</small>
+                </div>
+              </div>
             </td>
-
             <td>{{ getReservationCode(payment) }}</td>
             <td>{{ getMethodLabel(payment) }}</td>
+            <td>{{ payment.reference || 'Sin referencia' }}</td>
             <td>{{ getPaymentDateLabel(payment) }}</td>
             <td>
-              <p class="table-main">{{ getAmountLabel(payment) }}</p>
+              <span class="amount-cell">{{ getAmountLabel(payment) }}</span>
             </td>
-
             <td>
               <span
                 class="status-chip"
@@ -161,13 +189,14 @@
                 {{ payment.is_active ? 'Activo' : 'Inactivo' }}
               </span>
             </td>
-
             <td>
-              <div class="row-actions">
-                <button type="button" class="row-btn" title="Ver detalle" (click)="$event.stopPropagation(); openDetail(payment)">
-                  <i class="fa-regular fa-eye"></i>
-                </button>
-              </div>
+              <button
+                type="button"
+                class="row-btn table-action"
+                title="Ver detalle"
+                (click)="openDetail(payment); $event.stopPropagation()">
+                <i class="fa-regular fa-eye"></i>
+              </button>
             </td>
           </tr>
         </tbody>
@@ -175,10 +204,11 @@
     </div>
   </section>
 
-  <section class="payment-grid" *ngIf="!loading && !errorMessage && filteredPayments.length > 0 && viewMode === 'grid'">
+  <section class="payment-grid" *ngIf="!loading && !errorMessage && filteredPayments.length > 0 && viewMode === 'cards'">
     <article
       class="payment-card"
       *ngFor="let payment of filteredPayments; trackBy: trackByPayment"
+      [class.inactive-card]="!payment.is_active"
       (click)="openDetail(payment)">
       <header class="payment-head">
         <div>
@@ -199,24 +229,36 @@
 
       <div class="payment-body">
         <div class="guest-block">
-          <h3>{{ getGuestLabel(payment) }}</h3>
-          <p>{{ getGuestDocument(payment) }}</p>
+          <span class="guest-avatar">{{ getPaymentInitials(payment) }}</span>
+          <div>
+            <h3>{{ getGuestLabel(payment) }}</h3>
+            <p>{{ getGuestDocument(payment) }}</p>
+          </div>
         </div>
 
-        <div class="meta-row">
-          <span>{{ getReservationCode(payment) }}</span>
-          <span>{{ getMethodLabel(payment) }}</span>
-          <span *ngIf="payment.reference">Ref: {{ payment.reference }}</span>
+        <div class="meta-list">
+          <span>
+            <i class="fa-regular fa-calendar"></i>
+            {{ getReservationCode(payment) }}
+          </span>
+          <span>
+            <i class="fa-solid fa-credit-card"></i>
+            {{ getMethodLabel(payment) }}
+          </span>
+          <span>
+            <i class="fa-solid fa-hashtag"></i>
+            {{ payment.reference || 'Sin referencia' }}
+          </span>
         </div>
       </div>
 
       <footer class="payment-foot">
         <div>
-          <small>Monto</small>
+          <small>Total pago</small>
           <strong>{{ getAmountLabel(payment) }}</strong>
         </div>
 
-        <button type="button" class="row-btn" (click)="openDetail(payment); $event.stopPropagation()">
+        <button type="button" class="row-btn primary-action" (click)="openDetail(payment); $event.stopPropagation()">
           <i class="fa-regular fa-eye"></i>
           Ver detalle
         </button>
@@ -224,9 +266,14 @@
     </article>
   </section>
 
+  <p class="results-note" *ngIf="!loading && !errorMessage && filteredPayments.length > 0">
+    Mostrando {{ filteredPayments.length }} de {{ totalPayments }} pagos registrados
+  </p>
+
   <app-detail-payment
     *ngIf="selectedPayment"
     [payment]="selectedPayment"
+    [initialInvoice]="selectedPayment ? invoicesMap.get(selectedPayment.invoice) || null : null"
     (closed)="closeDetail()"
     (paymentUpdated)="onPaymentUpdated($event)">
   </app-detail-payment>

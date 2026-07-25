@@ -20,7 +20,7 @@ import { ReservationService } from '../../../services/reservation';
 import { RoomService } from '../../../services/room';
 import { AuthService } from '../../../services/auth/auth';
 
-type MetricTone = 'blue' | 'green' | 'violet' | 'amber' | 'gold';
+type MetricTone = 'blue' | 'green' | 'violet' | 'amber' | 'red';
 type RoomState = 'occupied' | 'free' | 'maintenance' | 'cleaning' | 'reserved';
 type AvatarTone = 'indigo' | 'pink' | 'orange' | 'green' | 'blue' | 'purple' | 'cyan';
 type AlertTone = 'warning' | 'info' | 'success';
@@ -177,7 +177,7 @@ export class Dashboard implements OnInit, OnDestroy {
   ) {}
 
   get dayResume(): string {
-    return `Hoy tienes ${this.checkInsToday.length} check-ins y ${this.checkOutsToday.length} check-outs programados`;
+    return `Hoy tienes ${this.checkInsToday.length} check-ins y ${this.checkOutsToday.length} check-outs programados.`;
   }
 
   get roomPanelSummary(): string {
@@ -316,7 +316,7 @@ export class Dashboard implements OnInit, OnDestroy {
 
     this.metrics = [
       {
-        label: 'Ocupacion',
+        label: 'Ocupación',
         value: `${Math.round(occupancyPct)}%`,
         note: `${occupied} / ${totalRooms} habitaciones`,
         trend: this.formatSignedPercent(this.computeDelta(occupied, occupancyBase || occupied)),
@@ -330,11 +330,11 @@ export class Dashboard implements OnInit, OnDestroy {
         note: `vs ayer ${this.formatCurrency(incomeYesterday)}`,
         trend: this.formatSignedPercent(this.computeDelta(incomeToday, incomeYesterday)),
         trendPositive: incomeToday >= incomeYesterday,
-        icon: 'fa-solid fa-dollar-sign',
+        icon: 'fa-regular fa-money-bill-1',
         tone: 'green',
       },
       {
-        label: 'Huespedes',
+        label: 'Huéspedes',
         value: this.formatInteger(inHouseGuests),
         note: 'En casa ahora',
         trend: `${this.checkInsToday.length} llegadas hoy`,
@@ -357,8 +357,8 @@ export class Dashboard implements OnInit, OnDestroy {
         note: 'Facturas emitidas por cobrar',
         trend: pendingIssuedInvoices.length > 0 ? `${pendingIssuedInvoices.length} facturas emitidas con saldo` : 'Sin facturas emitidas pendientes',
         trendPositive: pendingIssuedInvoices.length === 0,
-        icon: 'fa-solid fa-file-invoice-dollar',
-        tone: 'gold',
+        icon: 'fa-regular fa-rectangle-list',
+        tone: 'red',
       },
     ];
 
@@ -643,8 +643,8 @@ export class Dashboard implements OnInit, OnDestroy {
       const diff = checkInDate ? this.dayDifference(today, checkInDate) : 0;
       alerts.push({
         id: `res-${upcoming.id}`,
-        text: `Check-in proximo: ${upcoming.client_full_name || `Cliente #${upcoming.client}`}`,
-        age: diff === 0 ? 'Llega hoy' : 'Llega manana',
+        text: `Check-in próximo: ${upcoming.client_full_name || `Cliente #${upcoming.client}`}`,
+        age: diff === 0 ? 'Llega hoy' : 'Llega mañana',
         action: 'Ver reserva',
         tone: 'info',
         route: '/reservas',
@@ -654,7 +654,7 @@ export class Dashboard implements OnInit, OnDestroy {
     }
 
     if (!alerts.length) {
-      return [{ id: 'none', text: 'Sin alertas activas', age: 'Ahora', action: 'Ver panel', tone: 'success', route: '/dashboard', unread: false }];
+      return [{ id: 'none', text: 'Sistema operativo', age: 'El sistema está funcionando correctamente.', action: 'Ver panel', tone: 'success', route: '/dashboard', unread: false }];
     }
 
     return alerts.slice(0, 6);
@@ -768,13 +768,13 @@ export class Dashboard implements OnInit, OnDestroy {
     grid: string;
     gridSoft: string;
   } {
-    const occupied = this.readThemeColor('--gh-status-info-strong', '#3b82f6');
-    const free = this.readThemeColor('--gh-status-success-strong', '#69d7b5');
-    const revenue = this.readThemeColor('--gh-status-warn-strong', '#c6a749');
-    const tick = this.readThemeColor('--gh-text-soft', '#96a3b2');
-    const grid = this.readThemeColor('--gh-border-soft', '#e9eef3');
-    const gridSoft = this.readThemeColor('--gh-border', '#f3f6f9');
-    const revenueFill = this.readThemeColor('--gh-status-warn-bg', 'rgba(198, 167, 73, 0.2)');
+    const occupied = '#0b65d8';
+    const free = '#20c96b';
+    const revenue = '#0b65d8';
+    const tick = '#586576';
+    const grid = '#dde6f2';
+    const gridSoft = '#eef3fa';
+    const revenueFill = 'rgba(11, 101, 216, 0.08)';
 
     return { occupied, free, revenue, revenueFill, tick, grid, gridSoft };
   }
@@ -974,7 +974,7 @@ export class Dashboard implements OnInit, OnDestroy {
     }).format(now);
 
     this.todayLabel = date.charAt(0).toUpperCase() + date.slice(1);
-    this.currentTimeLabel = time.replace(/\u00a0/g, ' ').replace('a. m.', 'a.m.').replace('p. m.', 'p.m.');
+    this.currentTimeLabel = time.replace(/\u00a0/g, ' ');
   }
 
   private loadCurrentUserDisplayName(): void {

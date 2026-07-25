@@ -12,7 +12,8 @@ import { ReservationI } from '../../reservations/reservation-model';
 import { DetailPayment } from '../detail-payment/detail-payment';
 
 type PaymentActivityFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
-type PaymentViewMode = 'table' | 'grid';
+type PaymentDateFilter = 'ALL' | 'TODAY' | 'LAST_30';
+type PaymentViewMode = 'cards' | 'table';
 
 @Component({
   selector: 'app-list-payments',
@@ -35,7 +36,8 @@ export class ListPayments implements OnInit {
   search = '';
   methodFilter = 'ALL';
   activityFilter: PaymentActivityFilter = 'ACTIVE';
-  viewMode: PaymentViewMode = 'table';
+  dateFilter: PaymentDateFilter = 'ALL';
+  viewMode: PaymentViewMode = 'cards';
 
   selectedPayment: PaymentI | null = null;
 
@@ -43,6 +45,12 @@ export class ListPayments implements OnInit {
     { value: 'ACTIVE', label: 'Activos' },
     { value: 'INACTIVE', label: 'Inactivos' },
     { value: 'ALL', label: 'Todos' }
+  ];
+
+  readonly dateOptions: Array<{ value: PaymentDateFilter; label: string }> = [
+    { value: 'LAST_30', label: 'Ultimos 30 dias' },
+    { value: 'TODAY', label: 'Hoy' },
+    { value: 'ALL', label: 'Todas las fechas' }
   ];
 
   constructor(
@@ -63,6 +71,10 @@ export class ListPayments implements OnInit {
     return this.payments.filter((payment) => !!payment.is_active).length;
   }
 
+  get inactivePaymentsCount(): number {
+    return this.payments.filter((payment) => !payment.is_active).length;
+  }
+
   get collectedAmountLabel(): string {
     const total = this.payments
       .filter((payment) => !!payment.is_active)
@@ -76,6 +88,15 @@ export class ListPayments implements OnInit {
       .filter((payment) => !!payment.is_active)
       .reduce((sum, payment) => sum + this.toNumber(payment.amount), 0);
     return this.formatCurrency(total / this.activePaymentsCount);
+  }
+
+  get methodCount(): number {
+    return new Set(
+      this.payments
+        .filter((payment) => !!payment.is_active)
+        .map((payment) => this.resolvePaymentMethodCode(payment))
+        .filter((code) => code && code !== 'SINMETODO')
+    ).size;
   }
 
   get methodOptions(): Array<{ value: string; label: string }> {
@@ -207,6 +228,7 @@ export class ListPayments implements OnInit {
 
       const methodCode = this.resolvePaymentMethodCode(payment);
       const methodMatch = this.methodFilter === 'ALL' || methodCode === this.methodFilter;
+      const dateMatch = this.matchesDateFilter(payment);
 
       const invoice = this.invoicesMap.get(payment.invoice) || null;
       const reservation = invoice ? this.reservationsMap.get(invoice.reservation) || null : null;
@@ -223,7 +245,7 @@ export class ListPayments implements OnInit {
         .toLowerCase();
 
       const searchMatch = !query || searchPool.includes(query);
-      return activityMatch && methodMatch && searchMatch;
+      return activityMatch && methodMatch && dateMatch && searchMatch;
     });
   }
 
@@ -330,8 +352,39 @@ export class ListPayments implements OnInit {
     return this.formatDateTime(payment.payment_date || payment.created_at);
   }
 
+  getPaymentInitials(payment: PaymentI): string {
+    const label = this.getGuestLabel(payment).trim();
+    if (!label) return 'PG';
+
+    return label
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join('');
+  }
+
   trackByPayment(_: number, payment: PaymentI): number {
     return payment.id;
+  }
+
+  private matchesDateFilter(payment: PaymentI): boolean {
+    if (this.dateFilter === 'ALL') return true;
+
+    const paymentDate = this.parseDate(payment.payment_date || payment.created_at);
+    if (!paymentDate) return false;
+
+    const today = new Date();
+    const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const paymentDay = new Date(paymentDate.getFullYear(), paymentDate.getMonth(), paymentDate.getDate());
+
+    if (this.dateFilter === 'TODAY') {
+      return paymentDay.getTime() === dayStart.getTime();
+    }
+
+    const last30Start = new Date(dayStart);
+    last30Start.setDate(last30Start.getDate() - 29);
+    return paymentDay >= last30Start && paymentDay <= dayStart;
   }
 
   private resolvePaymentMethodCode(payment: PaymentI): string {
@@ -369,6 +422,12 @@ export class ListPayments implements OnInit {
       hour: '2-digit',
       minute: '2-digit'
     });
+  }
+
+  private parseDate(value: string | null | undefined): Date | null {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
   }
 
   private normalizeCode(value: unknown): string {

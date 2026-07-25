@@ -156,6 +156,10 @@ export class ListMaintenanceOrders implements OnInit {
     return this.maintenanceOrders.filter((order) => this.normalizeCode(order.status) === 'ENPROCESO').length;
   }
 
+  get delayedOrders(): number {
+    return this.maintenanceOrders.filter((order) => this.isDelayed(order)).length;
+  }
+
   get completedOrders(): number {
     return this.maintenanceOrders.filter((order) => this.normalizeCode(order.status) === 'COMPLETADA').length;
   }

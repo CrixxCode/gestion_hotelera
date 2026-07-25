@@ -8,6 +8,8 @@ import { AuthService } from '../../../services/auth/auth';
 import { errorActionAlert, successActionAlert } from '../../../services/action-alerts';
 
 type RefundActivityFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
+type RefundDateFilter = 'ALL' | 'TODAY' | 'LAST_30';
+type RefundViewMode = 'cards' | 'table';
 
 @Component({
   selector: 'app-list-payment-refunds',
@@ -29,11 +31,19 @@ export class ListPaymentRefunds implements OnInit {
   search = '';
   statusFilter = 'ALL';
   activityFilter: RefundActivityFilter = 'ACTIVE';
+  dateFilter: RefundDateFilter = 'ALL';
+  viewMode: RefundViewMode = 'cards';
 
   readonly activityOptions: Array<{ value: RefundActivityFilter; label: string }> = [
     { value: 'ACTIVE', label: 'Activos' },
     { value: 'INACTIVE', label: 'Inactivos' },
     { value: 'ALL', label: 'Todos' }
+  ];
+
+  readonly dateOptions: Array<{ value: RefundDateFilter; label: string }> = [
+    { value: 'LAST_30', label: 'Ultimos 30 dias' },
+    { value: 'TODAY', label: 'Hoy' },
+    { value: 'ALL', label: 'Todas las fechas' }
   ];
 
   constructor(
@@ -56,6 +66,10 @@ export class ListPaymentRefunds implements OnInit {
 
   get processedRefundsCount(): number {
     return this.refunds.filter((refund) => this.getStatusCode(refund) === 'PROCESADO').length;
+  }
+
+  get pendingRefundsCount(): number {
+    return this.refunds.filter((refund) => this.getStatusCode(refund) === 'PENDIENTE').length;
   }
 
   get processedRefundAmountLabel(): string {
@@ -112,6 +126,47 @@ export class ListPaymentRefunds implements OnInit {
     this.loadRefundsData();
   }
 
+  exportCsv(): void {
+    if (!this.filteredRefunds.length) return;
+
+    const headers = [
+      'factura',
+      'pago',
+      'metodo',
+      'fecha_reembolso',
+      'monto',
+      'estado',
+      'actividad',
+      'motivo',
+      'referencia'
+    ];
+
+    const rows = this.filteredRefunds.map((refund) => {
+      const row = [
+        this.getInvoiceLabel(refund),
+        `Pago #${refund.payment}`,
+        this.getMethodLabel(refund),
+        this.getDateLabel(refund),
+        this.toNumber(refund.amount),
+        this.getStatusLabel(refund),
+        refund.is_active ? 'Activo' : 'Inactivo',
+        refund.reason || '',
+        refund.reference || ''
+      ];
+
+      return row.map((cell) => this.escapeCsvCell(cell)).join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `reembolsos-${this.formatFileDate(new Date())}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   canApprove(refund: PaymentRefundI): boolean {
     if (!this.isAdmin) return false;
     if (!refund.is_active) return false;
@@ -151,6 +206,7 @@ export class ListPaymentRefunds implements OnInit {
 
       const statusCode = this.getStatusCode(refund);
       const statusMatch = this.statusFilter === 'ALL' || statusCode === this.statusFilter;
+      const dateMatch = this.matchesDateFilter(refund);
 
       const searchPool = [
         this.getInvoiceLabel(refund),
@@ -165,8 +221,12 @@ export class ListPaymentRefunds implements OnInit {
         .toLowerCase();
 
       const searchMatch = !query || searchPool.includes(query);
-      return activityMatch && statusMatch && searchMatch;
+      return activityMatch && statusMatch && dateMatch && searchMatch;
     });
+  }
+
+  setViewMode(mode: RefundViewMode): void {
+    this.viewMode = mode;
   }
 
   getInvoiceLabel(refund: PaymentRefundI): string {
@@ -249,8 +309,37 @@ export class ListPaymentRefunds implements OnInit {
     return this.formatCurrency(this.toNumber(refund.amount));
   }
 
+  getRefundInitials(refund: PaymentRefundI): string {
+    const source = this.getInvoiceLabel(refund).replace(/^FAC-?/i, '').trim() || `P${refund.payment}`;
+    return source
+      .split(/[\s-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join('') || 'RB';
+  }
+
   trackByRefund(_: number, refund: PaymentRefundI): number {
     return refund.id;
+  }
+
+  private matchesDateFilter(refund: PaymentRefundI): boolean {
+    if (this.dateFilter === 'ALL') return true;
+
+    const refundDate = this.parseDate(refund.refund_date || refund.created_at);
+    if (!refundDate) return false;
+
+    const today = new Date();
+    const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const refundDay = new Date(refundDate.getFullYear(), refundDate.getMonth(), refundDate.getDate());
+
+    if (this.dateFilter === 'TODAY') {
+      return refundDay.getTime() === dayStart.getTime();
+    }
+
+    const last30Start = new Date(dayStart);
+    last30Start.setDate(last30Start.getDate() - 29);
+    return refundDay >= last30Start && refundDay <= dayStart;
   }
 
   private loadUserContext(): void {
@@ -299,6 +388,25 @@ export class ListPaymentRefunds implements OnInit {
       hour: '2-digit',
       minute: '2-digit'
     });
+  }
+
+  private parseDate(value: string | null | undefined): Date | null {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  private formatFileDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+    return `${year}${month}${day}`;
+  }
+
+  private escapeCsvCell(value: unknown): string {
+    const normalized = String(value ?? '');
+    const escaped = normalized.replace(/"/g, '""');
+    return `"${escaped}"`;
   }
 
   private extractErrorMessage(error: unknown, fallback: string): string {

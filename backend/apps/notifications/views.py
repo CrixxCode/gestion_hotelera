@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.permissions import HasResourcePermission
-from accounts.tenancy import is_effective_global_admin
+from accounts.tenancy import is_effective_global_admin, scope_queryset_to_hotel
 from apps.notifications.models import Notification
 from apps.notifications.permissions import NotificationAccessPolicy
 from apps.notifications.serializers import NotificationSerializer
@@ -56,7 +56,11 @@ class NotificationViewSet(
             return queryset.none()
 
         if is_effective_global_admin(user):
-            return queryset
+            return scope_queryset_to_hotel(
+                queryset,
+                request=self.request,
+                tenant_filter="hotel_settings",
+            )
 
         if self._is_hotel_scope_requested() and self._allow_hotel_scope():
             tenant_id = getattr(user, "hotel_settings_id", None)

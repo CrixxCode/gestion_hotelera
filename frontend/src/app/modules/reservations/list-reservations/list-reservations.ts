@@ -410,6 +410,10 @@ export class ListReservations implements OnInit {
     this.showCreateOverlay = true;
   }
 
+  openReports(): void {
+    void this.router.navigate(['/reportes']);
+  }
+
   closeCreateOverlay(): void {
     this.showCreateOverlay = false;
     this.createPrefillRoomId = null;

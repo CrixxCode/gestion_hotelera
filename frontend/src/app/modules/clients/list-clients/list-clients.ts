@@ -35,7 +35,7 @@ export class ListClients implements OnInit {
   clientToEdit: ClientI | null = null;
 
   currentPage = 1;
-  perPage = 6;
+  perPage = 10;
   totalPages = 0;
 
   loading = false;
@@ -72,6 +72,14 @@ export class ListClients implements OnInit {
       icon: 'fa-solid fa-user-plus',
       color: 'var(--gh-status-violet-text)',
       bg: 'var(--gh-status-violet-bg)'
+    },
+    {
+      label: 'Clientes frecuentes',
+      value: '0',
+      sub: 'Con visitas recurrentes',
+      icon: 'fa-solid fa-repeat',
+      color: 'var(--gh-status-orange-text)',
+      bg: 'var(--gh-status-orange-bg)'
     }
   ];
 
@@ -86,6 +94,15 @@ export class ListClients implements OnInit {
 
   get deletedClientsCount(): number {
     return this.deletedClients.length;
+  }
+
+  get visiblePages(): number[] {
+    if (this.totalPages <= 5) {
+      return Array.from({ length: this.totalPages }, (_, index) => index + 1);
+    }
+
+    const start = Math.min(Math.max(this.currentPage - 2, 1), this.totalPages - 4);
+    return Array.from({ length: 5 }, (_, index) => start + index);
   }
 
   loadClients(): void {
@@ -118,6 +135,7 @@ export class ListClients implements OnInit {
     const totalClients = this.clients.length;
     const vipClients = this.clients.filter((c) => this.normalizeType(c.client_type) === 'VIP').length;
     const currentGuests = this.clients.filter((c) => this.normalizeStatus(c.status) === 'HUESPED_ACTUAL').length;
+    const frequentClients = this.clients.filter((c) => this.normalizeType(c.client_type) === 'FRECUENTE').length;
     const now = new Date();
     const newClients = this.clients.filter((c) => {
       if (!c.created_at) return false;
@@ -130,6 +148,7 @@ export class ListClients implements OnInit {
     this.statCards[1].value = vipClients.toString();
     this.statCards[2].value = currentGuests.toString();
     this.statCards[3].value = newClients.toString();
+    this.statCards[4].value = frequentClients.toString();
   }
 
   applyFilters(): void {

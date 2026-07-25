@@ -4,9 +4,10 @@ import { routes } from './app.routes';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { providePrimeNG } from 'primeng/config';
 import Lara from '@primeuix/themes/lara';
-import { provideHttpClient, withXsrfConfiguration } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, withXsrfConfiguration } from '@angular/common/http';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { AppTitleStrategy } from './app-title.strategy';
+import { hotelContextInterceptor } from './interceptors/hotel-context.interceptor';
 
 // ✅ PrimeNG modules para notificaciones y confirmaciones
 import { ToastModule } from 'primeng/toast';
@@ -24,6 +25,7 @@ export const appConfig: ApplicationConfig = {
     provideAnimationsAsync(), // 👈 reemplaza a BrowserAnimationsModule
 
     provideHttpClient(
+      withInterceptors([hotelContextInterceptor]),
       withXsrfConfiguration({
         cookieName: 'csrftoken',
         headerName: 'X-CSRFToken'

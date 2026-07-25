@@ -103,6 +103,10 @@ export class ListRates implements OnInit {
     return this.rates.filter((rate) => this.getValidityState(rate) === 'ACTIVE_NOW').length;
   }
 
+  get upcomingRates(): number {
+    return this.rates.filter((rate) => this.getValidityState(rate) === 'UPCOMING').length;
+  }
+
   get coveredRoomTypes(): number {
     return new Set(this.rates.map((rate) => Number(rate.room_type)).filter((id) => id > 0)).size;
   }

@@ -30,13 +30,22 @@
       <div class="stat-note">habilitados para movimientos</div>
     </article>
 
-    <article class="stat-card">
+    <article class="stat-card warning">
       <div class="stat-head">
         <span>Bajo minimo</span>
         <span class="stat-icon gold"><i class="fa-solid fa-triangle-exclamation"></i></span>
       </div>
       <div class="stat-value">{{ lowStockItems }}</div>
       <div class="stat-note">requieren reposicion</div>
+    </article>
+
+    <article class="stat-card danger">
+      <div class="stat-head">
+        <span>Sin stock</span>
+        <span class="stat-icon red"><i class="fa-regular fa-circle-xmark"></i></span>
+      </div>
+      <div class="stat-value">{{ outOfStockItems }}</div>
+      <div class="stat-note">agotados en inventario</div>
     </article>
 
     <article class="stat-card">

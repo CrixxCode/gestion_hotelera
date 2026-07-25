@@ -6,7 +6,7 @@
     </div>
 
     <div class="header-actions">
-      <button type="button" class="btn btn-dark" (click)="exportCsv()">
+      <button type="button" class="btn btn-dark" (click)="exportCsv()" [disabled]="!hotelSettingsId || !hasResults">
         <i class="fa-solid fa-file-export"></i>
         Exportar CSV
       </button>
@@ -62,27 +62,28 @@
             type="text"
             [(ngModel)]="search"
             (input)="applyFilters()"
+            [disabled]="!hotelSettingsId"
             placeholder="Buscar por factura, huesped, metodo o referencia..." />
         </div>
       </label>
 
       <label class="gh-filter-field">
         <span>Periodo</span>
-        <select class="gh-filter-select" [(ngModel)]="periodFilter" (change)="applyFilters()">
+        <select class="gh-filter-select" [(ngModel)]="periodFilter" (change)="applyFilters()" [disabled]="!hotelSettingsId">
           <option *ngFor="let option of periodOptions" [ngValue]="option.value">{{ option.label }}</option>
         </select>
       </label>
 
       <label class="gh-filter-field">
         <span>Estado</span>
-        <select class="gh-filter-select" [(ngModel)]="activityFilter" (change)="applyFilters()">
+        <select class="gh-filter-select" [(ngModel)]="activityFilter" (change)="applyFilters()" [disabled]="!hotelSettingsId">
           <option *ngFor="let option of activityOptions" [ngValue]="option.value">{{ option.label }}</option>
         </select>
       </label>
 
       <label class="gh-filter-field">
         <span>Metodo</span>
-        <select class="gh-filter-select" [(ngModel)]="methodFilter" (change)="applyFilters()">
+        <select class="gh-filter-select" [(ngModel)]="methodFilter" (change)="applyFilters()" [disabled]="!hotelSettingsId">
           <option *ngFor="let option of methodOptions" [ngValue]="option.value">{{ option.label }}</option>
         </select>
       </label>
@@ -107,7 +108,7 @@
       </div>
 
       <div class="gh-action-group">
-        <button type="button" class="gh-btn gh-btn-light" (click)="refreshIncomeData()" [disabled]="loading">
+        <button type="button" class="gh-btn gh-btn-light" (click)="refreshIncomeData()" [disabled]="loading || !hotelSettingsId">
           <i class="fa-solid fa-rotate-right"></i>
           Actualizar
         </button>

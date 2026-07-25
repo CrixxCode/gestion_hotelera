@@ -1,4 +1,5 @@
 from django.core.exceptions import ImproperlyConfigured
+from rest_framework.exceptions import ValidationError
 
 
 def is_effective_global_admin(user) -> bool:
@@ -8,6 +9,35 @@ def is_effective_global_admin(user) -> bool:
         and user.is_superuser
         and getattr(user, "hotel_settings_id", None) is None
     )
+
+
+def get_requested_hotel_settings_id(request) -> int | None:
+    raw_value = str(getattr(request, "query_params", {}).get("hotel_settings") or "").strip()
+    if not raw_value:
+        return None
+    if not raw_value.isdigit() or int(raw_value) <= 0:
+        raise ValidationError(
+            {"hotel_settings": "hotel_settings must be a valid positive integer."}
+        )
+    return int(raw_value)
+
+
+def scope_queryset_to_hotel(queryset, *, request, tenant_filter: str):
+    user = getattr(request, "user", None)
+    if not user or not user.is_authenticated:
+        return queryset.none()
+
+    if is_effective_global_admin(user):
+        selected_hotel_id = get_requested_hotel_settings_id(request)
+        if selected_hotel_id is None:
+            return queryset
+        return queryset.filter(**{f"{tenant_filter}_id": selected_hotel_id})
+
+    tenant_id = getattr(user, "hotel_settings_id", None)
+    if tenant_id is None:
+        return queryset.none()
+
+    return queryset.filter(**{f"{tenant_filter}_id": tenant_id})
 
 
 class TenantScopeMixin:
@@ -40,19 +70,11 @@ class TenantScopeMixin:
 
     def get_queryset(self):
         qs = self.get_base_queryset()
-        user = getattr(self.request, "user", None)
-
-        if not user or not user.is_authenticated:
-            return qs.none()
-
-        if self.is_global_admin():
-            return qs
-
-        tenant_id = self.get_tenant_id()
-        if tenant_id is None:
-            return qs.none()
-
-        return qs.filter(**{f"{self.get_tenant_filter()}_id": tenant_id})
+        return scope_queryset_to_hotel(
+            qs,
+            request=self.request,
+            tenant_filter=self.get_tenant_filter(),
+        )
     
 from rest_framework import serializers
 

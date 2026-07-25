@@ -1,9 +1,13 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, HostListener, OnInit, Output } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { catchError, of } from 'rxjs';
 import { AuthService } from '../../../services/auth/auth';
 import { NotificationI, NotificationService } from '../../../services/notification';
+import { HotelSettingsService } from '../../../services/hotel-settings';
+import { HotelContextService } from '../../../services/hotel-context';
+import { HotelSettings } from '../../pages/hotel-settings/hotel-setting-model';
 import { LogoutScreen } from '../../pages/logout-screen/logout-screen';
 
 type NotificationTone = 'warning' | 'info' | 'success';
@@ -22,7 +26,7 @@ interface HeaderNotification {
 @Component({
   selector: 'app-header',
   standalone: true,
-  imports: [CommonModule, LogoutScreen],
+  imports: [CommonModule, FormsModule, LogoutScreen],
   templateUrl: './header.html',
   styleUrl: './header.css',
 })
@@ -40,6 +44,10 @@ export class Header implements OnInit {
   userRole = '';
   userAvatar = 'avatar/default-avatar.png';
   unreadCountSnapshot = 0;
+  hotelOptions: HotelSettings[] = [];
+  selectedHotelSettingsId: number | null = null;
+  hotelSelectorLoading = false;
+  isGlobalAdmin = false;
 
   private readonly defaultAvatar = 'avatar/default-avatar.png';
   private readonly logoutAnimationDuration = 1000;
@@ -52,7 +60,9 @@ export class Header implements OnInit {
   constructor(
     private authService: AuthService,
     private router: Router,
-    private notificationsService: NotificationService
+    private notificationsService: NotificationService,
+    private hotelSettingsService: HotelSettingsService,
+    private hotelContextService: HotelContextService
   ) {}
 
   get unreadCount(): number {
@@ -85,6 +95,7 @@ export class Header implements OnInit {
         this.userRole = this.resolveUserRole(res);
         const resolvedAvatar = this.authService.buildMediaUrl(res.avatar);
         this.userAvatar = resolvedAvatar || this.defaultAvatar;
+        this.initializeHotelSelector(res);
         this.loadUnreadCount();
       },
       error: () => {
@@ -101,6 +112,14 @@ export class Header implements OnInit {
     if (this.menuOpen) {
       this.notificationsOpen = false;
     }
+  }
+
+  onHotelSelectionChange(): void {
+    const selectedId = Number(this.selectedHotelSettingsId || 0);
+    if (!Number.isFinite(selectedId) || selectedId <= 0) return;
+
+    this.hotelContextService.selectHotel(selectedId);
+    window.location.reload();
   }
 
   toggleNotifications(): void {
@@ -188,6 +207,7 @@ export class Header implements OnInit {
     this.menuOpen = false;
     this.notificationsOpen = false;
     this.showLogout = true;
+    this.hotelContextService.clearSelection();
     this.authService.logout().subscribe({
       next: () => this.finishLogoutTransition(),
       error: () => this.finishLogoutTransition(),
@@ -200,6 +220,56 @@ export class Header implements OnInit {
         this.showLogout = false;
       });
     }, this.logoutAnimationDuration);
+  }
+
+  private initializeHotelSelector(user: any): void {
+    const assignedHotelId = Number(user?.hotel_settings?.id || 0);
+    if (assignedHotelId > 0) {
+      const previousHotelId = this.hotelContextService.selectedHotelSettingsId;
+      this.isGlobalAdmin = false;
+      this.selectedHotelSettingsId = assignedHotelId;
+      this.hotelOptions = [user.hotel_settings as HotelSettings];
+      this.hotelContextService.selectHotel(assignedHotelId);
+      if (previousHotelId && previousHotelId !== assignedHotelId) {
+        window.location.reload();
+      }
+      return;
+    }
+
+    this.isGlobalAdmin = Boolean(user?.is_staff);
+    if (!this.isGlobalAdmin) {
+      this.hotelOptions = [];
+      this.selectedHotelSettingsId = null;
+      this.hotelContextService.clearSelection();
+      return;
+    }
+
+    this.hotelSelectorLoading = true;
+    this.hotelSettingsService
+      .listSettings()
+      .pipe(catchError(() => of([] as HotelSettings[])))
+      .subscribe((hotels) => {
+        this.hotelOptions = [...hotels]
+          .filter((hotel) => Number(hotel.id || 0) > 0)
+          .sort((left, right) =>
+            String(left.hotel_name || '').localeCompare(String(right.hotel_name || ''), 'es-CO')
+          );
+
+        const storedId = this.hotelContextService.selectedHotelSettingsId;
+        const storedSelectionIsValid = this.hotelOptions.some(
+          (hotel) => Number(hotel.id) === storedId
+        );
+        const fallbackId = Number(this.hotelOptions[0]?.id || 0) || null;
+        const selectedId = storedSelectionIsValid ? storedId : fallbackId;
+
+        this.selectedHotelSettingsId = selectedId;
+        this.hotelSelectorLoading = false;
+
+        if (selectedId && selectedId !== storedId) {
+          this.hotelContextService.selectHotel(selectedId);
+          window.location.reload();
+        }
+      });
   }
 
   private applyStoredThemeCustomization(): void {

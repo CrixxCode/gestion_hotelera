@@ -18,6 +18,7 @@ import { InvoiceI, PaymentI, PaymentRefundI } from '../../billing/billing-model'
 })
 export class DetailPayment implements OnInit, OnChanges {
   @Input() payment: PaymentI | null = null;
+  @Input() initialInvoice: InvoiceI | null = null;
 
   @Output() closed = new EventEmitter<void>();
   @Output() paymentUpdated = new EventEmitter<PaymentI>();
@@ -57,6 +58,11 @@ export class DetailPayment implements OnInit, OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['payment']) {
       this.loadDetail();
+      return;
+    }
+
+    if (changes['initialInvoice'] && !this.invoice) {
+      this.invoice = this.initialInvoice;
     }
   }
 
@@ -326,16 +332,29 @@ export class DetailPayment implements OnInit, OnChanges {
       return;
     }
 
+    const paymentSnapshot =
+      this.activePayment?.id === this.payment.id ? this.activePayment : this.payment;
+
+    this.activePayment = paymentSnapshot;
+    this.invoice = this.initialInvoice;
+    this.invoicePayments = [];
+    this.invoiceRefunds = [];
+    this.paymentRefunds = [];
+
+    if (!this.submittingRefund) {
+      this.resetRefundForm();
+    }
+
     this.loading = true;
     this.errorMessage = '';
     this.infoMessage = '';
 
-    const paymentId = this.payment.id;
-    const invoiceId = this.payment.invoice;
+    const paymentId = paymentSnapshot.id;
+    const invoiceId = paymentSnapshot.invoice;
 
     forkJoin({
-      payment: this.billingService.getPaymentById(paymentId).pipe(catchError(() => of(this.payment as PaymentI))),
-      invoice: this.billingService.getInvoiceById(invoiceId).pipe(catchError(() => of(null))),
+      payment: this.billingService.getPaymentById(paymentId).pipe(catchError(() => of(paymentSnapshot))),
+      invoice: this.billingService.getInvoiceById(invoiceId).pipe(catchError(() => of(this.initialInvoice))),
       invoicePayments: this.billingService
         .listPayments({ invoice: invoiceId, ordering: '-payment_date,-id', include_inactive: true })
         .pipe(catchError(() => of([] as PaymentI[]))),
@@ -346,7 +365,7 @@ export class DetailPayment implements OnInit, OnChanges {
       next: ({ payment, invoice, invoicePayments, invoiceRefunds }) => {
         this.loading = false;
         this.activePayment = payment;
-        this.invoice = invoice;
+        this.invoice = invoice || this.initialInvoice;
         this.invoicePayments = invoicePayments
           .filter((row) => Number(row.invoice) === invoiceId)
           .sort((a, b) => b.id - a.id);

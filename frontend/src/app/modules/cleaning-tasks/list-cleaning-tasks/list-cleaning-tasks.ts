@@ -156,6 +156,10 @@ export class ListCleaningTasks implements OnInit {
     return this.cleaningTasks.filter((task) => this.normalizeCode(task.status) === 'ENPROCESO').length;
   }
 
+  get overdueTasks(): number {
+    return this.cleaningTasks.filter((task) => this.isOverdue(task)).length;
+  }
+
   get completedTasks(): number {
     return this.cleaningTasks.filter((task) => this.normalizeCode(task.status) === 'COMPLETADA').length;
   }

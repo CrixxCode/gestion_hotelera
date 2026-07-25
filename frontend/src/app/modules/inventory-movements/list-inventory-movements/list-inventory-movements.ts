@@ -176,6 +176,13 @@ export class ListInventoryMovements implements OnInit {
     return this.movements.filter((movement) => this.resolveDirection(movement) === 'OUT').length;
   }
 
+  get adjustmentMovements(): number {
+    return this.movements.filter((movement) => {
+      const direction = this.resolveDirection(movement);
+      return direction === 'ADJUSTMENT' || direction === 'TRANSFER';
+    }).length;
+  }
+
   get movedUnits(): number {
     return this.movements.reduce((sum, movement) => sum + this.toPositiveInt(movement.quantity), 0);
   }

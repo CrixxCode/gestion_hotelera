@@ -102,6 +102,10 @@ export class ListRooms implements OnInit {
     return this.rooms.filter((room) => room.status === 'OCUPADA').length;
   }
 
+  get reservedCount(): number {
+    return this.rooms.filter((room) => room.status === 'RESERVADA').length;
+  }
+
   get maintenanceCount(): number {
     return this.rooms.filter((room) => room.status === 'MANTENIMIENTO').length;
   }
@@ -133,7 +137,7 @@ export class ListRooms implements OnInit {
       },
       error: () => {
         this.loading = false;
-        this.errorMessage = 'No se pudo cargar el mÃ³dulo de habitaciones.';
+        this.errorMessage = 'No se pudo cargar el modulo de habitaciones.';
       }
     });
   }
@@ -291,7 +295,7 @@ export class ListRooms implements OnInit {
     const bedCount = roomType.bed_count || 0;
     const bedType = roomType.bed_type || 'cama';
     const capacity = roomType.capacity || 1;
-    return `${bedCount} ${bedType} · ${capacity} huesped(es)`;
+    return `${bedCount} ${bedType} - ${capacity} huesped(es)`;
   }
 
   getCardTypeSummary(room: RoomI): string {
@@ -300,7 +304,7 @@ export class ListRooms implements OnInit {
     if (!roomType?.bed_count) return roomTypeName;
 
     const bedWord = roomType.bed_count === 1 ? 'Cama' : 'Camas';
-    return `${roomTypeName} · ${roomType.bed_count} ${bedWord}`;
+    return `${roomTypeName} - ${roomType.bed_count} ${bedWord}`;
   }
 
   getPriceLabel(room: RoomI): string {

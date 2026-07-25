@@ -1,77 +1,120 @@
 :host {
   display: block;
+  --credit-form-navy: #111827;
+  --credit-form-blue: #0b5ed7;
+  --credit-form-soft: #f8fbff;
+  --credit-form-border: #d8e1f0;
+  --credit-form-muted: #64748b;
+  --credit-form-danger: #dc2626;
+  --credit-form-success: #16a34a;
 }
 
 .credit-note-form-card {
-  border: 1px solid var(--gh-border-strong);
-  border-radius: 14px;
-  background: var(--gh-page-bg-alt);
-  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 10px;
+  background: #ffffff;
 }
 
 .form-head {
-  margin-bottom: 10px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  color: #f8fafc;
+  background: var(--credit-form-navy);
 }
 
 .form-head h3 {
   margin: 0;
-  color: var(--gh-text-strong);
-  font-size: 20px;
-  line-height: 1.1;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.25;
 }
 
 .form-head p {
-  margin: 4px 0 0;
-  color: var(--gh-text-muted);
-  font-size: 12px;
+  margin: 6px 0 0;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.form-close {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  color: #bfdbfe;
+  background: transparent;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.form-close:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.form-close:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
 }
 
 .credit-note-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
+  padding: 22px 24px 0;
 }
 
 .row-main {
   display: grid;
-  grid-template-columns: 190px minmax(0, 1fr) 160px;
-  gap: 10px;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(0, 1.4fr) minmax(140px, 0.8fr);
+  gap: 12px;
 }
 
 label {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-width: 0;
+  gap: 7px;
 }
 
 label span {
-  color: var(--gh-text-muted);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  color: #334155;
+  font-size: 0.68rem;
   font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 
 select,
 input,
 textarea {
-  border: 1px solid var(--gh-border-strong);
-  border-radius: 11px;
-  color: var(--gh-text);
-  background: var(--gh-surface);
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #b8c2d4;
+  border-radius: 7px;
+  color: #0f172a;
+  background: #ffffff;
   outline: 0;
-  font-size: 14px;
   font-family: inherit;
+  font-size: 0.84rem;
+  line-height: 1.35;
 }
 
 select,
 input {
-  height: 40px;
+  height: 38px;
   padding: 0 10px;
 }
 
 textarea {
+  min-height: 82px;
   padding: 10px;
   resize: vertical;
 }
@@ -79,74 +122,116 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: var(--credit-form-blue);
+  box-shadow: 0 0 0 3px rgba(11, 94, 215, 0.14);
+}
+
+.input-error {
+  border-color: #fca5a5;
+  background: #fff7f7;
+}
+
+.field-error {
+  color: var(--credit-form-danger);
+  font-size: 0.72rem;
+  line-height: 1.35;
 }
 
 .form-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 9px;
+  padding-top: 4px;
 }
 
 .btn {
-  min-height: 40px;
-  border-radius: 11px;
-  border: 1px solid transparent;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
+  min-height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    background-color 0.16s ease;
 }
 
-.btn-dark {
-  background: var(--gh-brand);
-  color: var(--gh-on-brand);
-}
-
-.btn-light {
-  background: var(--gh-surface);
-  border-color: var(--gh-border-strong);
-  color: var(--gh-text);
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 .btn:disabled {
-  opacity: 0.6;
+  opacity: 0.58;
   cursor: not-allowed;
 }
 
+.btn-dark {
+  color: #ffffff;
+  background: var(--credit-form-navy);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
+}
+
+.btn-light {
+  color: #334155;
+  background: #ffffff;
+  border-color: #cbd5e1;
+}
+
 .feedback {
-  margin: 10px 0 0;
-  border-radius: 10px;
-  padding: 8px 10px;
-  font-size: 12px;
+  margin: 16px 24px 22px;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 .feedback.error {
-  background: var(--gh-status-danger-bg);
-  color: var(--gh-status-danger-text);
+  color: #991b1b;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
 }
 
 .feedback.hint {
-  background: var(--gh-status-success-bg);
-  color: var(--gh-status-success-text);
+  color: #075985;
+  background: #eef4ff;
+  border: 1px solid var(--credit-form-border);
 }
 
-@media (max-width: 920px) {
+@media (max-width: 760px) {
+  .credit-note-form-card {
+    min-height: 100vh;
+    border-radius: 0;
+  }
+
+  .form-head,
+  .credit-note-form {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
   .row-main {
     grid-template-columns: 1fr;
   }
 
   .form-actions {
-    justify-content: stretch;
-    gap: 10px;
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .form-actions .btn {
-    flex: 1;
+    width: 100%;
+  }
+
+  .feedback {
+    margin-left: 18px;
+    margin-right: 18px;
   }
 }

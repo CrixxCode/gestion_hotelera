@@ -7,7 +7,7 @@
 }
 
 :host ::ng-deep .app-breadcrumb.p-breadcrumb {
-  margin: 8px 0 10px;
+  margin: 18px 0 18px;
   padding: 0;
   border-radius: 0;
   border: 0 !important;
@@ -16,30 +16,34 @@
 }
 
 :host ::ng-deep .app-breadcrumb .p-breadcrumb-list {
-  gap: 8px;
+  gap: 10px;
 }
 
 :host ::ng-deep .app-breadcrumb .p-menuitem-link {
-  color: var(--gh-text-muted);
+  color: #111827;
   border-radius: 0;
   background: transparent;
+  font-size: 0.86rem;
+  font-weight: 500;
 }
 
 :host ::ng-deep .app-breadcrumb .p-menuitem-text {
-  color: var(--gh-text);
+  color: #111827;
 }
 
 :host ::ng-deep .app-breadcrumb .p-menuitem-icon {
-  color: var(--gh-text-muted);
+  color: #111827;
+  font-size: 1rem;
 }
 
 :host ::ng-deep .app-breadcrumb .p-breadcrumb-item:last-child .p-menuitem-text {
-  color: var(--gh-text-strong);
+  color: #111827;
 }
 
 :host ::ng-deep .app-breadcrumb .p-breadcrumb-separator,
 :host ::ng-deep .app-breadcrumb .p-breadcrumb-separator i {
-  color: var(--gh-text-muted);
+  color: #111827;
+  font-size: 0.82rem;
 }
 
 :host ::ng-deep .app-breadcrumb .p-menuitem-link:hover {

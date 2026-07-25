@@ -21,7 +21,7 @@
       <div class="stat-note">registros de mantenimiento</div>
     </article>
 
-    <article class="stat-card">
+    <article class="stat-card warning">
       <div class="stat-head">
         <span>Pendientes</span>
         <span class="stat-icon gold"><i class="fa-regular fa-clock"></i></span>
@@ -30,7 +30,7 @@
       <div class="stat-note">pendientes por iniciar</div>
     </article>
 
-    <article class="stat-card">
+    <article class="stat-card info">
       <div class="stat-head">
         <span>En proceso</span>
         <span class="stat-icon blue"><i class="fa-solid fa-screwdriver-wrench"></i></span>
@@ -39,7 +39,16 @@
       <div class="stat-note">intervenciones activas</div>
     </article>
 
-    <article class="stat-card">
+    <article class="stat-card danger">
+      <div class="stat-head">
+        <span>Atrasadas</span>
+        <span class="stat-icon red"><i class="fa-solid fa-triangle-exclamation"></i></span>
+      </div>
+      <div class="stat-value">{{ delayedOrders }}</div>
+      <div class="stat-note">requieren atencion</div>
+    </article>
+
+    <article class="stat-card success">
       <div class="stat-head">
         <span>Completadas</span>
         <span class="stat-icon green"><i class="fa-solid fa-circle-check"></i></span>

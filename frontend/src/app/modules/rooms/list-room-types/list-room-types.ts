@@ -94,6 +94,10 @@ export class ListRoomTypes implements OnInit {
     return this.activeRateByType.size;
   }
 
+  get roomTypesWithoutRate(): number {
+    return Math.max(this.totalTypes - this.roomTypesWithRate, 0);
+  }
+
   loadCatalogData(): void {
     this.loading = true;
     this.errorMessage = '';
@@ -340,7 +344,13 @@ export class ListRoomTypes implements OnInit {
     const bedCount = this.toPositiveNumber(roomType.bed_count);
     const bedType = String(roomType.bed_type || '').trim() || 'cama estandar';
     const bedWord = bedCount === 1 ? 'cama' : 'camas';
-    return `${bedCount} ${bedWord} · ${bedType}`;
+    return `${bedCount} ${bedWord} - ${bedType}`;
+  }
+
+  getBedCompact(roomType: RoomTypeI): string {
+    const bedCount = this.toPositiveNumber(roomType.bed_count);
+    const bedType = String(roomType.bed_type || '').trim() || 'Estandar';
+    return `${bedCount} ${bedType}`;
   }
 
   getCapacityLabel(roomType: RoomTypeI): string {

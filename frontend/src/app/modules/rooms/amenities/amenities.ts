@@ -110,6 +110,10 @@ export class AmenitiesPage implements OnInit {
     return this.allAmenities.filter((item) => this.getUsageCount(item.id) > 0).length;
   }
 
+  get unusedAmenities(): number {
+    return this.allAmenities.filter((item) => this.getUsageCount(item.id) === 0).length;
+  }
+
   trackByAmenity(_: number, item: AmenityI): number {
     return item.id;
   }

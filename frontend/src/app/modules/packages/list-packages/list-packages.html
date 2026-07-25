@@ -23,6 +23,15 @@
 
     <article class="stat-card">
       <div class="stat-head">
+        <span>Activos</span>
+        <span class="stat-icon green"><i class="fa-solid fa-circle-check"></i></span>
+      </div>
+      <div class="stat-value">{{ activePackages }}</div>
+      <div class="stat-note">Disponibles para reservas</div>
+    </article>
+
+    <article class="stat-card">
+      <div class="stat-head">
         <span>Destacados</span>
         <span class="stat-icon gold"><i class="fa-regular fa-star"></i></span>
       </div>
@@ -33,7 +42,7 @@
     <article class="stat-card">
       <div class="stat-head">
         <span>Con servicios</span>
-        <span class="stat-icon green"><i class="fa-solid fa-list-check"></i></span>
+        <span class="stat-icon purple"><i class="fa-solid fa-list-check"></i></span>
       </div>
       <div class="stat-value">{{ packagesWithServices }}</div>
       <div class="stat-note">paquetes ya configurados</div>
@@ -42,15 +51,15 @@
     <article class="stat-card">
       <div class="stat-head">
         <span>Precio promedio</span>
-        <span class="stat-icon purple"><i class="fa-solid fa-wallet"></i></span>
+        <span class="stat-icon red"><i class="fa-solid fa-wallet"></i></span>
       </div>
       <div class="stat-value stat-money">{{ averagePriceLabel }}</div>
-      <div class="stat-note">{{ activePackages }} activos</div>
+      <div class="stat-note">Promedio del catalogo</div>
     </article>
   </section>
 
-  <section class="gh-filters-card">
-    <div class="gh-filters-grid">
+  <section class="filters-card">
+    <div class="filters-grid">
       <label class="search-field search-wrap gh-search-wrap">
         <span>Buscar</span>
         <div class="search-control gh-search-control">
@@ -78,28 +87,27 @@
           <option *ngFor="let tab of categoryTabs; trackBy: trackByTab" [value]="tab.key">{{ tab.label }}</option>
         </select>
       </label>
-    </div>
 
-    <div class="gh-filters-actions gh-filters-actions-single">
-      <div class="gh-action-group">
-        <button type="button" class="gh-btn gh-btn-light" (click)="refreshPackages()" [disabled]="loading">
+      <div class="filter-actions-inline">
+        <button type="button" class="icon-action" (click)="refreshPackages()" [disabled]="loading" title="Actualizar">
           <i class="fa-solid fa-rotate-right"></i>
-          Actualizar
         </button>
 
-        <button type="button" class="gh-btn gh-btn-light" (click)="exportCsv()">
-          <i class="fa-solid fa-file-export"></i>
-          Exportar
+        <button type="button" class="icon-action" (click)="exportCsv()" title="Exportar">
+          <i class="fa-solid fa-download"></i>
         </button>
       </div>
     </div>
   </section>
 
-  <section class="gh-filters-card" *ngIf="!loading && deletedPackagesCount > 0">
-    <div class="gh-filters-actions">
-      <p class="state-note">Hay {{ deletedPackagesCount }} paquete(s) eliminados logicamente.</p>
-      <div class="gh-action-group">
-        <button type="button" class="gh-btn gh-btn-light" (click)="showDeletedPackages = !showDeletedPackages">
+  <section class="deleted-alert-card" *ngIf="!loading && deletedPackagesCount > 0">
+    <div class="deleted-alert-head">
+      <p class="state-note">
+        <i class="fa-solid fa-circle-info"></i>
+        Hay {{ deletedPackagesCount }} paquete(s) eliminados logicamente.
+      </p>
+      <div>
+        <button type="button" class="deleted-link" (click)="showDeletedPackages = !showDeletedPackages">
           <i class="fa-solid" [class.fa-eye]="!showDeletedPackages" [class.fa-eye-slash]="showDeletedPackages"></i>
           {{ showDeletedPackages ? 'Ocultar eliminados' : 'Ver eliminados' }}
         </button>
@@ -171,6 +179,7 @@
           *ngFor="let pkg of group.items; trackBy: trackByPackage"
           (click)="openDetail(pkg)">
           <div class="package-cover" [ngStyle]="{ background: getCategoryTone(group).cover }">
+            <i [ngClass]="['cover-symbol', getCategoryTone(group).icon]"></i>
             <div class="cover-badges">
               <span
                 class="cover-type"
@@ -238,8 +247,9 @@
             </div>
 
             <div class="card-actions" (click)="$event.stopPropagation()">
-              <button type="button" class="row-btn" title="Ver detalle" (click)="openDetail(pkg)">
+              <button type="button" class="row-btn primary-action" title="Ver detalle" (click)="openDetail(pkg)">
                 <i class="fa-regular fa-eye"></i>
+                <span>Ver</span>
               </button>
               <button type="button" class="row-btn" title="Editar" (click)="openUpdateDrawer(pkg)">
                 <i class="fa-regular fa-pen-to-square"></i>
@@ -257,6 +267,12 @@
             </div>
           </div>
         </article>
+
+        <button type="button" class="add-package-card" (click)="openCreateDrawer()">
+          <span><i class="fa-solid fa-plus"></i></span>
+          <strong>Nuevo paquete</strong>
+          <small>Para {{ group.label }}</small>
+        </button>
       </div>
     </article>
   </section>
