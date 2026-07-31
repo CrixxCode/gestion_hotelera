@@ -30,6 +30,10 @@ def env_int(name: str, default: int) -> int:
 
 
 DEBUG = env_bool("DJANGO_DEBUG", default=False)
+RAILWAY_PUBLIC_DOMAIN = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
+RAILWAY_PUBLIC_ORIGIN = (
+    f"https://{RAILWAY_PUBLIC_DOMAIN}" if RAILWAY_PUBLIC_DOMAIN else ""
+)
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
@@ -42,7 +46,7 @@ elif not DEBUG and SECRET_KEY in {"CHANGE_ME", "dev-only-secret-key-change-me"}:
 
 ALLOWED_HOSTS = env_list(
     "DJANGO_ALLOWED_HOSTS",
-    "localhost,127.0.0.1" if DEBUG else "",
+    "localhost,127.0.0.1" if DEBUG else RAILWAY_PUBLIC_DOMAIN,
 )
 if not DEBUG and not ALLOWED_HOSTS:
     raise RuntimeError("DJANGO_ALLOWED_HOSTS must not be empty when DEBUG=False")
@@ -81,6 +85,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -99,11 +104,11 @@ if os.getenv("DB_ENGINE", "sqlite") == "postgres":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("DB_NAME", "gestion_hotelera"),
-            "USER": os.getenv("DB_USER", "postgres"),
-            "PASSWORD": os.getenv("DB_PASSWORD", ""),
-            "HOST": os.getenv("DB_HOST", "localhost"),
-            "PORT": os.getenv("DB_PORT", "5432"),
+            "NAME": os.getenv("DB_NAME") or os.getenv("PGDATABASE", "gestion_hotelera"),
+            "USER": os.getenv("DB_USER") or os.getenv("PGUSER", "postgres"),
+            "PASSWORD": os.getenv("DB_PASSWORD") or os.getenv("PGPASSWORD", ""),
+            "HOST": os.getenv("DB_HOST") or os.getenv("PGHOST", "localhost"),
+            "PORT": os.getenv("DB_PORT") or os.getenv("PGPORT", "5432"),
         }
     }
 else:
@@ -123,6 +128,14 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / os.getenv("DJANGO_STATIC_ROOT", "staticfiles")
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+FRONTEND_DIST_DIR = Path(
+    os.getenv("FRONTEND_DIST_DIR", BASE_DIR.parent / "frontend_dist")
+)
+if FRONTEND_DIST_DIR.exists():
+    STATICFILES_DIRS = [FRONTEND_DIST_DIR]
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
@@ -173,7 +186,7 @@ if not DEBUG:
 
 CORS_ALLOWED_ORIGINS = env_list(
     "CORS_ALLOWED_ORIGINS",
-    "http://localhost:4200,http://127.0.0.1:4200" if DEBUG else "",
+    "http://localhost:4200,http://127.0.0.1:4200" if DEBUG else RAILWAY_PUBLIC_ORIGIN,
 )
 if not DEBUG and not CORS_ALLOWED_ORIGINS:
     raise RuntimeError(
@@ -194,7 +207,7 @@ CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", default=not DEBUG)
 CSRF_COOKIE_SAMESITE = SESSION_COOKIE_SAMESITE
 CSRF_TRUSTED_ORIGINS = env_list(
     "CSRF_TRUSTED_ORIGINS",
-    "http://localhost:4200,http://127.0.0.1:4200" if DEBUG else "",
+    "http://localhost:4200,http://127.0.0.1:4200" if DEBUG else RAILWAY_PUBLIC_ORIGIN,
 )
 if not DEBUG and not CSRF_TRUSTED_ORIGINS:
     raise RuntimeError(
@@ -228,7 +241,10 @@ EMAIL_TIMEOUT = env_int("EMAIL_TIMEOUT", 20)
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [
+            BASE_DIR / "templates",
+            FRONTEND_DIST_DIR,
+        ],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
