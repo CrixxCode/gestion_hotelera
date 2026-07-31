@@ -31,8 +31,18 @@ def env_int(name: str, default: int) -> int:
 
 DEBUG = env_bool("DJANGO_DEBUG", default=False)
 RAILWAY_PUBLIC_DOMAIN = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
+RAILWAY_PRIVATE_DOMAIN = os.getenv("RAILWAY_PRIVATE_DOMAIN", "").strip()
 RAILWAY_PUBLIC_ORIGIN = (
     f"https://{RAILWAY_PUBLIC_DOMAIN}" if RAILWAY_PUBLIC_DOMAIN else ""
+)
+RAILWAY_ALLOWED_HOSTS = ",".join(
+    host
+    for host in [
+        RAILWAY_PUBLIC_DOMAIN,
+        RAILWAY_PRIVATE_DOMAIN,
+        "healthcheck.railway.app" if RAILWAY_PUBLIC_DOMAIN else "",
+    ]
+    if host
 )
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
@@ -46,7 +56,7 @@ elif not DEBUG and SECRET_KEY in {"CHANGE_ME", "dev-only-secret-key-change-me"}:
 
 ALLOWED_HOSTS = env_list(
     "DJANGO_ALLOWED_HOSTS",
-    "localhost,127.0.0.1" if DEBUG else RAILWAY_PUBLIC_DOMAIN,
+    "localhost,127.0.0.1" if DEBUG else RAILWAY_ALLOWED_HOSTS,
 )
 if not DEBUG and not ALLOWED_HOSTS:
     raise RuntimeError("DJANGO_ALLOWED_HOSTS must not be empty when DEBUG=False")
