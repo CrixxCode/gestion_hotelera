@@ -24,6 +24,7 @@ DB_USER=${{Postgres.PGUSER}}
 DB_PASSWORD=${{Postgres.PGPASSWORD}}
 DB_HOST=${{Postgres.PGHOST}}
 DB_PORT=${{Postgres.PGPORT}}
+SECURE_SSL_REDIRECT=False
 ```
 
 Si Railway no inyecta `RAILWAY_PUBLIC_DOMAIN` en tu servicio, agrega tambien:
