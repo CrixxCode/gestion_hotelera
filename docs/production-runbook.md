@@ -21,11 +21,18 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS=True
 SECURE_HSTS_PRELOAD=False
 SECURE_PROXY_SSL_HEADER_ENABLED=True
 
-EMAIL_HOST=<smtp-host>
-EMAIL_PORT=587
-EMAIL_HOST_USER=<smtp-user>
-EMAIL_HOST_PASSWORD=<smtp-password>
-DEFAULT_FROM_EMAIL=<no-reply@tu-dominio.com>
+# Railway Free/Trial/Hobby: usar API HTTPS de correo transaccional.
+EMAIL_BACKEND=anymail.backends.resend.EmailBackend
+RESEND_API_KEY=<resend-api-key>
+DEFAULT_FROM_EMAIL=Wayra <no-reply@tu-dominio.com>
+SERVER_EMAIL=Wayra <no-reply@tu-dominio.com>
+
+# SMTP solo si el proveedor/plan permite salida SMTP.
+# EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+# EMAIL_HOST=<smtp-host>
+# EMAIL_PORT=587
+# EMAIL_HOST_USER=<smtp-user>
+# EMAIL_HOST_PASSWORD=<smtp-password>
 
 ALLOW_PUBLIC_USER_REGISTRATION=False
 ALLOW_PUBLIC_CLIENT_REGISTRATION=False

@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "anymail",
     "corsheaders",
     "drf_spectacular",
     "django_filters",
@@ -252,7 +253,12 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", default=True)
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "no-reply@localhost")
+SERVER_EMAIL = os.getenv("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 EMAIL_TIMEOUT = env_int("EMAIL_TIMEOUT", 20)
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+ANYMAIL = {
+    "RESEND_API_KEY": RESEND_API_KEY,
+}
 
 TEMPLATES = [
     {
