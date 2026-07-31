@@ -13,6 +13,7 @@ env/
 venv/
 
 # Backend sensitive/local artifacts
+backups/
 backend/.env
 backend/.env.*
 !backend/.env.example
