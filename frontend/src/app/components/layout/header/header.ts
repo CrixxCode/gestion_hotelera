@@ -32,6 +32,7 @@ interface HeaderNotification {
 })
 export class Header implements OnInit {
   @Output() menuToggle = new EventEmitter<void>();
+  @Output() tourStart = new EventEmitter<void>();
 
   menuOpen = false;
   notificationsOpen = false;
@@ -112,6 +113,12 @@ export class Header implements OnInit {
     if (this.menuOpen) {
       this.notificationsOpen = false;
     }
+  }
+
+  startGuidedTour(): void {
+    this.menuOpen = false;
+    this.notificationsOpen = false;
+    this.tourStart.emit();
   }
 
   onHotelSelectionChange(): void {

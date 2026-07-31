@@ -4,10 +4,11 @@ import { Header } from '../header/header';
 import { Aside } from '../aside/aside';
 import { Content } from '../content/content';
 import { CommonModule } from '@angular/common';
+import { GuidedTour } from '../../tutorial/guided-tour/guided-tour';
 
 @Component({
   selector: 'app-layout-main',
-  imports: [Header, Aside, Content, CommonModule],
+  imports: [Header, Aside, Content, CommonModule, GuidedTour],
   templateUrl: './layout-main.html',
   styleUrl: './layout-main.css'
 })

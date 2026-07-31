@@ -10,7 +10,11 @@
         <i class="fa-solid fa-bars text-lg"></i>
       </button>
 
-      <label class="hotel-context-selector" *ngIf="isGlobalAdmin && (hotelOptions.length > 0 || hotelSelectorLoading)">
+      <label
+        class="hotel-context-selector"
+        *ngIf="isGlobalAdmin && (hotelOptions.length > 0 || hotelSelectorLoading)"
+        data-tour="hotel-context"
+      >
         <span>Hotel activo</span>
         <div class="hotel-context-control">
           <i class="fa-solid fa-hotel"></i>
@@ -31,7 +35,18 @@
 
     <!-- DERECHA: Notificaciones + menu usuario -->
     <div class="flex items-center gap-3 sm:gap-6 relative ml-auto">
-      <div class="relative notifications-menu">
+      <button
+        type="button"
+        class="header-tour-btn p-2 rounded-lg transition-colors"
+        (click)="startGuidedTour()"
+        aria-label="Iniciar tutorial guiado"
+        title="Tutorial guiado"
+        data-tour="tour-entry"
+      >
+        <i class="fa-regular fa-circle-question text-lg"></i>
+      </button>
+
+      <div class="relative notifications-menu" data-tour="notifications">
         <button
           class="header-notification-btn relative p-2 rounded-lg transition-colors"
           (click)="toggleNotifications()"
@@ -140,7 +155,7 @@
         </div>
       </div>
 
-      <div class="relative user-menu">
+      <div class="relative user-menu" data-tour="user-menu">
         <button
           class="flex items-center gap-3 group"
           (click)="toggleMenu()"

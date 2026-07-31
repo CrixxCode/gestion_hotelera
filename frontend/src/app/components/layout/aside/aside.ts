@@ -1,7 +1,7 @@
 import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
-import { Router, RouterModule } from '@angular/router';
+import { NavigationEnd, Router, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { catchError, of } from 'rxjs';
+import { Subscription, catchError, filter, of } from 'rxjs';
 import { AuthService, MenuItem, MeResponse, isEffectivePlatformAdmin } from '../../../services/auth/auth';
 import { HotelSettingsService } from '../../../services/hotel-settings';
 import { HotelSettings } from '../../pages/hotel-settings/hotel-setting-model';
@@ -25,6 +25,7 @@ export class Aside implements OnInit, OnDestroy {
   currentTime = '';
   currentDate = '';
   private clockTimer?: ReturnType<typeof setInterval>;
+  private routeEventsSubscription?: Subscription;
 
   constructor(
     private authService: AuthService,
@@ -35,6 +36,9 @@ export class Aside implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.startClock();
     this.loadBranding();
+    this.routeEventsSubscription = this.router.events
+      .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
+      .subscribe(() => this.openCurrentRouteGroup());
 
     this.authService.getUserInfo().subscribe({
       next: (user: MeResponse) => {
@@ -47,15 +51,7 @@ export class Aside implements OnInit, OnDestroy {
         // Inicializa estados
         this.openGroups = {};
 
-        // Auto-abrir grupos que contengan la ruta actual
-        const currentUrl = this.router.url || '';
-
-        for (const item of this.menu) {
-          if (this.isGroup(item)) {
-            const hasActiveChild = (item.children || []).some(ch => (ch.route || '') === currentUrl);
-            this.openGroups[item.id] = hasActiveChild;
-          }
-        }
+        this.openCurrentRouteGroup();
       },
       error: () => {
         this.menu = [];
@@ -68,6 +64,7 @@ export class Aside implements OnInit, OnDestroy {
     if (this.clockTimer) {
       clearInterval(this.clockTimer);
     }
+    this.routeEventsSubscription?.unsubscribe();
   }
 
   @HostListener('window:gh-hotel-brand-updated')
@@ -187,6 +184,21 @@ export class Aside implements OnInit, OnDestroy {
     const withPrefix = safe.startsWith('/') ? safe : `/${safe}`;
     const withoutTrailing = withPrefix.replace(/\/+$/, '');
     return withoutTrailing || '/';
+  }
+
+  private openCurrentRouteGroup(): void {
+    const currentUrl = this.normalizeRoute(this.router.url.split('?')[0].split('#')[0]);
+
+    for (const item of this.menu) {
+      if (this.isGroup(item)) {
+        const hasActiveChild = (item.children || []).some(
+          (child) => this.normalizeRoute(child.route) === currentUrl
+        );
+        if (hasActiveChild) {
+          this.openGroups[item.id] = true;
+        }
+      }
+    }
   }
 
   private startClock(): void {

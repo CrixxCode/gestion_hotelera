@@ -92,6 +92,16 @@
   color: #111827;
 }
 
+.app-header-shell .header-tour-btn {
+  color: #111827;
+  border: 1px solid transparent;
+}
+
+.app-header-shell .header-tour-btn:hover {
+  background: #eef2f8;
+  border-color: #e1e7f0;
+}
+
 .app-header-shell .header-notification-btn:hover {
   background: #eef2f8;
   color: #111827;
