@@ -23,12 +23,12 @@
           (click)="closeMobileMenu()">
           Iniciar sesion
         </a>
-        <a
+        <button
+          type="button"
           class="rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-800"
-          href="#cta"
-          (click)="scrollToSection($event, 'cta')">
+          (click)="openDemoModal($event)">
           Solicitar demo
-        </a>
+        </button>
       </div>
 
       <button
@@ -54,12 +54,12 @@
           (click)="scrollToSection($event, link.sectionId)">
           {{ link.label }}
         </a>
-        <a
+        <button
+          type="button"
           class="mt-2 rounded-xl bg-slate-900 px-4 py-2.5 text-center text-sm font-semibold text-white"
-          href="#cta"
-          (click)="scrollToSection($event, 'cta')">
+          (click)="openDemoModal($event)">
           Solicitar demo
-        </a>
+        </button>
       </nav>
     </div>
   </header>
@@ -84,13 +84,13 @@
           </p>
 
           <div class="mt-8 flex flex-wrap gap-3">
-            <a
+            <button
+              type="button"
               class="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-bold text-white shadow-xl shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-800"
-              href="#cta"
-              (click)="scrollToSection($event, 'cta')">
+              (click)="openDemoModal($event)">
               Solicitar demo
               <i class="pi pi-arrow-right text-xs"></i>
-            </a>
+            </button>
             <a
               class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-100"
               href="#funcionalidades"
@@ -346,13 +346,13 @@
           </p>
 
           <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <a
+            <button
+              type="button"
               class="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-bold text-slate-900 transition hover:-translate-y-0.5 hover:bg-slate-100"
-              routerLink="/login"
-              (click)="closeMobileMenu()">
+              (click)="openDemoModal($event)">
               Solicitar demo
               <i class="pi pi-arrow-up-right text-xs"></i>
-            </a>
+            </button>
             <a
               class="inline-flex items-center gap-2 rounded-xl border border-slate-300/80 bg-transparent px-6 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-white/10"
               href="#funcionalidades"
@@ -394,9 +394,12 @@
       <div>
         <h3 class="wayra-heading text-sm font-bold uppercase tracking-widest text-slate-100">Acciones</h3>
         <div class="mt-4 space-y-2">
-          <a class="block text-sm text-slate-400 transition hover:text-white" href="#cta" (click)="scrollToSection($event, 'cta')">
+          <button
+            type="button"
+            class="block text-left text-sm text-slate-400 transition hover:text-white"
+            (click)="openDemoModal($event)">
             Solicitar demo
-          </a>
+          </button>
           <a class="block text-sm text-slate-400 transition hover:text-white" routerLink="/login" (click)="closeMobileMenu()">
             Iniciar sesion
           </a>
@@ -408,6 +411,284 @@
       <p>Wayra SaaS hotelero. Todos los derechos reservados. {{ year }}</p>
     </div>
   </footer>
+
+  <div
+    *ngIf="demoModalOpen"
+    class="wayra-demo-overlay fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm"
+    (click)="closeDemoModal()">
+    <section
+      class="wayra-demo-modal w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl shadow-slate-950/30"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="demo-modal-title"
+      (click)="$event.stopPropagation()">
+      <header class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-5 sm:px-6">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-widest text-sky-700">Solicitud de demo</p>
+          <h2 id="demo-modal-title" class="wayra-heading mt-1 text-2xl font-extrabold text-slate-900">
+            Conoce Wayra para tu hotel
+          </h2>
+        </div>
+        <button
+          type="button"
+          class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+          aria-label="Cerrar solicitud de demo"
+          (click)="closeDemoModal()">
+          <i class="pi pi-times"></i>
+        </button>
+      </header>
+
+      <ng-container *ngIf="!demoSubmitted; else demoConfirmation">
+        <div class="grid gap-2 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:grid-cols-2 sm:px-6">
+          <button
+            type="button"
+            class="wayra-demo-step"
+            [class.wayra-demo-step-active]="demoStep === 'hotel'"
+            (click)="goToHotelStep()">
+            <span>1</span>
+            Informacion del hotel
+          </button>
+          <button
+            type="button"
+            class="wayra-demo-step"
+            [class.wayra-demo-step-active]="demoStep === 'requester'"
+            [disabled]="demoForm.controls.hotel.invalid"
+            (click)="goToRequesterStep()">
+            <span>2</span>
+            Primer usuario del hotel
+          </button>
+        </div>
+
+        <form [formGroup]="demoForm" (ngSubmit)="submitDemoRequest()">
+          <ng-container *ngIf="demoStep === 'hotel'">
+            <div formGroupName="hotel" class="px-5 py-6 sm:px-6">
+              <div class="grid gap-4 md:grid-cols-2">
+                <label class="wayra-demo-field md:col-span-2" for="demo-hotel-name">
+                  <span>Nombre del hotel</span>
+                  <input
+                    id="demo-hotel-name"
+                    type="text"
+                    class="wayra-demo-input"
+                    [class.input-error]="isInvalid('hotel', 'hotelName')"
+                    formControlName="hotelName"
+                    autocomplete="organization" />
+                  <small *ngIf="isInvalid('hotel', 'hotelName')" class="field-error">
+                    Ingresa el nombre del hotel.
+                  </small>
+                </label>
+
+                <label class="wayra-demo-field" for="demo-hotel-type">
+                  <span>Tipo de alojamiento</span>
+                  <select
+                    id="demo-hotel-type"
+                    class="wayra-demo-input"
+                    [class.input-error]="isInvalid('hotel', 'hotelType')"
+                    formControlName="hotelType">
+                    <option value="" disabled>Selecciona un tipo</option>
+                    <option *ngFor="let type of hotelTypes; trackBy: trackByIndex" [value]="type">{{ type }}</option>
+                  </select>
+                  <small *ngIf="isInvalid('hotel', 'hotelType')" class="field-error">
+                    Selecciona el tipo de alojamiento.
+                  </small>
+                </label>
+
+                <label class="wayra-demo-field" for="demo-city">
+                  <span>Ciudad</span>
+                  <input
+                    id="demo-city"
+                    type="text"
+                    class="wayra-demo-input"
+                    [class.input-error]="isInvalid('hotel', 'city')"
+                    formControlName="city"
+                    autocomplete="address-level2" />
+                  <small *ngIf="isInvalid('hotel', 'city')" class="field-error">Ingresa la ciudad.</small>
+                </label>
+
+                <label class="wayra-demo-field" for="demo-rooms">
+                  <span>Numero de habitaciones</span>
+                  <input
+                    id="demo-rooms"
+                    type="number"
+                    min="1"
+                    inputmode="numeric"
+                    class="wayra-demo-input"
+                    [class.input-error]="isInvalid('hotel', 'rooms')"
+                    formControlName="rooms" />
+                  <small *ngIf="isInvalid('hotel', 'rooms')" class="field-error">
+                    Ingresa una cantidad valida.
+                  </small>
+                </label>
+
+                <label class="wayra-demo-field" for="demo-website">
+                  <span>Sitio web o red social</span>
+                  <input
+                    id="demo-website"
+                    type="text"
+                    class="wayra-demo-input"
+                    formControlName="website"
+                    autocomplete="url" />
+                </label>
+              </div>
+
+              <div class="mt-6 flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+                  (click)="closeDemoModal()">
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
+                  (click)="goToRequesterStep()">
+                  Continuar
+                  <i class="pi pi-arrow-right text-xs"></i>
+                </button>
+              </div>
+            </div>
+          </ng-container>
+
+          <ng-container *ngIf="demoStep === 'requester'">
+            <div formGroupName="requester" class="px-5 py-6 sm:px-6">
+              <div class="grid gap-4 md:grid-cols-2">
+                <label class="wayra-demo-field" for="demo-first-name">
+                  <span>Nombre</span>
+                  <input
+                    id="demo-first-name"
+                    type="text"
+                    class="wayra-demo-input"
+                    [class.input-error]="isInvalid('requester', 'firstName')"
+                    formControlName="firstName"
+                    autocomplete="given-name" />
+                  <small *ngIf="isInvalid('requester', 'firstName')" class="field-error">
+                    Ingresa el nombre del primer usuario.
+                  </small>
+                </label>
+
+                <label class="wayra-demo-field" for="demo-last-name">
+                  <span>Apellidos</span>
+                  <input
+                    id="demo-last-name"
+                    type="text"
+                    class="wayra-demo-input"
+                    [class.input-error]="isInvalid('requester', 'lastName')"
+                    formControlName="lastName"
+                    autocomplete="family-name" />
+                  <small *ngIf="isInvalid('requester', 'lastName')" class="field-error">
+                    Ingresa los apellidos del primer usuario.
+                  </small>
+                </label>
+
+                <label class="wayra-demo-field" for="demo-username">
+                  <span>Usuario de acceso</span>
+                  <input
+                    id="demo-username"
+                    type="text"
+                    class="wayra-demo-input"
+                    [class.input-error]="isInvalid('requester', 'username')"
+                    formControlName="username"
+                    autocomplete="username" />
+                  <small *ngIf="isInvalid('requester', 'username')" class="field-error">
+                    Ingresa un usuario de acceso.
+                  </small>
+                </label>
+
+                <label class="wayra-demo-field" for="demo-job-title">
+                  <span>Cargo</span>
+                  <input
+                    id="demo-job-title"
+                    type="text"
+                    class="wayra-demo-input"
+                    [class.input-error]="isInvalid('requester', 'jobTitle')"
+                    formControlName="jobTitle"
+                    autocomplete="organization-title" />
+                  <small *ngIf="isInvalid('requester', 'jobTitle')" class="field-error">Ingresa el cargo.</small>
+                </label>
+
+                <label class="wayra-demo-field" for="demo-email">
+                  <span>Correo de acceso</span>
+                  <input
+                    id="demo-email"
+                    type="email"
+                    class="wayra-demo-input"
+                    [class.input-error]="isInvalid('requester', 'email')"
+                    formControlName="email"
+                    autocomplete="email" />
+                  <small *ngIf="isInvalid('requester', 'email')" class="field-error">
+                    Ingresa un correo valido.
+                  </small>
+                </label>
+
+                <label class="wayra-demo-field" for="demo-phone">
+                  <span>Telefono de contacto</span>
+                  <input
+                    id="demo-phone"
+                    type="tel"
+                    class="wayra-demo-input"
+                    [class.input-error]="isInvalid('requester', 'phone')"
+                    formControlName="phone"
+                    autocomplete="tel" />
+                  <small *ngIf="isInvalid('requester', 'phone')" class="field-error">
+                    Ingresa un telefono de contacto.
+                  </small>
+                </label>
+
+                <label class="wayra-demo-field md:col-span-2" for="demo-message">
+                  <span>Comentarios para la demo</span>
+                  <textarea
+                    id="demo-message"
+                    rows="4"
+                    class="wayra-demo-input wayra-demo-textarea"
+                    formControlName="message"></textarea>
+                </label>
+              </div>
+
+              <p *ngIf="demoSubmitError" class="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                {{ demoSubmitError }}
+              </p>
+
+              <div class="mt-6 flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+                  [disabled]="demoSubmitting"
+                  (click)="goToHotelStep()">
+                  <i class="pi pi-arrow-left text-xs"></i>
+                  Atras
+                </button>
+                <button
+                  type="submit"
+                  class="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+                  [disabled]="demoSubmitting">
+                  {{ demoSubmitting ? 'Guardando...' : 'Enviar solicitud' }}
+                  <i class="text-xs" [ngClass]="demoSubmitting ? 'pi pi-spin pi-spinner' : 'pi pi-send'"></i>
+                </button>
+              </div>
+            </div>
+          </ng-container>
+        </form>
+      </ng-container>
+
+      <ng-template #demoConfirmation>
+        <div class="px-5 py-10 text-center sm:px-6">
+          <div class="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+            <i class="pi pi-check text-xl"></i>
+          </div>
+          <h3 class="wayra-heading mt-5 text-2xl font-extrabold text-slate-900">Solicitud registrada</h3>
+          <p class="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-600">
+            Recibimos la informacion de {{ demoRequestSummary }} y del primer usuario del hotel. El equipo de Wayra
+            revisara los datos para coordinar la demo.
+          </p>
+          <button
+            type="button"
+            class="mt-7 inline-flex items-center justify-center rounded-xl bg-slate-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
+            (click)="closeDemoModal()">
+            Cerrar
+          </button>
+        </div>
+      </ng-template>
+    </section>
+  </div>
 </div>
 
 

@@ -21,6 +21,7 @@ export interface MeResponse {
   avatar?: string | null;
   must_change_password?: boolean;
   is_staff?: boolean;
+  is_superuser?: boolean;
   hotel_settings?: {
     id?: string | number;
     hotel_name?: string;
@@ -48,6 +49,9 @@ export interface SessionLoginResponse {
   must_change_password?: boolean;
   user?: MeResponse;
 }
+
+export const isEffectivePlatformAdmin = (user?: MeResponse | null): boolean =>
+  Boolean(user?.is_superuser) && !user?.hotel_settings;
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {

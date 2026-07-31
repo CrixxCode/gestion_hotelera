@@ -2,7 +2,7 @@ import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { Router, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { catchError, of } from 'rxjs';
-import { AuthService, MenuItem, MeResponse } from '../../../services/auth/auth';
+import { AuthService, MenuItem, MeResponse, isEffectivePlatformAdmin } from '../../../services/auth/auth';
 import { HotelSettingsService } from '../../../services/hotel-settings';
 import { HotelSettings } from '../../pages/hotel-settings/hotel-setting-model';
 
@@ -39,7 +39,10 @@ export class Aside implements OnInit, OnDestroy {
     this.authService.getUserInfo().subscribe({
       next: (user: MeResponse) => {
         const rawMenu = Array.isArray(user.menu) ? user.menu : [];
-        this.menu = this.normalizeSecurityGroup(rawMenu);
+        const visibleMenu = isEffectivePlatformAdmin(user)
+          ? rawMenu
+          : this.excludeSaasAdminItems(rawMenu);
+        this.menu = this.normalizeSecurityGroup(visibleMenu);
 
         // Inicializa estados
         this.openGroups = {};
@@ -148,6 +151,26 @@ export class Aside implements OnInit, OnDestroy {
       securityGroup,
       ...filteredTopLevel.slice(insertAt)
     ];
+  }
+
+  private excludeSaasAdminItems(items: MenuItem[]): MenuItem[] {
+    return items
+      .map((item) => ({
+        ...item,
+        children: Array.isArray(item.children)
+          ? this.excludeSaasAdminItems(item.children)
+          : item.children,
+      }))
+      .filter((item) => {
+        if (this.isSaasAdminItem(item)) return false;
+        return !Array.isArray(item.children) || item.children.length > 0 || Boolean(item.route);
+      });
+  }
+
+  private isSaasAdminItem(item: MenuItem): boolean {
+    const route = this.normalizeRoute(item.route);
+    const label = String(item.label || '').trim().toLowerCase();
+    return route.startsWith('/saas-') || label.includes('saas');
   }
 
   private normalizeMenuRoutes(items: MenuItem[]): MenuItem[] {

@@ -10,7 +10,7 @@
         <i class="fa-solid fa-bars text-lg"></i>
       </button>
 
-      <label class="hotel-context-selector" *ngIf="hotelOptions.length > 0 || hotelSelectorLoading">
+      <label class="hotel-context-selector" *ngIf="isGlobalAdmin && (hotelOptions.length > 0 || hotelSelectorLoading)">
         <span>Hotel activo</span>
         <div class="hotel-context-control">
           <i class="fa-solid fa-hotel"></i>

@@ -3,7 +3,7 @@ import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { catchError, of, switchMap } from 'rxjs';
-import { AuthService } from '../../../services/auth/auth';
+import { AuthService, isEffectivePlatformAdmin } from '../../../services/auth/auth';
 import { SaasDashboardService } from '../../../services/saas-dashboard';
 import { SaasHotelSnapshot } from '../saas-dashboard-model';
 
@@ -61,7 +61,7 @@ export class ListSaasHotels implements OnInit {
       .getUserInfo()
       .pipe(
         switchMap((user) => {
-          this.isPlatformAdmin = !user?.hotel_settings;
+          this.isPlatformAdmin = isEffectivePlatformAdmin(user);
           if (!this.isPlatformAdmin) {
             return of([] as SaasHotelSnapshot[]);
           }

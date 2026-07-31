@@ -3,7 +3,7 @@ import { Component, EventEmitter, HostListener, OnInit, Output } from '@angular/
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { catchError, of } from 'rxjs';
-import { AuthService } from '../../../services/auth/auth';
+import { AuthService, isEffectivePlatformAdmin } from '../../../services/auth/auth';
 import { NotificationI, NotificationService } from '../../../services/notification';
 import { HotelSettingsService } from '../../../services/hotel-settings';
 import { HotelContextService } from '../../../services/hotel-context';
@@ -236,7 +236,7 @@ export class Header implements OnInit {
       return;
     }
 
-    this.isGlobalAdmin = Boolean(user?.is_staff);
+    this.isGlobalAdmin = isEffectivePlatformAdmin(user);
     if (!this.isGlobalAdmin) {
       this.hotelOptions = [];
       this.selectedHotelSettingsId = null;

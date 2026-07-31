@@ -1,6 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, HostListener, OnDestroy, inject } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { finalize } from 'rxjs';
+import { DemoRequestPayload, DemoRequestService } from '../../../services/demo-request';
 
 interface NavLink {
   label: string;
@@ -43,15 +46,43 @@ interface AudienceItem {
   icon: string;
 }
 
+type DemoStep = 'hotel' | 'requester';
+type DemoFormSection = 'hotel' | 'requester';
+
 @Component({
   selector: 'app-landing',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink],
   templateUrl: './landing.html',
   styleUrl: './landing.css',
 })
-export class LandingPage {
+export class LandingPage implements OnDestroy {
+  private readonly formBuilder = inject(FormBuilder);
+  private readonly demoRequestService = inject(DemoRequestService);
+  private previousBodyOverflow = '';
+
   readonly year = new Date().getFullYear();
+
+  readonly hotelTypes = ['Hotel', 'Hostal', 'Apartahotel', 'Alojamiento turistico', 'Otro'];
+
+  readonly demoForm = this.formBuilder.group({
+    hotel: this.formBuilder.group({
+      hotelName: ['', [Validators.required, Validators.minLength(2)]],
+      hotelType: ['', Validators.required],
+      city: ['', Validators.required],
+      rooms: [null, [Validators.required, Validators.min(1)]],
+      website: [''],
+    }),
+    requester: this.formBuilder.group({
+      firstName: ['', Validators.required],
+      lastName: ['', Validators.required],
+      username: ['', [Validators.required, Validators.minLength(3)]],
+      email: ['', [Validators.required, Validators.email]],
+      jobTitle: ['', Validators.required],
+      phone: ['', [Validators.required, Validators.minLength(7)]],
+      message: [''],
+    }),
+  });
 
   readonly navLinks: NavLink[] = [
     { label: 'Problemas', sectionId: 'problemas' },
@@ -238,6 +269,23 @@ export class LandingPage {
   ];
 
   mobileMenuOpen = false;
+  demoModalOpen = false;
+  demoStep: DemoStep = 'hotel';
+  demoSubmitted = false;
+  demoSubmitting = false;
+  demoSubmitError = '';
+  demoRequestSummary = '';
+
+  ngOnDestroy(): void {
+    this.unlockPageScroll();
+  }
+
+  @HostListener('document:keydown.escape')
+  handleEscapeKey(): void {
+    if (this.demoModalOpen) {
+      this.closeDemoModal();
+    }
+  }
 
   toggleMobileMenu(): void {
     this.mobileMenuOpen = !this.mobileMenuOpen;
@@ -268,7 +316,124 @@ export class LandingPage {
     this.closeMobileMenu();
   }
 
+  openDemoModal(event?: Event): void {
+    event?.preventDefault();
+    this.closeMobileMenu();
+    this.demoModalOpen = true;
+    this.demoSubmitted = false;
+    this.demoSubmitError = '';
+    this.demoStep = 'hotel';
+    this.lockPageScroll();
+
+    window.setTimeout(() => {
+      document.getElementById('demo-hotel-name')?.focus();
+    });
+  }
+
+  closeDemoModal(): void {
+    this.demoModalOpen = false;
+    this.demoStep = 'hotel';
+    this.demoSubmitted = false;
+    this.demoSubmitting = false;
+    this.demoSubmitError = '';
+    this.demoRequestSummary = '';
+    this.demoForm.reset();
+    this.unlockPageScroll();
+  }
+
+  goToHotelStep(): void {
+    this.demoStep = 'hotel';
+
+    window.setTimeout(() => {
+      document.getElementById('demo-hotel-name')?.focus();
+    });
+  }
+
+  goToRequesterStep(): void {
+    const hotelForm = this.demoForm.controls.hotel;
+    hotelForm.markAllAsTouched();
+
+    if (hotelForm.invalid) return;
+
+    this.demoStep = 'requester';
+
+    window.setTimeout(() => {
+      document.getElementById('demo-first-name')?.focus();
+    });
+  }
+
+  submitDemoRequest(): void {
+    if (this.demoSubmitting) return;
+
+    this.demoForm.markAllAsTouched();
+    this.demoSubmitError = '';
+
+    if (this.demoForm.controls.hotel.invalid) {
+      this.goToHotelStep();
+      return;
+    }
+
+    if (this.demoForm.controls.requester.invalid) {
+      this.demoStep = 'requester';
+      return;
+    }
+
+    const hotelName = String(this.demoForm.controls.hotel.controls.hotelName.value || '').trim();
+    this.demoRequestSummary = hotelName || 'tu hotel';
+    this.demoSubmitting = true;
+
+    this.demoRequestService
+      .createDemoRequest(this.buildDemoRequestPayload())
+      .pipe(finalize(() => (this.demoSubmitting = false)))
+      .subscribe({
+        next: () => {
+          this.demoSubmitted = true;
+        },
+        error: () => {
+          this.demoSubmitError = 'No se pudo guardar la solicitud. Intenta nuevamente.';
+        },
+      });
+  }
+
+  isInvalid(sectionName: DemoFormSection, controlName: string): boolean {
+    const control =
+      sectionName === 'hotel'
+        ? this.demoForm.controls.hotel.get(controlName)
+        : this.demoForm.controls.requester.get(controlName);
+
+    return Boolean(control && control.invalid && (control.dirty || control.touched));
+  }
+
   trackByIndex(index: number): number {
     return index;
+  }
+
+  private lockPageScroll(): void {
+    this.previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+  }
+
+  private unlockPageScroll(): void {
+    document.body.style.overflow = this.previousBodyOverflow;
+  }
+
+  private buildDemoRequestPayload(): DemoRequestPayload {
+    const hotel = this.demoForm.controls.hotel.getRawValue();
+    const requester = this.demoForm.controls.requester.getRawValue();
+
+    return {
+      hotel_name: String(hotel.hotelName || '').trim(),
+      hotel_type: String(hotel.hotelType || '').trim(),
+      city: String(hotel.city || '').trim(),
+      rooms: Number(hotel.rooms || 0),
+      website: String(hotel.website || '').trim(),
+      requester_first_name: String(requester.firstName || '').trim(),
+      requester_last_name: String(requester.lastName || '').trim(),
+      requester_username: String(requester.username || '').trim(),
+      requester_email: String(requester.email || '').trim().toLowerCase(),
+      requester_job_title: String(requester.jobTitle || '').trim(),
+      requester_phone: String(requester.phone || '').trim(),
+      message: String(requester.message || '').trim(),
+    };
   }
 }

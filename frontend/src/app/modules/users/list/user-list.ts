@@ -96,6 +96,14 @@ export class UserList implements OnInit {
       icon: 'fa-solid fa-user-plus',
       color: 'var(--gh-status-violet-text)',
       bg: 'var(--gh-status-violet-bg)'
+    },
+    {
+      label: 'Resultados',
+      value: '0',
+      sub: 'Segun filtros activos',
+      icon: 'fa-solid fa-filter',
+      color: 'var(--gh-status-info-strong)',
+      bg: 'var(--gh-status-info-bg)'
     }
   ];
 
@@ -187,6 +195,7 @@ export class UserList implements OnInit {
       this.matchesRole(user)
     );
 
+    this.statCards[4].value = `${this.filteredUsers.length}`;
     this.first = 0;
   }
 

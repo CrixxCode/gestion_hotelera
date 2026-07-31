@@ -68,6 +68,8 @@ const loadSaasDashboardComponent = () =>
   import('./modules/saas/list-saas-dashboard/list-saas-dashboard').then((m) => m.ListSaasDashboard);
 const loadSaasHotelsComponent = () =>
   import('./modules/saas/list-saas-hotels/list-saas-hotels').then((m) => m.ListSaasHotels);
+const loadDemoRequestsComponent = () =>
+  import('./modules/saas/list-demo-requests/list-demo-requests').then((m) => m.ListDemoRequests);
 
 export const routes: Routes = [
     {
@@ -149,9 +151,10 @@ export const routes: Routes = [
             { path: 'reports', redirectTo: 'reportes', pathMatch: 'full' },
             { path: 'mi-perfil', loadComponent: loadMyProfileComponent, title: 'Mi Perfil', data: { breadcrumbLabel: 'Mi Perfil' } },
             { path: 'hotel-config', component: HotelSettings, title: 'Configuracion Hotel' },
-            { path: 'saas-panel', loadComponent: loadSaasDashboardComponent, title: 'Panel SaaS', data: { breadcrumbLabel: 'Panel SaaS' } },
-            { path: 'saas-hoteles', loadComponent: loadSaasHotelsComponent, title: 'Hoteles Globales SaaS', data: { breadcrumbLabel: 'Hoteles Globales SaaS' } },
+            { path: 'saas-panel', loadComponent: loadSaasDashboardComponent, title: 'Panel SaaS', data: { breadcrumbLabel: 'Panel SaaS', platformAdminOnly: true } },
+            { path: 'saas-hoteles', loadComponent: loadSaasHotelsComponent, title: 'Hoteles Globales SaaS', data: { breadcrumbLabel: 'Hoteles Globales SaaS', platformAdminOnly: true } },
             { path: 'saas-hotels', redirectTo: 'saas-hoteles', pathMatch: 'full' },
+            { path: 'saas-solicitudes-demo', loadComponent: loadDemoRequestsComponent, title: 'Solicitudes de Demo', data: { breadcrumbLabel: 'Solicitudes de Demo', platformAdminOnly: true } },
             { path: 'master-data', component: MasterDataComponent, title: 'Master Data' },
             { path: '403', component: ForbiddenPage, title: 'Acceso Denegado', data: { breadcrumbLabel: 'Acceso denegado' } },
             { path: '404', component: NotFoundPage, title: 'Pagina No Encontrada', data: { breadcrumbLabel: 'Pagina no encontrada' } },

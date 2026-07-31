@@ -53,6 +53,7 @@ urlpatterns = [
     path("api/", include("apps.finance.urls")),
     path("api/", include("apps.reports.urls")),
     path("api/", include("apps.notifications.urls")),
+    path("api/", include("apps.demo_requests.urls")),
 ]
 
 if settings.DEBUG:

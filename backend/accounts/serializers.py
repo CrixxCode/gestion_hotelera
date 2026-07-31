@@ -6,13 +6,13 @@ from django.contrib.auth import get_user_model, password_validation
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django.utils.encoding import force_str, smart_bytes
-from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from django.urls import reverse
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from apps.hotel_settings.models import HotelSettings
+from accounts.email_utils import build_password_reset_url, email_backend_delivers_to_inbox
 from accounts.tenancy import is_effective_global_admin
 
 from rest_framework import serializers
@@ -117,6 +117,7 @@ class UserSerializer(serializers.ModelSerializer):
             "job_title",
             "is_active",
             "is_staff",
+            "is_superuser",
             "must_change_password",
             "hotel_settings",
             "roles",
@@ -127,6 +128,7 @@ class UserSerializer(serializers.ModelSerializer):
             "id",
             "hotel_settings",
             "is_staff",
+            "is_superuser",
             "must_change_password",
             "roles",
             "resource_keys",
@@ -653,18 +655,11 @@ class PasswordResetRequestSerializer(serializers.Serializer):
             return {"found": False}
 
         user = qs.first()
-        uid = urlsafe_base64_encode(smart_bytes(user.pk))
-        token = PasswordResetTokenGenerator().make_token(user)
-
-        base_url = self.context.get("base_url")
-        if base_url:
-            reset_url = f"{base_url}?uid={uid}&token={token}"
-        else:
-            path = reverse("password_reset_confirm")
-            if request is not None:
-                reset_url = request.build_absolute_uri(f"{path}?uid={uid}&token={token}")
-            else:
-                reset_url = f"http://localhost:8000{path}?uid={uid}&token={token}"
+        reset_url = build_password_reset_url(
+            user,
+            request=request,
+            base_url=self.context.get("base_url"),
+        )
         app_name = str(getattr(settings, "APP_DISPLAY_NAME", "Wayra") or "Wayra").strip()
         support_email = str(getattr(settings, "SUPPORT_EMAIL", "soporte@hotel.local") or "soporte@hotel.local").strip()
         primary_color = str(getattr(settings, "BRAND_PRIMARY_COLOR", "#0f1f41") or "#0f1f41").strip()
@@ -726,7 +721,7 @@ class PasswordResetRequestSerializer(serializers.Serializer):
             )
             msg.attach(logo_attachment)
         try:
-            msg.send(fail_silently=False)
+            sent_count = msg.send(fail_silently=False)
         except Exception:
             logger.exception(
                 "Password reset email could not be sent for user_id=%s email=%s",
@@ -736,7 +731,7 @@ class PasswordResetRequestSerializer(serializers.Serializer):
             # Avoid exposing internals and keep API response stable.
             return {"found": True, "sent": False}
 
-        return {"found": True, "sent": True}
+        return {"found": True, "sent": bool(sent_count) and email_backend_delivers_to_inbox()}
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):

@@ -2,7 +2,7 @@ import { inject } from '@angular/core';
 import { CanActivateChildFn, Router } from '@angular/router';
 import { catchError, map, of } from 'rxjs';
 import { MessageService } from 'primeng/api';
-import { AuthService, MeResponse, MenuItem } from '../services/auth/auth';
+import { AuthService, MeResponse, MenuItem, isEffectivePlatformAdmin } from '../services/auth/auth';
 
 const PUBLIC_CHILD_PATHS = new Set(['403', '404', '**']);
 const AUTHENTICATED_DEFAULT_PATHS = new Set(['mi-perfil', 'actividad']);
@@ -70,6 +70,14 @@ export const permissionChildGuard: CanActivateChildFn = (route, state) => {
 
   return authService.getUserInfo().pipe(
     map((user) => {
+      if (routeConfig?.data?.['platformAdminOnly']) {
+        if (isEffectivePlatformAdmin(user)) {
+          return true;
+        }
+        showForbiddenToast(messageService);
+        return buildForbiddenRedirect(router, state.url);
+      }
+
       if (canAccessChildRoute(path, user)) {
         return true;
       }

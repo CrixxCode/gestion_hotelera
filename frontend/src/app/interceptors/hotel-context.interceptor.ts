@@ -20,6 +20,7 @@ function isHotelScopedApiRequest(url: string): boolean {
   const normalizedUrl = String(url || '').split('?')[0].replace(/\/$/, '');
   if (!normalizedUrl.includes('/api/')) return false;
   if (normalizedUrl.includes('/api/auth/')) return false;
+  if (normalizedUrl.endsWith('/api/demo-requests')) return false;
 
   // The hotel catalog must remain global so the header can populate the selector.
   if (normalizedUrl.endsWith('/api/hotel-settings')) return false;

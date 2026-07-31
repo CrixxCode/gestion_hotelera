@@ -91,6 +91,7 @@ INSTALLED_APPS = [
     'apps.finance',
     'apps.reports',
     "apps.notifications",
+    "apps.demo_requests",
 ]
 
 MIDDLEWARE = [
@@ -168,6 +169,7 @@ REST_FRAMEWORK = {
         "user": "120/min",
         "auth_login": "10/min",
         "password_reset": "5/min",
+        "demo_request": "5/min",
     },
     "EXCEPTION_HANDLER": "accounts.exceptions.exception_handler",
     "DEFAULT_FILTER_BACKENDS": [

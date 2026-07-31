@@ -179,10 +179,125 @@
   animation-delay: 190ms;
 }
 
+.wayra-demo-overlay {
+  animation: wayra-modal-fade 0.18s ease-out;
+}
+
+.wayra-demo-modal {
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  animation: wayra-modal-enter 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.wayra-demo-step {
+  min-height: 52px;
+  border: 1px solid #dbe3ee;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 800;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.wayra-demo-step span {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  display: inline-grid;
+  place-items: center;
+  font-size: 13px;
+}
+
+.wayra-demo-step-active {
+  border-color: #0f172a;
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.wayra-demo-step-active span {
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.wayra-demo-step:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.wayra-demo-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.wayra-demo-field > span {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.wayra-demo-input {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #0f172a;
+  outline: none;
+  padding: 0 13px;
+  font-size: 14px;
+  font-weight: 600;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.wayra-demo-input:focus {
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+}
+
+.wayra-demo-textarea {
+  min-height: 112px;
+  padding-bottom: 12px;
+  padding-top: 12px;
+  resize: vertical;
+}
+
 @keyframes wayra-fade-up {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes wayra-modal-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes wayra-modal-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
